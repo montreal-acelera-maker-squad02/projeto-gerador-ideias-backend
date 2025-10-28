@@ -10,6 +10,4 @@ public class IdeaResponse {
     private String title;
     private String description;
     private String category;
-    // Você pode adicionar outros campos que a ideia terá
-    // Ex: private LocalDateTime createdAt;
 }
