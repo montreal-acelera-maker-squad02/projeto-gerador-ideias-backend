@@ -1,5 +1,6 @@
 package projeto_gerador_ideias_backend.controller;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,7 +16,7 @@ public class IdeaController {
     private final IdeaService ideaService;
 
     @PostMapping("/generate")
-    public ResponseEntity<IdeaResponse> generateIdea(@RequestBody IdeaRequest request) {
+    public ResponseEntity<IdeaResponse> generateIdea(@Valid @RequestBody IdeaRequest request) {
         IdeaResponse response = ideaService.generateIdea(request);
         return ResponseEntity.ok(response);
     }
