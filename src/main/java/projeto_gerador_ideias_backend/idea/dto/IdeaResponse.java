@@ -6,7 +6,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class IdeaResponse {
-    private Long id; // Para simular o ID gerado pelo banco de dados
+    private Long id;
     private String title;
     private String description;
     private String category;
