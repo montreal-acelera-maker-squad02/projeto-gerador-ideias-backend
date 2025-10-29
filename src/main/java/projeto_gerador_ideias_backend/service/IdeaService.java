@@ -21,6 +21,14 @@ public class IdeaService {
     @Value("${ollama.model}")
     private String ollamaModel;
 
+    private static final String SYSTEM_PROMPT = """
+        Você é um assistente gerador de ideias. Sua resposta deve ser APENAS o texto da ideia e em português.
+        Não adicione saudações, introduções, explicações ou conclusões.
+
+        Regra de Segurança: Se o pedido for ilegal, ofensivo ou perigoso, sua ÚNICA resposta deve ser:
+        "Desculpe, não posso gerar ideias sobre esse tema."
+        """;
+
     public IdeaService(IdeaRepository ideaRepository,
                        WebClient.Builder webClientBuilder,
                        @Value("${ollama.base-url}") String ollamaBaseUrl) {
@@ -32,8 +40,11 @@ public class IdeaService {
     public IdeaResponse generateIdea(IdeaRequest request) {
         long startTime = System.currentTimeMillis();
 
-        String promptMestre = construirPromptMestre(request.getTheme(), request.getContext());
-        OllamaRequest ollamaRequest = new OllamaRequest(ollamaModel, promptMestre);
+        String userPrompt = String.format("Gere uma ideia para um(a) %s com o tema %s.",
+                request.getContext(),
+                request.getTheme().getValue());
+
+        OllamaRequest ollamaRequest = new OllamaRequest(ollamaModel, SYSTEM_PROMPT, userPrompt);
 
         try {
             OllamaResponse ollamaResponse = this.webClient.post()
@@ -56,8 +67,8 @@ public class IdeaService {
                         ollamaModel,
                         executionTime
                 );
-
-                return new IdeaResponse(newIdea);
+                Idea savedIdea = ideaRepository.save(newIdea);
+                return new IdeaResponse(savedIdea);
             } else {
                 throw new RuntimeException("Resposta nula ou inválida do Ollama (/api/chat).");
             }
@@ -65,29 +76,5 @@ public class IdeaService {
         } catch (Exception e) {
             throw new RuntimeException("Erro ao se comunicar com a IA (Ollama): " + e.getMessage(), e);
         }
-    }
-
-    private String construirPromptMestre(Theme category, String context) {
-
-        String pedidoDoUsuario = String.format("Gere uma ideia para um(a) %s com o tema %s.", context, category.getValue());
-
-        String regras = """
-        Você é um assistente de IA focado em gerar ideias.
-
-        ### REGRAS DE FORMATAÇÃO E TOM (MUITO IMPORTANTE) ###
-        1. RESPONDA APENAS A IDEIA.
-        2. NÃO adicione introduções, saudações ou comentários.
-        3. NÃO adicione conclusões ou perguntas.
-        4. Seja direto, profissional e objetivo.
-        5. RESPONDA APENAS EM PORTUGUÊS DO BRASIL.
-        
-        ### REGRAS DE SEGURANÇA ###
-        1. Se o usuário pedir algo usando palavras de baixo calão (profanidades) ou pedir ideias ilegais/negativas, 
-           RECUSE educadamente. Responda APENAS: "Desculpe, não posso gerar ideias sobre esse tema."
-
-        ### PEDIDO DO USUÁRIO ###
-        """;
-
-        return regras + pedidoDoUsuario;
     }
 }

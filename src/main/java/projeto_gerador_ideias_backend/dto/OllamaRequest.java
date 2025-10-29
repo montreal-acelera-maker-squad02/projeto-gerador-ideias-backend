@@ -11,9 +11,12 @@ public class OllamaRequest {
     private List<Message> messages;
     private boolean stream = false;
 
-    public OllamaRequest(String model, String promptDoUsuario) {
+    public OllamaRequest(String model, String systemPrompt, String userPrompt) {
         this.model = model;
-        this.messages = List.of(new Message("user", promptDoUsuario));
+        this.messages = List.of(
+                new Message("system", systemPrompt),
+                new Message("user", userPrompt)
+        );
     }
 
     @Data
