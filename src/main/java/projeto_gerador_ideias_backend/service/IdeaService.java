@@ -27,17 +27,22 @@ public class IdeaService {
     private String ollamaModel;
 
     private static final String REJEICAO_SEGURANCA = "Desculpe, não posso gerar ideias sobre esse tema.";
-    private static final List<String> BLACKLIST_PALAVRAS = List.of(
-            "phishing", "malware", "keylogger", "vírus", "trojan",
-            "roubar senha", "fraudar", "veneno", "exploit", "ciberbullying", "antiético",
-            "invadir", "ransomware", "ddos"
-    );
-    private static final Pattern SECURITY_BLACKLIST_PATTERN = Pattern.compile(
-            "\\b(" + String.join("|", BLACKLIST_PALAVRAS) + ")\\b",
-            Pattern.CASE_INSENSITIVE
-    );
 
     private static final Pattern HEADER_CLEANUP_PATTERN = Pattern.compile("(?s)#{2,}.*?(\\R|$)");
+
+    private static final String PROMPT_MODERACAO =
+            "Analise o 'Tópico' abaixo. O tópico sugere uma intenção maliciosa, ilegal ou antiética (como phishing, fraude, malware, invasão, etc.)?" +
+                    "Responda APENAS 'SEGURO' ou 'PERIGOSO'.\n\n" +
+                    "Tópico: \"%s\"\n\n" +
+                    "RESPOSTA (SEGURO ou PERIGOSO):";
+
+    private static final String PROMPT_GERACAO =
+            "Gere uma ideia concisa (30 palavras ou menos) em português do Brasil sobre o Tópico.\n\n" +
+                    "Tópico: \"%s\"\n\n" +
+                    "REGRAS OBRIGATÓRIAS:\n" +
+                    "1. TAMANHO: 30 palavras ou menos. NÃO liste 10 itens. NÃO escreva roteiros.\n" +
+                    "2. FORMATO: Responda APENAS o texto da ideia. NÃO inclua saudações, explicações ou cabeçalhos.\n\n" +
+                    "RESPOSTA (MÁX 30 PALAVRAS):";
 
     public IdeaService(IdeaRepository ideaRepository,
                        WebClient.Builder webClientBuilder,
@@ -46,12 +51,39 @@ public class IdeaService {
         this.webClient = webClientBuilder.baseUrl(ollamaBaseUrl).build();
     }
 
+    /**
+     * Helper genérico para chamar o Ollama com um modelo e prompt específicos
+     */
+    private String callOllama(String prompt, String modelName) {
+        OllamaRequest ollamaRequest = new OllamaRequest(modelName, prompt);
+        try {
+            OllamaResponse ollamaResponse = this.webClient.post()
+                    .uri("/api/chat")
+                    .bodyValue(ollamaRequest)
+                    .retrieve()
+                    .bodyToMono(OllamaResponse.class)
+                    .block();
+
+            if (ollamaResponse != null && ollamaResponse.getMessage() != null) {
+                return ollamaResponse.getMessage().getContent().trim();
+            } else {
+                throw new RuntimeException("Resposta nula ou inválida do Ollama (/api/chat).");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao se comunicar com a IA (Ollama): " + e.getMessage(), e);
+        }
+    }
+
+
     @Transactional
     public IdeaResponse generateIdea(IdeaRequest request) {
         long startTime = System.currentTimeMillis();
         String userContext = request.getContext();
 
-        if (userContext != null && SECURITY_BLACKLIST_PATTERN.matcher(userContext).find()) {
+        String moderationPrompt = String.format(PROMPT_MODERACAO, userContext);
+        String moderationResult = callOllama(moderationPrompt, ollamaModel);
+
+        if (moderationResult.contains("PERIGOSO") || !moderationResult.contains("SEGURO")) {
 
             long executionTime = System.currentTimeMillis() - startTime;
 
@@ -59,7 +91,7 @@ public class IdeaService {
                     request.getTheme(),
                     userContext,
                     REJEICAO_SEGURANCA,
-                    "local-security-filter",
+                    ollamaModel,
                     executionTime
             );
             return new IdeaResponse(newIdea);
@@ -69,62 +101,33 @@ public class IdeaService {
                 request.getTheme().getValue(),
                 userContext);
 
-        String promptMestre = String.format(
-                "Gere uma ideia concisa (50 palavras ou menos) em português do Brasil sobre o Tópico.\n\n" +
-                        "Tópico: \"%s\"\n\n" +
-                        "REGRAS OBRIGATÓRIAS:\n" +
-                        "1. SEGURANÇA: Se o Tópico sugerir uma ação com intenção maliciosa ou ilegal (como fraude ou invasão), " +
-                        "responda APENAS: \"%s\". Tópicos históricos SÃO PERMITIDOS.\n" +
-                        "2. TAMANHO: 50 palavras ou menos.\n" +
-                        "3. FORMATO: Responda APENAS o texto da ideia. NÃO inclua saudações, explicações ou cabeçalhos.\n\n" +
-                        "RESPOSTA:",
-                topicoUsuario, REJEICAO_SEGURANCA
-        );
+        String generationPrompt = String.format(PROMPT_GERACAO, topicoUsuario);
+        String generatedContent = callOllama(generationPrompt, ollamaModel);
 
-        OllamaRequest ollamaRequest = new OllamaRequest(ollamaModel, promptMestre);
-        try {
-            OllamaResponse ollamaResponse = this.webClient.post()
-                    .uri("/api/chat")
-                    .bodyValue(ollamaRequest)
-                    .retrieve()
-                    .bodyToMono(OllamaResponse.class)
-                    .block();
+        generatedContent = HEADER_CLEANUP_PATTERN.matcher(generatedContent).replaceAll("").trim();
 
-            long executionTime = System.currentTimeMillis() - startTime;
-
-            if (ollamaResponse != null && ollamaResponse.getMessage() != null) {
-
-                String generatedContent = ollamaResponse.getMessage().getContent().trim();
-
-                generatedContent = HEADER_CLEANUP_PATTERN.matcher(generatedContent).replaceAll("").trim();
-
-                if (generatedContent.startsWith("Embora seja impossível")) {
-                    int firstNewline = generatedContent.indexOf('\n');
-                    if (firstNewline != -1) {
-                        generatedContent = generatedContent.substring(firstNewline).trim();
-                    }
-                }
-
-                if (generatedContent.startsWith("I cannot") || generatedContent.startsWith("Sorry, I can't")) {
-                    generatedContent = REJEICAO_SEGURANCA;
-                }
-
-                Idea newIdea = new Idea(
-                        request.getTheme(),
-                        userContext,
-                        generatedContent,
-                        ollamaModel,
-                        executionTime
-                );
-                Idea savedIdea = ideaRepository.save(newIdea);
-                return new IdeaResponse(savedIdea);
-            } else {
-                throw new RuntimeException("Resposta nula ou inválida do Ollama (/api/chat).");
+        if (generatedContent.startsWith("Embora seja impossível")) {
+            int firstNewline = generatedContent.indexOf('\n');
+            if (firstNewline != -1) {
+                generatedContent = generatedContent.substring(firstNewline).trim();
             }
-
-        } catch (Exception e) {
-            throw new RuntimeException("Erro ao se comunicar com a IA (Ollama): " + e.getMessage(), e);
         }
+
+        if (generatedContent.startsWith("I cannot") || generatedContent.startsWith("Sorry, I can't")) {
+            generatedContent = REJEICAO_SEGURANCA;
+        }
+
+        long executionTime = System.currentTimeMillis() - startTime;
+
+        Idea newIdea = new Idea(
+                request.getTheme(),
+                userContext,
+                generatedContent,
+                ollamaModel,
+                executionTime
+        );
+        Idea savedIdea = ideaRepository.save(newIdea);
+        return new IdeaResponse(savedIdea);
     }
 
     public List<IdeaResponse> listarHistoricoIdeias() {
