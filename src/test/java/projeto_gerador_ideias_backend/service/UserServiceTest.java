@@ -6,7 +6,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import projeto_gerador_ideias_backend.dto.LoginRequest;
+import projeto_gerador_ideias_backend.dto.LoginResponse;
 import projeto_gerador_ideias_backend.dto.RegisterRequest;
 import projeto_gerador_ideias_backend.dto.RegisterResponse;
 import projeto_gerador_ideias_backend.dto.UpdateUserRequest;
@@ -16,13 +20,16 @@ import projeto_gerador_ideias_backend.exceptions.ValidationException;
 import projeto_gerador_ideias_backend.exceptions.WrongPasswordException;
 import projeto_gerador_ideias_backend.model.User;
 import projeto_gerador_ideias_backend.repository.UserRepository;
+import projeto_gerador_ideias_backend.service.JwtService;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class UserServiceTest {
     
     @Mock
@@ -30,6 +37,9 @@ class UserServiceTest {
     
     @Mock
     private PasswordEncoder passwordEncoder;
+    
+    @Mock
+    private JwtService jwtService;
     
     @InjectMocks
     private UserService userService;
@@ -43,14 +53,12 @@ class UserServiceTest {
         validRequest.setEmail("joao@example.com");
         validRequest.setPassword("Senha@123");
         validRequest.setConfirmPassword("Senha@123");
-        
-        when(passwordEncoder.encode(anyString())).thenReturn("encodedPassword");
     }
     
     @Test
     void shouldRegisterUserSuccessfully() {
-        // Arrange
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("encodedPassword");
         
         User savedUser = new User();
         savedUser.setId(1L);
@@ -60,10 +68,8 @@ class UserServiceTest {
         
         when(userRepository.save(any(User.class))).thenReturn(savedUser);
         
-        // Act
         RegisterResponse response = userService.registerUser(validRequest);
         
-        // Assert
         assertNotNull(response);
         assertEquals(1L, response.getId());
         assertEquals(validRequest.getName(), response.getName());
@@ -76,10 +82,8 @@ class UserServiceTest {
     
     @Test
     void shouldThrowExceptionWhenEmailAlreadyExists() {
-        // Arrange
         when(userRepository.existsByEmail(anyString())).thenReturn(true);
         
-        // Act & Assert
         EmailAlreadyExistsException exception = assertThrows(
             EmailAlreadyExistsException.class,
             () -> userService.registerUser(validRequest)
@@ -94,16 +98,15 @@ class UserServiceTest {
     
     @Test
     void shouldThrowExceptionWhenPasswordsDoNotMatch() {
-        // Arrange
         RegisterRequest request = new RegisterRequest();
         request.setName("João Silva");
         request.setEmail("joao@example.com");
         request.setPassword("Senha@123");
-        request.setConfirmPassword("Senha@456"); // diferente
+        request.setConfirmPassword("Senha@456");
         
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("encodedPassword");
         
-        // Act & Assert
         ValidationException exception = assertThrows(
             ValidationException.class,
             () -> userService.registerUser(request)
@@ -118,16 +121,14 @@ class UserServiceTest {
     
     @Test
     void shouldThrowExceptionWhenPasswordIsTooShort() {
-        // Arrange
         RegisterRequest request = new RegisterRequest();
         request.setName("João Silva");
         request.setEmail("joao@example.com");
-        request.setPassword("Senha@1"); // 7 caracteres
+        request.setPassword("Senha@1"); 
         request.setConfirmPassword("Senha@1");
         
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
         
-        // Act & Assert
         ValidationException exception = assertThrows(
             ValidationException.class,
             () -> userService.registerUser(request)
@@ -192,11 +193,8 @@ class UserServiceTest {
         assertThrows(ValidationException.class, () -> userService.registerUser(request));
     }
     
-    // === Testes para updateUser ===
-    
     @Test
     void shouldUpdateUserNameSuccessfully() {
-        // Arrange
         User existingUser = new User();
         existingUser.setId(1L);
         existingUser.setUuid(java.util.UUID.randomUUID());
@@ -210,10 +208,8 @@ class UserServiceTest {
         UpdateUserRequest request = new UpdateUserRequest();
         request.setName("João Silva Santos");
         
-        // Act
         RegisterResponse response = userService.updateUser(existingUser.getUuid().toString(), request);
         
-        // Assert
         assertNotNull(response);
         assertEquals("João Silva Santos", existingUser.getName());
         verify(userRepository, times(1)).save(existingUser);
@@ -221,13 +217,11 @@ class UserServiceTest {
     
     @Test
     void shouldThrowExceptionWhenUserNotFound() {
-        // Arrange
         when(userRepository.findByUuid(any(java.util.UUID.class))).thenReturn(java.util.Optional.empty());
         
         UpdateUserRequest request = new UpdateUserRequest();
         request.setName("Novo Nome");
         
-        // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> 
             userService.updateUser(java.util.UUID.randomUUID().toString(), request)
         );
@@ -235,7 +229,6 @@ class UserServiceTest {
     
     @Test
     void shouldThrowExceptionWhenOldPasswordMissing() {
-        // Arrange
         User existingUser = new User();
         existingUser.setId(1L);
         existingUser.setPassword("encodedPassword");
@@ -248,7 +241,6 @@ class UserServiceTest {
         request.setPassword("NovaSenha@123");
         request.setConfirmPassword("NovaSenha@123");
         
-        // Act & Assert
         ValidationException exception = assertThrows(ValidationException.class, () ->
             userService.updateUser(existingUser.getUuid().toString(), request)
         );
@@ -258,7 +250,6 @@ class UserServiceTest {
     
     @Test
     void shouldThrowExceptionWhenOldPasswordIncorrect() {
-        // Arrange
         User existingUser = new User();
         existingUser.setId(1L);
         existingUser.setPassword("encodedPassword");
@@ -273,7 +264,6 @@ class UserServiceTest {
         request.setPassword("NovaSenha@123");
         request.setConfirmPassword("NovaSenha@123");
         
-        // Act & Assert
         assertThrows(WrongPasswordException.class, () ->
             userService.updateUser(existingUser.getUuid().toString(), request)
         );
@@ -281,7 +271,6 @@ class UserServiceTest {
     
     @Test
     void shouldThrowExceptionWhenNewPasswordsDoNotMatch() {
-        // Arrange
         User existingUser = new User();
         existingUser.setId(1L);
         existingUser.setPassword("encodedPassword");
@@ -296,7 +285,6 @@ class UserServiceTest {
         request.setPassword("NovaSenha@123");
         request.setConfirmPassword("SenhaDiferente@456");
         
-        // Act & Assert
         ValidationException exception = assertThrows(ValidationException.class, () ->
             userService.updateUser(existingUser.getUuid().toString(), request)
         );
@@ -306,7 +294,6 @@ class UserServiceTest {
     
     @Test
     void shouldThrowExceptionWhenNewPasswordInvalid() {
-        // Arrange
         User existingUser = new User();
         existingUser.setId(1L);
         existingUser.setPassword("encodedPassword");
@@ -318,15 +305,90 @@ class UserServiceTest {
         UpdateUserRequest request = new UpdateUserRequest();
         request.setName("Nome Novo");
         request.setOldPassword("Senha@123");
-        request.setPassword("senha123"); // inválida
+        request.setPassword("senha123"); 
         request.setConfirmPassword("senha123");
         
-        // Act & Assert
         ValidationException exception = assertThrows(ValidationException.class, () ->
             userService.updateUser(existingUser.getUuid().toString(), request)
         );
         
         assertTrue(exception.getMessage().contains("8 caracteres"));
+    }
+    
+    @Test
+    void shouldLoginSuccessfully() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("joao@example.com");
+        request.setPassword("Senha@123");
+        
+        User user = new User();
+        user.setId(1L);
+        user.setUuid(java.util.UUID.randomUUID());
+        user.setName("João Silva");
+        user.setEmail("joao@example.com");
+        user.setPassword("encodedPassword");
+        
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(user));
+        when(passwordEncoder.matches(request.getPassword(), user.getPassword())).thenReturn(true);
+        when(jwtService.generateToken(user.getEmail(), user.getId())).thenReturn("jwt-token-123");
+        
+        LoginResponse response = userService.login(request);
+        
+        assertNotNull(response);
+        assertEquals(user.getUuid(), response.getUuid());
+        assertEquals(user.getName(), response.getName());
+        assertEquals(user.getEmail(), response.getEmail());
+        assertEquals("jwt-token-123", response.getToken());
+        
+        verify(userRepository, times(1)).findByEmail(request.getEmail());
+        verify(passwordEncoder, times(1)).matches(request.getPassword(), user.getPassword());
+        verify(jwtService, times(1)).generateToken(user.getEmail(), user.getId());
+    }
+    
+    @Test
+    void shouldThrowExceptionWhenEmailNotFoundOnLogin() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("naoexiste@example.com");
+        request.setPassword("Senha@123");
+        
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(java.util.Optional.empty());
+        
+        ResourceNotFoundException exception = assertThrows(
+            ResourceNotFoundException.class,
+            () -> userService.login(request)
+        );
+        
+        assertEquals("Credenciais inválidas", exception.getMessage());
+        
+        verify(userRepository, times(1)).findByEmail(request.getEmail());
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+        verify(jwtService, never()).generateToken(anyString(), anyLong());
+    }
+    
+    @Test
+    void shouldThrowExceptionWhenPasswordIncorrectOnLogin() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("joao@example.com");
+        request.setPassword("SenhaErrada");
+        
+        User user = new User();
+        user.setId(1L);
+        user.setEmail("joao@example.com");
+        user.setPassword("encodedPassword");
+        
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(user));
+        when(passwordEncoder.matches(request.getPassword(), user.getPassword())).thenReturn(false);
+        
+        WrongPasswordException exception = assertThrows(
+            WrongPasswordException.class,
+            () -> userService.login(request)
+        );
+        
+        assertEquals("Credenciais inválidas", exception.getMessage());
+        
+        verify(userRepository, times(1)).findByEmail(request.getEmail());
+        verify(passwordEncoder, times(1)).matches(request.getPassword(), user.getPassword());
+        verify(jwtService, never()).generateToken(anyString(), anyLong());
     }
 }
 
