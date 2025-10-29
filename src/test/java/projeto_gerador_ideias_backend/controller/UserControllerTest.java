@@ -3,14 +3,19 @@ package projeto_gerador_ideias_backend.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import projeto_gerador_ideias_backend.dto.LoginRequest;
+import projeto_gerador_ideias_backend.dto.LoginResponse;
 import projeto_gerador_ideias_backend.dto.RegisterRequest;
 import projeto_gerador_ideias_backend.dto.RegisterResponse;
 import projeto_gerador_ideias_backend.dto.UpdateUserRequest;
 import projeto_gerador_ideias_backend.exceptions.ValidationException;
+import projeto_gerador_ideias_backend.security.JwtAuthenticationFilter;
+import projeto_gerador_ideias_backend.service.JwtService;
 import projeto_gerador_ideias_backend.service.UserService;
 
 import java.time.LocalDateTime;
@@ -22,7 +27,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(UserController.class)
+import java.util.UUID;
+
+@WebMvcTest(controllers = UserController.class, 
+        excludeAutoConfiguration = {
+            org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class
+        })
+@AutoConfigureMockMvc(addFilters = false)
+@org.springframework.context.annotation.Import(projeto_gerador_ideias_backend.exceptions.GlobalExceptionHandler.class)
 class UserControllerTest {
     
     @Autowired
@@ -34,9 +46,14 @@ class UserControllerTest {
     @MockBean
     private UserService userService;
     
+    @MockBean
+    private JwtService jwtService;
+    
+    @MockBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+    
     @Test
     void shouldRegisterUserSuccessfully() throws Exception {
-        // Arrange
         RegisterRequest request = new RegisterRequest();
         request.setName("João Silva");
         request.setEmail("joao@example.com");
@@ -52,7 +69,6 @@ class UserControllerTest {
         
         when(userService.registerUser(any(RegisterRequest.class))).thenReturn(response);
         
-        // Act & Assert
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -68,7 +84,6 @@ class UserControllerTest {
     
     @Test
     void shouldReturnConflictWhenEmailExists() throws Exception {
-        // Arrange
         RegisterRequest request = new RegisterRequest();
         request.setName("João Silva");
         request.setEmail("joao@example.com");
@@ -78,7 +93,6 @@ class UserControllerTest {
         when(userService.registerUser(any(RegisterRequest.class)))
                 .thenThrow(new projeto_gerador_ideias_backend.exceptions.EmailAlreadyExistsException("Email já está em uso: joao@example.com"));
         
-        // Act & Assert
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -91,16 +105,15 @@ class UserControllerTest {
     
     @Test
     void shouldReturnBadRequestWhenValidationFails() throws Exception {
-        // Arrange
         RegisterRequest request = new RegisterRequest();
         request.setName("João Silva");
         request.setEmail("joao@example.com");
-        request.setPassword("senha123"); // senha inválida
+        request.setPassword("senha123");
+        request.setConfirmPassword("senha123");
         
         when(userService.registerUser(any(RegisterRequest.class)))
                 .thenThrow(new ValidationException("A senha deve ter no mínimo 8 caracteres..."));
         
-        // Act & Assert
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -113,13 +126,10 @@ class UserControllerTest {
     
     @Test
     void shouldReturnBadRequestWhenNameIsMissing() throws Exception {
-        // Arrange
         RegisterRequest request = new RegisterRequest();
         request.setEmail("joao@example.com");
         request.setPassword("Senha@123");
-        // name está null
         
-        // Act & Assert
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -130,13 +140,11 @@ class UserControllerTest {
     
     @Test
     void shouldReturnBadRequestWhenEmailIsInvalid() throws Exception {
-        // Arrange
         RegisterRequest request = new RegisterRequest();
         request.setName("João Silva");
-        request.setEmail("invalid-email"); // email inválido
+        request.setEmail("invalid-email");
         request.setPassword("Senha@123");
         
-        // Act & Assert
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -147,14 +155,12 @@ class UserControllerTest {
     
     @Test
     void shouldReturnBadRequestWhenPasswordIsTooShort() throws Exception {
-        // Arrange
         RegisterRequest request = new RegisterRequest();
         request.setName("João Silva");
         request.setEmail("joao@example.com");
         request.setPassword("Senh");
         request.setConfirmPassword("Senh");
         
-        // Act & Assert
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -165,7 +171,6 @@ class UserControllerTest {
     
     @Test
     void shouldUpdateUserSuccessfully() throws Exception {
-        // Arrange
         String uuid = java.util.UUID.randomUUID().toString();
         UpdateUserRequest request = new UpdateUserRequest();
         request.setName("João Silva Santos");
@@ -179,7 +184,6 @@ class UserControllerTest {
         
         when(userService.updateUser(uuid, request)).thenReturn(response);
         
-        // Act & Assert
         mockMvc.perform(put("/api/users/{uuid}", uuid)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -191,7 +195,6 @@ class UserControllerTest {
     
     @Test
     void shouldReturnNotFoundWhenUserNotExists() throws Exception {
-        // Arrange
         String uuid = java.util.UUID.randomUUID().toString();
         UpdateUserRequest request = new UpdateUserRequest();
         request.setName("Novo Nome");
@@ -199,7 +202,6 @@ class UserControllerTest {
         when(userService.updateUser(anyString(), any(UpdateUserRequest.class)))
                 .thenThrow(new projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException("Usuário não encontrado"));
         
-        // Act & Assert
         mockMvc.perform(put("/api/users/{uuid}", uuid)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -207,6 +209,107 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.error").value("Recurso não encontrado"));
         
         verify(userService, times(1)).updateUser(anyString(), any(UpdateUserRequest.class));
+    }
+    
+    @Test
+    void shouldLoginSuccessfully() throws Exception {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("joao@example.com");
+        request.setPassword("Senha@123");
+        
+        LoginResponse response = new LoginResponse();
+        response.setUuid(UUID.randomUUID());
+        response.setName("João Silva");
+        response.setEmail("joao@example.com");
+        response.setToken("jwt-token-123");
+        
+        when(userService.login(any(LoginRequest.class))).thenReturn(response);
+        
+        mockMvc.perform(post("/api/users/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("joao@example.com"))
+                .andExpect(jsonPath("$.name").value("João Silva"))
+                .andExpect(jsonPath("$.token").value("jwt-token-123"))
+                .andExpect(jsonPath("$.uuid").exists());
+        
+        verify(userService, times(1)).login(any(LoginRequest.class));
+    }
+    
+    @Test
+    void shouldReturnUnauthorizedWhenCredentialsIncorrect() throws Exception {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("joao@example.com");
+        request.setPassword("SenhaErrada");
+        
+        when(userService.login(any(LoginRequest.class)))
+                .thenThrow(new projeto_gerador_ideias_backend.exceptions.WrongPasswordException("Credenciais inválidas"));
+        
+        mockMvc.perform(post("/api/users/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Erro de autenticação"));
+        
+        verify(userService, times(1)).login(any(LoginRequest.class));
+    }
+    
+    @Test
+    void shouldReturnNotFoundWhenUserNotFoundOnLogin() throws Exception {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("naoexiste@example.com");
+        request.setPassword("Senha@123");
+        
+        when(userService.login(any(LoginRequest.class)))
+                .thenThrow(new projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException("Credenciais inválidas"));
+        
+        mockMvc.perform(post("/api/users/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Recurso não encontrado"));
+        
+        verify(userService, times(1)).login(any(LoginRequest.class));
+    }
+    
+    @Test
+    void shouldReturnBadRequestWhenLoginRequestIsInvalid() throws Exception {
+        LoginRequest request = new LoginRequest();
+
+        mockMvc.perform(post("/api/users/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+        
+        verify(userService, never()).login(any(LoginRequest.class));
+    }
+    
+    @Test
+    void shouldReturnBadRequestWhenLoginEmailIsInvalid() throws Exception {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("invalid-email");
+        request.setPassword("Senha@123");
+        
+        mockMvc.perform(post("/api/users/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+        
+        verify(userService, never()).login(any(LoginRequest.class));
+    }
+    
+    @Test
+    void shouldReturnBadRequestWhenPasswordIsMissing() throws Exception {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("joao@example.com");
+        
+        mockMvc.perform(post("/api/users/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+        
+        verify(userService, never()).login(any(LoginRequest.class));
     }
 }
 
