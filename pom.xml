@@ -5,11 +5,11 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.3.1</version> <!-- Versão estável mais recente do Spring Boot -->
-		<relativePath/> <!-- lookup parent from repository -->
+		<version>3.3.1</version>
+		<relativePath/>
 	</parent>
 	<groupId>projeto-gerador-ideias-backend</groupId>
-	<artifactId>gerador-ideias-backend</artifactId> <!-- Nome do artefato mais descritivo -->
+	<artifactId>gerador-ideias-backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>Gerador de Ideias</name>
 	<description>Gerador de Ideias Criativas com IA</description>
@@ -109,6 +109,14 @@
 			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
 	</dependencies>
 
 	<build>
