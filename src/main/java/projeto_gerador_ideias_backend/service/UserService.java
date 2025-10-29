@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import projeto_gerador_ideias_backend.dto.LoginRequest;
+import projeto_gerador_ideias_backend.dto.LoginResponse;
 import projeto_gerador_ideias_backend.dto.RegisterRequest;
 import projeto_gerador_ideias_backend.dto.RegisterResponse;
 import projeto_gerador_ideias_backend.dto.UpdateUserRequest;
@@ -21,6 +23,7 @@ public class UserService {
     
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
     
     @Transactional
     public RegisterResponse registerUser(RegisterRequest request) {
@@ -90,6 +93,26 @@ public class UserService {
         response.setName(updatedUser.getName());
         response.setEmail(updatedUser.getEmail());
         response.setCreatedAt(updatedUser.getCreatedAt());
+        
+        return response;
+    }
+    
+    @Transactional(readOnly = true)
+    public LoginResponse login(LoginRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new ResourceNotFoundException("Credenciais inválidas"));
+        
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new WrongPasswordException("Credenciais inválidas");
+        }
+        
+        String token = jwtService.generateToken(user.getEmail(), user.getId());
+        
+        LoginResponse response = new LoginResponse();
+        response.setUuid(user.getUuid());
+        response.setName(user.getName());
+        response.setEmail(user.getEmail());
+        response.setToken(token);
         
         return response;
     }

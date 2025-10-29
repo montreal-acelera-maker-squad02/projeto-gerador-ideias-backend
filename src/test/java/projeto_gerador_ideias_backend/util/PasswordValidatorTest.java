@@ -16,7 +16,7 @@ class PasswordValidatorTest {
     
     @Test
     void shouldReturnFalseForPasswordTooShort() {
-        assertFalse(PasswordValidator.isValid("Senha@1")); // 7 caracteres
+        assertFalse(PasswordValidator.isValid("Senha@1"));
         assertFalse(PasswordValidator.isValid(null));
         assertFalse(PasswordValidator.isValid(""));
     }
