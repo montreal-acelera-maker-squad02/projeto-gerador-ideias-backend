@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -12,6 +13,7 @@ import projeto_gerador_ideias_backend.dto.IdeaRequest;
 import projeto_gerador_ideias_backend.dto.IdeaResponse;
 import projeto_gerador_ideias_backend.service.IdeaService;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -28,23 +30,33 @@ public class IdeaController {
     }
 
     @Operation(
-            summary = "Listar Histórico de Ideias",
-            description = "Retorna todas as ideias salvas no banco de dados, ordenadas da mais recente para a mais antiga."
+            summary = "Listar Histórico de Ideias (com filtro opcional por tema e data)",
+            description = "Retorna as ideias salvas no banco de dados, podendo filtrar por tema e intervalo de datas. Ordenadas da mais recente para a mais antiga."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Histórico de ideias encontrado com sucesso"),
             @ApiResponse(responseCode = "404", description = "Nenhuma ideia encontrada no banco de dados"),
+            @ApiResponse(responseCode = "400", description = "Erro de validação nos parâmetros de filtro"),
             @ApiResponse(responseCode = "500", description = "Erro interno no servidor")
     })
     @GetMapping("/history")
-    public ResponseEntity<?> getAllIdeas() {
+    public ResponseEntity<?> getAllIdeas(
+            @RequestParam(required = false) String theme,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
+    ) {
         try {
-            List<IdeaResponse> ideias = ideaService.listarHistoricoIdeias();
+            List<IdeaResponse> ideias = ideaService.listarHistoricoIdeiasFiltrado(theme, startDate, endDate);
+
             if (ideias == null || ideias.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body("Nenhuma ideia encontrada no banco de dados.");
+                        .body("Nenhuma ideia encontrada no banco de dados para os filtros informados.");
             }
+
             return ResponseEntity.ok(ideias);
+
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest()
                     .body("Erro de validação: " + e.getMessage());
@@ -53,4 +65,5 @@ public class IdeaController {
                     .body("Erro interno ao buscar histórico de ideias: " + e.getMessage());
         }
     }
+
 }
