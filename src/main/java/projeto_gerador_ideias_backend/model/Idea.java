@@ -38,6 +38,10 @@ public class Idea {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
     public Idea(Theme theme, String context, String generatedContent, String modelUsed, Long executionTimeMs) {
         this.theme = theme;
         this.context = context;

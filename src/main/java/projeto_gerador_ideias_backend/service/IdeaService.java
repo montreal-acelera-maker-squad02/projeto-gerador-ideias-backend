@@ -12,6 +12,7 @@ import projeto_gerador_ideias_backend.dto.OllamaResponse;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -130,11 +131,35 @@ public class IdeaService {
         return new IdeaResponse(savedIdea);
     }
 
-    public List<IdeaResponse> listarHistoricoIdeias() {
-        List<Idea> ideias = ideaRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
+    public List<IdeaResponse> listarHistoricoIdeiasFiltrado(String theme, LocalDateTime startDate, LocalDateTime endDate) {
+        List<Idea> ideias;
 
-        return ideias.stream()
-                .map(IdeaResponse::new)
-                .collect(Collectors.toList());
+        // Pesquisa com todos filtros
+        if (theme != null && startDate != null && endDate != null) {
+            ideias = ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()), startDate, endDate);
+        }
+        // Pesquisa com tema
+        else if (theme != null) {
+            ideias = ideaRepository.findByThemeOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()));
+        }
+        // Pesquisa Pesquisa com a data
+        else if (startDate != null && endDate != null) {
+            ideias = ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
+        }
+        // Pesquisa sem filtros
+        else {
+            ideias = ideaRepository.findAllByOrderByCreatedAtDesc();
+        }
+
+        return ideias.stream().map(IdeaResponse::new).toList();
     }
+
+    public List<IdeaResponse> listarIdeiasPorUsuario(Long userId) {
+        List<Idea> ideias = ideaRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        if (ideias.isEmpty()) {
+            throw new IllegalArgumentException("Nenhuma ideia encontrada para o usuário com ID: " + userId);
+        }
+        return ideias.stream().map(IdeaResponse::new).toList();
+    }
+
 }

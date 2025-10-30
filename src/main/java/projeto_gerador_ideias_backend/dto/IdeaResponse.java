@@ -29,6 +29,7 @@ public class IdeaResponse {
 
     @Schema(description = "Tempo que o servidor levou para processar a ideia (em milissegundos)", example = "1250")
     private long executionTimeMs;
+    private String userName;
 
     public IdeaResponse(Idea savedIdea) {
         this.id = savedIdea.getId();
@@ -37,5 +38,12 @@ public class IdeaResponse {
         this.createdAt = savedIdea.getCreatedAt();
         this.modelUsed = savedIdea.getModelUsed();
         this.executionTimeMs = savedIdea.getExecutionTimeMs();
+
+        // Caso não haja usuário
+        if (savedIdea.getUser() != null) {
+            this.userName = savedIdea.getUser().getName();
+        } else {
+            this.userName = "Usuário não informado";
+        }
     }
 }
