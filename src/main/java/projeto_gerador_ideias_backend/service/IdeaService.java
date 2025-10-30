@@ -10,11 +10,12 @@ import projeto_gerador_ideias_backend.dto.IdeaResponse;
 import projeto_gerador_ideias_backend.dto.OllamaRequest;
 import projeto_gerador_ideias_backend.dto.OllamaResponse;
 import projeto_gerador_ideias_backend.model.Idea;
-import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.regex.Pattern;
+
 import java.util.stream.Collectors;
 
 @Service
@@ -26,6 +27,24 @@ public class IdeaService {
     @Value("${ollama.model}")
     private String ollamaModel;
 
+    private static final String REJEICAO_SEGURANCA = "Desculpe, não posso gerar ideias sobre esse tema.";
+
+    private static final Pattern HEADER_CLEANUP_PATTERN = Pattern.compile("(?s)#{2,}.*?(\\R|$)");
+
+    private static final String PROMPT_MODERACAO =
+            "Analise o 'Tópico' abaixo. O tópico sugere uma intenção maliciosa, ilegal ou antiética (como phishing, fraude, malware, invasão, etc.)?" +
+                    "Responda APENAS 'SEGURO' ou 'PERIGOSO'.\n\n" +
+                    "Tópico: \"%s\"\n\n" +
+                    "RESPOSTA (SEGURO ou PERIGOSO):";
+
+    private static final String PROMPT_GERACAO =
+            "Gere uma ideia concisa (30 palavras ou menos) em português do Brasil sobre o Tópico.\n\n" +
+                    "Tópico: \"%s\"\n\n" +
+                    "REGRAS OBRIGATÓRIAS:\n" +
+                    "1. TAMANHO: 30 palavras ou menos. NÃO liste 10 itens. NÃO escreva roteiros.\n" +
+                    "2. FORMATO: Responda APENAS o texto da ideia. NÃO inclua saudações, explicações ou cabeçalhos.\n\n" +
+                    "RESPOSTA (MÁX 30 PALAVRAS):";
+
     public IdeaService(IdeaRepository ideaRepository,
                        WebClient.Builder webClientBuilder,
                        @Value("${ollama.base-url}") String ollamaBaseUrl) {
@@ -33,13 +52,11 @@ public class IdeaService {
         this.webClient = webClientBuilder.baseUrl(ollamaBaseUrl).build();
     }
 
-    @Transactional
-    public IdeaResponse generateIdea(IdeaRequest request) {
-        long startTime = System.currentTimeMillis();
-
-        String promptMestre = construirPromptMestre(request.getTheme(), request.getContext());
-        OllamaRequest ollamaRequest = new OllamaRequest(ollamaModel, promptMestre);
-
+    /**
+     * Helper genérico para chamar o Ollama com um modelo e prompt específicos
+     */
+    private String callOllama(String prompt, String modelName) {
+        OllamaRequest ollamaRequest = new OllamaRequest(modelName, prompt);
         try {
             OllamaResponse ollamaResponse = this.webClient.post()
                     .uri("/api/chat")
@@ -48,54 +65,71 @@ public class IdeaService {
                     .bodyToMono(OllamaResponse.class)
                     .block();
 
-            long executionTime = System.currentTimeMillis() - startTime;
-
             if (ollamaResponse != null && ollamaResponse.getMessage() != null) {
-
-                String generatedContent = ollamaResponse.getMessage().getContent();
-
-                Idea newIdea = new Idea(
-                        request.getTheme(),
-                        request.getContext(),
-                        generatedContent,
-                        ollamaModel,
-                        executionTime
-                );
-
-                return new IdeaResponse(newIdea);
+                return ollamaResponse.getMessage().getContent().trim();
             } else {
                 throw new RuntimeException("Resposta nula ou inválida do Ollama (/api/chat).");
             }
-
         } catch (Exception e) {
             throw new RuntimeException("Erro ao se comunicar com a IA (Ollama): " + e.getMessage(), e);
         }
     }
 
-    private String construirPromptMestre(Theme category, String context) {
 
-        String pedidoDoUsuario = String.format("Gere uma ideia para um(a) %s com o tema %s.", context, category.getValue());
+    @Transactional
+    public IdeaResponse generateIdea(IdeaRequest request) {
+        long startTime = System.currentTimeMillis();
+        String userContext = request.getContext();
 
-        String regras = """
-                Você é um assistente de IA focado em gerar ideias.
-                
-                ### REGRAS DE FORMATAÇÃO E TOM (MUITO IMPORTANTE) ###
-                1. RESPONDA APENAS A IDEIA.
-                2. NÃO adicione introduções, saudações ou comentários.
-                3. NÃO adicione conclusões ou perguntas.
-                4. Seja direto, profissional e objetivo.
-                5. RESPONDA APENAS EM PORTUGUÊS DO BRASIL.
-                
-                ### REGRAS DE SEGURANÇA ###
-                1. Se o usuário pedir algo usando palavras de baixo calão (profanidades) ou pedir ideias ilegais/negativas, 
-                   RECUSE educadamente. Responda APENAS: "Desculpe, não posso gerar ideias sobre esse tema."
-                
-                ### PEDIDO DO USUÁRIO ###
-                """;
+        String moderationPrompt = String.format(PROMPT_MODERACAO, userContext);
+        String moderationResult = callOllama(moderationPrompt, ollamaModel);
 
-        return regras + pedidoDoUsuario;
+        if (moderationResult.contains("PERIGOSO") || !moderationResult.contains("SEGURO")) {
+
+            long executionTime = System.currentTimeMillis() - startTime;
+
+            Idea newIdea = new Idea(
+                    request.getTheme(),
+                    userContext,
+                    REJEICAO_SEGURANCA,
+                    ollamaModel,
+                    executionTime
+            );
+            return new IdeaResponse(newIdea);
+        }
+
+        String topicoUsuario = String.format("Tema: %s, Contexto: %s",
+                request.getTheme().getValue(),
+                userContext);
+
+        String generationPrompt = String.format(PROMPT_GERACAO, topicoUsuario);
+        String generatedContent = callOllama(generationPrompt, ollamaModel);
+
+        generatedContent = HEADER_CLEANUP_PATTERN.matcher(generatedContent).replaceAll("").trim();
+
+        if (generatedContent.startsWith("Embora seja impossível")) {
+            int firstNewline = generatedContent.indexOf('\n');
+            if (firstNewline != -1) {
+                generatedContent = generatedContent.substring(firstNewline).trim();
+            }
+        }
+
+        if (generatedContent.startsWith("I cannot") || generatedContent.startsWith("Sorry, I can't")) {
+            generatedContent = REJEICAO_SEGURANCA;
+        }
+
+        long executionTime = System.currentTimeMillis() - startTime;
+
+        Idea newIdea = new Idea(
+                request.getTheme(),
+                userContext,
+                generatedContent,
+                ollamaModel,
+                executionTime
+        );
+        Idea savedIdea = ideaRepository.save(newIdea);
+        return new IdeaResponse(savedIdea);
     }
-
 
     public List<IdeaResponse> listarHistoricoIdeiasFiltrado(String theme, LocalDateTime startDate, LocalDateTime endDate) {
         List<Idea> ideias;
