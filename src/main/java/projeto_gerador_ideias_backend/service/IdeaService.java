@@ -13,6 +13,7 @@ import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -96,11 +97,20 @@ public class IdeaService {
     }
 
 
-    public List<IdeaResponse> listarHistoricoIdeias() {
-        List<Idea> ideias = ideaRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
+    public List<IdeaResponse> listarHistoricoIdeiasFiltrado(String theme, LocalDateTime startDate, LocalDateTime endDate) {
+        List<Idea> ideias;
 
-        return ideias.stream()
-                .map(IdeaResponse::new)
-                .collect(Collectors.toList());
+        if (theme != null && startDate != null && endDate != null) {
+            ideias = ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()), startDate, endDate);
+        } else if (theme != null) {
+            ideias = ideaRepository.findByThemeOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()));
+        } else if (startDate != null && endDate != null) {
+            ideias = ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
+        } else {
+            ideias = ideaRepository.findAllByOrderByCreatedAtDesc();
+        }
+
+        return ideias.stream().map(IdeaResponse::new).toList();
     }
+
 }
