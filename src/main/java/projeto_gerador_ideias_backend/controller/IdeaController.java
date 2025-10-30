@@ -66,4 +66,27 @@ public class IdeaController {
         }
     }
 
+    @Operation(
+            summary = "Listar Ideias de um Usuário",
+            description = "Retorna todas as ideias criadas por um usuário específico, ordenadas da mais recente para a mais antiga."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Ideias do usuário encontradas com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Nenhuma ideia encontrada para o usuário informado"),
+            @ApiResponse(responseCode = "400", description = "ID de usuário inválido"),
+            @ApiResponse(responseCode = "500", description = "Erro interno no servidor")
+    })
+    @GetMapping("/user/{userId}/ideas")
+    public ResponseEntity<?> getIdeasByUser(@PathVariable Long userId) {
+        try {
+            List<IdeaResponse> ideias = ideaService.listarIdeiasPorUsuario(userId);
+            return ResponseEntity.ok(ideias);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Erro ao buscar ideias do usuário: " + e.getMessage());
+        }
+    }
+
 }

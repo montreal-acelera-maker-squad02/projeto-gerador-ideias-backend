@@ -19,4 +19,7 @@ public interface IdeaRepository extends JpaRepository<Idea, Long> {
     List<Idea> findByCreatedAtBetweenOrderByCreatedAtDesc(LocalDateTime start, LocalDateTime end);
 
     List<Idea> findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme theme, LocalDateTime start, LocalDateTime end);
+
+    List<Idea> findByUserIdOrderByCreatedAtDesc(Long userId);
+
 }

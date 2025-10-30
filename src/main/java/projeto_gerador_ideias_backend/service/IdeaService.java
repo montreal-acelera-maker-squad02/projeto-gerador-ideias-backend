@@ -77,21 +77,21 @@ public class IdeaService {
         String pedidoDoUsuario = String.format("Gere uma ideia para um(a) %s com o tema %s.", context, category.getValue());
 
         String regras = """
-        Você é um assistente de IA focado em gerar ideias.
-
-        ### REGRAS DE FORMATAÇÃO E TOM (MUITO IMPORTANTE) ###
-        1. RESPONDA APENAS A IDEIA.
-        2. NÃO adicione introduções, saudações ou comentários.
-        3. NÃO adicione conclusões ou perguntas.
-        4. Seja direto, profissional e objetivo.
-        5. RESPONDA APENAS EM PORTUGUÊS DO BRASIL.
-        
-        ### REGRAS DE SEGURANÇA ###
-        1. Se o usuário pedir algo usando palavras de baixo calão (profanidades) ou pedir ideias ilegais/negativas, 
-           RECUSE educadamente. Responda APENAS: "Desculpe, não posso gerar ideias sobre esse tema."
-
-        ### PEDIDO DO USUÁRIO ###
-        """;
+                Você é um assistente de IA focado em gerar ideias.
+                
+                ### REGRAS DE FORMATAÇÃO E TOM (MUITO IMPORTANTE) ###
+                1. RESPONDA APENAS A IDEIA.
+                2. NÃO adicione introduções, saudações ou comentários.
+                3. NÃO adicione conclusões ou perguntas.
+                4. Seja direto, profissional e objetivo.
+                5. RESPONDA APENAS EM PORTUGUÊS DO BRASIL.
+                
+                ### REGRAS DE SEGURANÇA ###
+                1. Se o usuário pedir algo usando palavras de baixo calão (profanidades) ou pedir ideias ilegais/negativas, 
+                   RECUSE educadamente. Responda APENAS: "Desculpe, não posso gerar ideias sobre esse tema."
+                
+                ### PEDIDO DO USUÁRIO ###
+                """;
 
         return regras + pedidoDoUsuario;
     }
@@ -117,6 +117,14 @@ public class IdeaService {
             ideias = ideaRepository.findAllByOrderByCreatedAtDesc();
         }
 
+        return ideias.stream().map(IdeaResponse::new).toList();
+    }
+
+    public List<IdeaResponse> listarIdeiasPorUsuario(Long userId) {
+        List<Idea> ideias = ideaRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        if (ideias.isEmpty()) {
+            throw new IllegalArgumentException("Nenhuma ideia encontrada para o usuário com ID: " + userId);
+        }
         return ideias.stream().map(IdeaResponse::new).toList();
     }
 
