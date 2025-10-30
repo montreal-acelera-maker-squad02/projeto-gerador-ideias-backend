@@ -16,6 +16,14 @@ public class OllamaRequest {
         this.messages = List.of(new Message("user", promptDoUsuario));
     }
 
+    public OllamaRequest(String model, String systemPrompt, String userPrompt) {
+        this.model = model;
+        this.messages = List.of(
+                new Message("system", systemPrompt),
+                new Message("user", userPrompt)
+        );
+    }
+
     @Data
     @NoArgsConstructor
     public static class Message {

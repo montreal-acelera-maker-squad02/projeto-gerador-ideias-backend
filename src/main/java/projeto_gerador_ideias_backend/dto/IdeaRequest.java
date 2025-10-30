@@ -13,6 +13,6 @@ public class IdeaRequest {
     private Theme theme;
 
     @NotBlank(message = "O contexto não pode estar em branco")
-    @Size(max = 100, message = "O contexto não pode exceder 100 caracteres")
+    @Size(max = 50, message = "O contexto não pode exceder 50 caracteres")
     private String context;
 }
