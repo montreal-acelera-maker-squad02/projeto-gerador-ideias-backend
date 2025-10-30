@@ -100,13 +100,20 @@ public class IdeaService {
     public List<IdeaResponse> listarHistoricoIdeiasFiltrado(String theme, LocalDateTime startDate, LocalDateTime endDate) {
         List<Idea> ideias;
 
+        // Pesquisa com todos filtros
         if (theme != null && startDate != null && endDate != null) {
             ideias = ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()), startDate, endDate);
-        } else if (theme != null) {
+        }
+        // Pesquisa com tema
+        else if (theme != null) {
             ideias = ideaRepository.findByThemeOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()));
-        } else if (startDate != null && endDate != null) {
+        }
+        // Pesquisa Pesquisa com a data
+        else if (startDate != null && endDate != null) {
             ideias = ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
-        } else {
+        }
+        // Pesquisa sem filtros
+        else {
             ideias = ideaRepository.findAllByOrderByCreatedAtDesc();
         }
 
