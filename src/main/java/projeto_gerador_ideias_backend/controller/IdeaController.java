@@ -1,6 +1,8 @@
 package projeto_gerador_ideias_backend.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
@@ -8,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import projeto_gerador_ideias_backend.dto.ErrorResponse;
 import projeto_gerador_ideias_backend.dto.IdeaRequest;
 import projeto_gerador_ideias_backend.dto.IdeaResponse;
 import projeto_gerador_ideias_backend.service.IdeaService;
@@ -21,6 +24,18 @@ public class IdeaController {
 
     private final IdeaService ideaService;
 
+    @Operation(
+            summary = "Gerar Nova Ideia",
+            description = "Gera uma nova ideia com base em um tema e contexto, utilizando a IA (Ollama). Inclui moderação de segurança."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Ideia gerada com sucesso (ou rejeição de segurança retornada com sucesso)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = IdeaResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Erro de validação (ex: contexto em branco ou tema nulo)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Erro interno no servidor (ex: falha ao conectar com o Ollama)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @PostMapping("/generate")
     public ResponseEntity<IdeaResponse> generateIdea(@Valid @RequestBody IdeaRequest request) {
         IdeaResponse response = ideaService.generateIdea(request);
