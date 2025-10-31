@@ -1,7 +1,6 @@
 package projeto_gerador_ideias_backend.service;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -10,18 +9,24 @@ import projeto_gerador_ideias_backend.dto.IdeaResponse;
 import projeto_gerador_ideias_backend.dto.OllamaRequest;
 import projeto_gerador_ideias_backend.dto.OllamaResponse;
 import projeto_gerador_ideias_backend.model.Idea;
+import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
+import projeto_gerador_ideias_backend.repository.UserRepository;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
+import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.regex.Pattern;
 
-import java.util.stream.Collectors;
-
 @Service
 public class IdeaService {
 
     private final IdeaRepository ideaRepository;
+    private final UserRepository userRepository;
     private final WebClient webClient;
 
     @Value("${ollama.model}")
@@ -46,9 +51,11 @@ public class IdeaService {
                     "RESPOSTA (MÁX 30 PALAVRAS):";
 
     public IdeaService(IdeaRepository ideaRepository,
+                       UserRepository userRepository,
                        WebClient.Builder webClientBuilder,
                        @Value("${ollama.base-url}") String ollamaBaseUrl) {
         this.ideaRepository = ideaRepository;
+        this.userRepository = userRepository;
         this.webClient = webClientBuilder.baseUrl(ollamaBaseUrl).build();
     }
 
@@ -78,24 +85,24 @@ public class IdeaService {
 
     @Transactional
     public IdeaResponse generateIdea(IdeaRequest request) {
+        User currentUser = getCurrentAuthenticatedUser();
         long startTime = System.currentTimeMillis();
         String userContext = request.getContext();
 
         String moderationPrompt = String.format(PROMPT_MODERACAO, userContext);
         String moderationResult = callOllama(moderationPrompt, ollamaModel);
 
-        if (moderationResult.contains("PERIGOSO") || !moderationResult.contains("SEGURO")) {
-
+        if (moderationResult.contains("PERIGOSO")) {
             long executionTime = System.currentTimeMillis() - startTime;
-
             Idea newIdea = new Idea(
-                    request.getTheme(),
-                    userContext,
-                    REJEICAO_SEGURANCA,
-                    ollamaModel,
-                    executionTime
+                    request.getTheme(), userContext, REJEICAO_SEGURANCA,
+                    ollamaModel, executionTime
             );
+            newIdea.setUser(currentUser);
             return new IdeaResponse(newIdea);
+
+        } else if (!moderationResult.contains("SEGURO")) {
+            throw new RuntimeException("Falha na moderação: A IA retornou uma resposta inesperada. Tente novamente em alguns segundos.");
         }
 
         String topicoUsuario = String.format("Tema: %s, Contexto: %s",
@@ -127,6 +134,7 @@ public class IdeaService {
                 ollamaModel,
                 executionTime
         );
+        newIdea.setUser(currentUser);
         Idea savedIdea = ideaRepository.save(newIdea);
         return new IdeaResponse(savedIdea);
     }
@@ -160,6 +168,22 @@ public class IdeaService {
             throw new IllegalArgumentException("Nenhuma ideia encontrada para o usuário com ID: " + userId);
         }
         return ideias.stream().map(IdeaResponse::new).toList();
+    }
+
+    /**
+     * Busca o usuário autenticado no contexto de segurança.
+     */
+    private User getCurrentAuthenticatedUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserDetails)) {
+            throw new ResourceNotFoundException("Usuário não autenticado. Não é possível gerar ideias.");
+        }
+
+        String userEmail = ((UserDetails) authentication.getPrincipal()).getUsername();
+
+        return userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário autenticado não encontrado no banco de dados: " + userEmail));
     }
 
 }
