@@ -19,16 +19,20 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import projeto_gerador_ideias_backend.dto.IdeaRequest;
 import projeto_gerador_ideias_backend.dto.OllamaResponse;
+import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.model.User;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.List;
 
-import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
@@ -192,5 +196,108 @@ class IdeaControllerTest {
 
         int requestCountAfter = mockWebServer.getRequestCount();
         assertEquals(0, requestCountAfter - requestCountBefore, "Não deveria fazer requisições se a validação falhar");
+    }
+
+    // ==========================================
+    // NOVOS TESTES (histórico e filtro por tema/data)
+    // ==========================================
+
+    @Test
+    @WithMockUser
+    void shouldListIdeasWithoutFilter() throws Exception {
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
+
+        User user = new User();
+        user.setName("user1");
+        user.setEmail("user1@test.com");
+        user.setPassword("123456");
+        userRepository.save(user);
+
+        Idea idea1 = new Idea(Theme.ESTUDOS, "Contexto 1", "Ideia 1", "modeloA", 100L);
+        idea1.setUser(user);
+        Idea idea2 = new Idea(Theme.TRABALHO, "Contexto 2", "Ideia 2", "modeloB", 150L);
+        idea2.setUser(user);
+        ideaRepository.saveAll(List.of(idea1, idea2));
+
+        mockMvc.perform(get("/api/ideas/history"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)));
+    }
+
+    @Test
+    @WithMockUser
+    void shouldListIdeasWithThemeFilter() throws Exception {
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
+
+        User user = new User();
+        user.setName("user2");
+        user.setEmail("user2@test.com");
+        user.setPassword("123456");
+        userRepository.save(user);
+
+        Idea idea = new Idea(Theme.ESTUDOS, "Contexto Filtro", "Ideia Filtrada", "modeloX", 200L);
+        idea.setUser(user);
+        ideaRepository.save(idea);
+
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("theme", "ESTUDOS"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].theme", is("estudos")));
+    }
+
+    @Test
+    @WithMockUser
+    void shouldReturnNotFoundWhenNoIdeasFound() throws Exception {
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
+
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("theme", "TECNOLOGIA"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().string("Nenhuma ideia encontrada no banco de dados para os filtros informados."));
+    }
+
+    @Test
+    @WithMockUser(username = "user3@test.com")
+    void shouldListIdeasByUserSuccessfully() throws Exception {
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
+
+        User user = new User();
+        user.setName("user3");
+        user.setEmail("user3@test.com");
+        user.setPassword("123456");
+        userRepository.save(user);
+
+        Idea idea = new Idea(Theme.TRABALHO, "User Context", "Ideia de usuário", "modeloU", 300L);
+        idea.setUser(user);
+        ideaRepository.save(idea);
+
+        mockMvc.perform(get("/api/ideas/user/" + user.getId() + "/ideas"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].content", is("Ideia de usuário")))
+                .andExpect(jsonPath("$[0].theme", is("trabalho")))
+                .andExpect(jsonPath("$[0].userName", is("user3")));
+    }
+
+
+
+    @Test
+    @WithMockUser
+    void shouldReturnNotFoundForUserWithoutIdeas() throws Exception {
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
+
+        User user = new User();
+        user.setName("user4");
+        user.setEmail("user4@test.com");
+        user.setPassword("123456");
+        userRepository.save(user);
+
+        mockMvc.perform(get("/api/ideas/user/" + user.getId() + "/ideas"))
+                .andExpect(status().isNotFound());
     }
 }

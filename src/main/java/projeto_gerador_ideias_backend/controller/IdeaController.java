@@ -26,6 +26,8 @@ public class IdeaController {
 
     private final IdeaService ideaService;
 
+
+    // GERAR NOVA IDEIA
     @Operation(
             summary = "Gerar Nova Ideia",
             description = "Gera uma nova ideia com base em um tema e contexto, utilizando a IA (Ollama). Inclui moderação de segurança."
@@ -43,6 +45,9 @@ public class IdeaController {
         IdeaResponse response = ideaService.generateIdea(request);
         return ResponseEntity.ok(response);
     }
+
+
+    // LISTAR HISTORICO DE IDEIAS COM FILTROS
 
     @Operation(
             summary = "Listar Histórico de Ideias (com filtro opcional por tema e data)",
@@ -81,6 +86,8 @@ public class IdeaController {
         }
     }
 
+
+    // LISTAR IDEIAS DO USUARIO
     @Operation(
             summary = "Listar Ideias de um Usuário",
             description = "Retorna todas as ideias criadas por um usuário específico, ordenadas da mais recente para a mais antiga."
