@@ -78,8 +78,6 @@ class IdeaServiceTest {
                 .build();
         Authentication auth = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(auth);
-
-        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
     }
 
     @AfterEach
@@ -99,6 +97,8 @@ class IdeaServiceTest {
 
     @Test
     void shouldGenerateIdeaWhenModerationIsSafe() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
         IdeaRequest request = new IdeaRequest();
         request.setTheme(Theme.TECNOLOGIA);
         request.setContext("Um app de lista de tarefas");
@@ -129,6 +129,8 @@ class IdeaServiceTest {
 
     @Test
     void shouldRejectIdeaWhenModerationIsDangerous() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
         IdeaRequest request = new IdeaRequest();
         request.setTheme(Theme.TECNOLOGIA);
         request.setContext("Como fazer phishing");
@@ -148,6 +150,8 @@ class IdeaServiceTest {
 
     @Test
     void shouldThrowExceptionWhenModerationResponseIsUnclear() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
         IdeaRequest request = new IdeaRequest();
         request.setTheme(Theme.TECNOLOGIA);
         request.setContext("Contexto normal");
@@ -167,6 +171,8 @@ class IdeaServiceTest {
 
     @Test
     void shouldHandleOllamaException() {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
         IdeaRequest request = new IdeaRequest();
         request.setTheme(Theme.TECNOLOGIA);
         request.setContext("Contexto válido");
