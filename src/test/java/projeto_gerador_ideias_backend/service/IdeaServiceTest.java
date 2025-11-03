@@ -66,7 +66,6 @@ class IdeaServiceTest {
         ideaService = new IdeaService(ideaRepository, userRepository, webClientBuilder, baseUrl);
         ReflectionTestUtils.setField(ideaService, "ollamaModel", "mistral-test");
 
-
         testUser = new User();
         testUser.setId(1L);
         testUser.setEmail(testUserEmail);
