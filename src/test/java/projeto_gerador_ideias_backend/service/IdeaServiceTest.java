@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -125,7 +126,10 @@ class IdeaServiceTest {
         assertEquals("tecnologia", response.getTheme());
         assertEquals(2, mockWebServer.getRequestCount());
 
-        verify(ideaRepository).save(argThat(idea -> idea.getUser().getId().equals(1L)));
+        verify(ideaRepository).save(argThat(idea ->
+                idea.getUser().getId().equals(1L) &&
+                        idea.getGeneratedContent().equals("Ideia gerada: Criar um app focado em gamificação.")
+        ));
     }
 
     @Test
@@ -270,5 +274,43 @@ class IdeaServiceTest {
         assertEquals("Nenhuma ideia encontrada para o usuário com ID: 1", ex.getMessage());
         verify(ideaRepository, times(1))
                 .findByUserIdOrderByCreatedAtDesc(1L);
+    }
+
+    @Test
+    void shouldGenerateSurpriseIdeaSuccessfully() throws Exception {
+        String mockAiResponse = "A IA gerou esta ideia aleatória.";
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse(mockAiResponse))
+                .addHeader("Content-Type", "application/json"));
+
+        when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> {
+            Idea idea = invocation.getArgument(0);
+            idea.setId(1L);
+            return idea;
+        });
+
+        IdeaResponse response = ideaService.generateSurpriseIdea();
+
+        assertEquals(1, mockWebServer.getRequestCount());
+
+        RecordedRequest request = mockWebServer.takeRequest();
+        String requestBody = request.getBody().readUtf8();
+        assertTrue(requestBody.contains("Gere um nome de startup") ||
+                requestBody.contains("Gere um slogan de marketing") ||
+                requestBody.contains("Gere uma ideia de produto") ||
+                requestBody.contains("Gere um post para redes sociais"));
+
+        assertNotNull(response);
+        assertEquals("Test User", response.getUserName());
+
+        assertTrue(response.getContent().endsWith(mockAiResponse));
+        assertTrue(response.getContent().contains(": "));
+
+        verify(ideaRepository).save(argThat(idea ->
+                idea.getUser().getId().equals(1L) &&
+                        idea.getGeneratedContent().endsWith(mockAiResponse) &&
+                        idea.getGeneratedContent().startsWith("um ")
+        ));
     }
 }

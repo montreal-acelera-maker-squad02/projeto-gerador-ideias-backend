@@ -30,6 +30,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.startsWith;
+import static org.hamcrest.Matchers.endsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -196,6 +199,28 @@ class IdeaControllerTest {
 
         int requestCountAfter = mockWebServer.getRequestCount();
         assertEquals(0, requestCountAfter - requestCountBefore, "Não deveria fazer requisições se a validação falhar");
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldGenerateSurpriseIdeaSuccessfully() throws Exception {
+        String mockAiResponse = "A IA gerou esta ideia aleatória.";
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse(mockAiResponse))
+                .addHeader("Content-Type", "application/json"));
+
+        int requestCountBefore = mockWebServer.getRequestCount();
+
+        mockMvc.perform(post("/api/ideas/surprise-me")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userName", is("Controller User")))
+                .andExpect(jsonPath("$.content", endsWith(mockAiResponse)))
+                .andExpect(jsonPath("$.content", startsWith("um "))); // Verifica se o contexto foi pré-anexado
+
+        int requestCountAfter = mockWebServer.getRequestCount();
+        assertEquals(1, requestCountAfter - requestCountBefore, "Deveria ter feito apenas 1 requisição (sem moderação)");
     }
 
     // ==========================================
