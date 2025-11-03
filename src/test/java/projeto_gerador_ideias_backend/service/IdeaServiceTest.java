@@ -7,6 +7,7 @@ import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -26,6 +27,9 @@ import projeto_gerador_ideias_backend.repository.UserRepository;
 import java.io.IOException;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -176,5 +180,94 @@ class IdeaServiceTest {
         assertTrue(exception.getMessage().contains("Erro ao se comunicar com a IA (Ollama)"));
         verify(ideaRepository, never()).save(any(Idea.class));
         assertEquals(1, mockWebServer.getRequestCount());
+    }
+
+    private LocalDateTime startDate;
+    private LocalDateTime endDate;
+    private Idea ideaMock;
+
+    @BeforeEach
+    void setup() {
+        MockitoAnnotations.openMocks(this);
+        startDate = LocalDateTime.of(2025, 10, 1, 0, 0);
+        endDate = LocalDateTime.of(2025, 10, 31, 23, 59);
+
+        ideaMock = new Idea(Theme.TECNOLOGIA, "contexto teste", "ideia gerada", "modelo-teste", 120L);
+    }
+
+    @Test
+    void deveListarHistorico_ComTemaEData() {
+        when(ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(
+                Theme.TECNOLOGIA, startDate, endDate))
+                .thenReturn(List.of(ideaMock));
+
+        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado("TECNOLOGIA", startDate, endDate);
+
+        assertEquals(1, result.size());
+        verify(ideaRepository, times(1))
+                .findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.TECNOLOGIA, startDate, endDate);
+    }
+
+    @Test
+    void deveListarHistorico_ApenasComTema() {
+        when(ideaRepository.findByThemeOrderByCreatedAtDesc(Theme.TECNOLOGIA))
+                .thenReturn(List.of(ideaMock));
+
+        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado("TECNOLOGIA", null, null);
+
+        assertEquals(1, result.size());
+        verify(ideaRepository, times(1))
+                .findByThemeOrderByCreatedAtDesc(Theme.TECNOLOGIA);
+    }
+
+    @Test
+    void deveListarHistorico_ApenasComDatas() {
+        when(ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate))
+                .thenReturn(List.of(ideaMock));
+
+        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado(null, startDate, endDate);
+
+        assertEquals(1, result.size());
+        verify(ideaRepository, times(1))
+                .findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
+    }
+
+    @Test
+    void deveListarHistorico_SemFiltros() {
+        when(ideaRepository.findAllByOrderByCreatedAtDesc())
+                .thenReturn(List.of(ideaMock));
+
+        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado(null, null, null);
+
+        assertEquals(1, result.size());
+        verify(ideaRepository, times(1))
+                .findAllByOrderByCreatedAtDesc();
+    }
+
+    @Test
+    void deveListarIdeiasPorUsuario_ComSucesso() {
+        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L))
+                .thenReturn(List.of(ideaMock));
+
+        List<IdeaResponse> result = ideaService.listarIdeiasPorUsuario(1L);
+
+        assertEquals(1, result.size());
+        verify(ideaRepository, times(1))
+                .findByUserIdOrderByCreatedAtDesc(1L);
+    }
+
+    @Test
+    void deveLancarExcecao_QuandoUsuarioSemIdeias() {
+        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L))
+                .thenReturn(Collections.emptyList());
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> ideaService.listarIdeiasPorUsuario(1L)
+        );
+
+        assertEquals("Nenhuma ideia encontrada para o usuário com ID: 1", ex.getMessage());
+        verify(ideaRepository, times(1))
+                .findByUserIdOrderByCreatedAtDesc(1L);
     }
 }
