@@ -29,6 +29,8 @@
 	<properties>
 		<java.version>17</java.version>
 		<lombok.version>1.18.32</lombok.version>
+		<sonar.organization>Acelera Maker</sonar.organization>
+		<sonar.projectKey>chaveprojetoaceleramaker</sonar.projectKey>
 	</properties>
 	<dependencies>
 		<dependency>
