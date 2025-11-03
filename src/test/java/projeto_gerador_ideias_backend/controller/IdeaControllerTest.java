@@ -4,12 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -50,10 +53,33 @@ class IdeaControllerTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    private final String testUserEmail = "controller-user@example.com";
+
     @BeforeAll
     static void setUp() throws IOException {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
+    }
+
+    @BeforeEach
+    void setUpDatabase() {
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
+
+        User testUser = new User();
+        testUser.setEmail(testUserEmail);
+        testUser.setName("Controller User");
+        testUser.setPassword(passwordEncoder.encode("password"));
+        userRepository.save(testUser);
+    }
+
+    @AfterEach
+    void tearDownDatabase() {
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
     }
 
     @AfterAll
@@ -76,7 +102,7 @@ class IdeaControllerTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(username = testUserEmail)
     void shouldGenerateIdeaSuccessfully() throws Exception {
         IdeaRequest request = new IdeaRequest();
         request.setTheme(Theme.ESTUDOS);
@@ -97,15 +123,16 @@ class IdeaControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", is("Crie pequenos projetos todos os dias.")))
-                .andExpect(jsonPath("$.theme", is("estudos")));
+                .andExpect(jsonPath("$.theme", is("estudos")))
+                .andExpect(jsonPath("$.userName", is("Controller User")));
 
         int requestCountAfter = mockWebServer.getRequestCount();
         assertEquals(2, requestCountAfter - requestCountBefore, "Deveria ter feito 2 requisições (1 moderação, 1 geração)");
     }
 
     @Test
-    @WithMockUser
-    void shouldReturnRejectionFromModeration() throws Exception {
+    @WithMockUser(username = testUserEmail)
+    void shouldReturnRejectionFromModerationWhenDangerous() throws Exception {
         IdeaRequest request = new IdeaRequest();
         request.setTheme(Theme.TRABALHO);
         request.setContext("Tópico perigoso");
@@ -121,14 +148,40 @@ class IdeaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content", is("Desculpe, não posso gerar ideias sobre esse tema.")));
+                .andExpect(jsonPath("$.content", is("Desculpe, não posso gerar ideias sobre esse tema.")))
+                .andExpect(jsonPath("$.userName", is("Controller User")));
 
         int requestCountAfter = mockWebServer.getRequestCount();
         assertEquals(1, requestCountAfter - requestCountBefore, "Deveria ter feito apenas 1 requisição (moderação)");
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(username = testUserEmail)
+    void shouldReturnInternalServerErrorWhenModerationFails() throws Exception {
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(Theme.TRABALHO);
+        request.setContext("Tópico normal");
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("...carregando..."))
+                .addHeader("Content-Type", "application/json"));
+
+
+        int requestCountBefore = mockWebServer.getRequestCount();
+
+        mockMvc.perform(post("/api/ideas/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error", is("Erro interno do servidor")))
+                .andExpect(jsonPath("$.message", is("Falha na moderação: A IA retornou uma resposta inesperada. Tente novamente em alguns segundos.")));
+
+        int requestCountAfter = mockWebServer.getRequestCount();
+        assertEquals(1, requestCountAfter - requestCountBefore, "Deveria ter feito apenas 1 requisição (moderação)");
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
     void shouldReturnBadRequestForInvalidInput() throws Exception {
         IdeaRequest request = new IdeaRequest();
         request.setTheme(Theme.TECNOLOGIA);
@@ -138,7 +191,8 @@ class IdeaControllerTest {
         mockMvc.perform(post("/api/ideas/generate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.context", is("O contexto não pode estar em branco")));
 
         int requestCountAfter = mockWebServer.getRequestCount();
         assertEquals(0, requestCountAfter - requestCountBefore, "Não deveria fazer requisições se a validação falhar");
