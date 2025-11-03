@@ -10,6 +10,7 @@ import projeto_gerador_ideias_backend.dto.IdeaResponse;
 import projeto_gerador_ideias_backend.dto.OllamaRequest;
 import projeto_gerador_ideias_backend.dto.OllamaResponse;
 import projeto_gerador_ideias_backend.model.Idea;
+import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
 
 import java.time.LocalDateTime;
