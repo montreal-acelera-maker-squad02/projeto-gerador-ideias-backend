@@ -20,6 +20,7 @@ import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Random;
 import java.util.regex.Pattern;
 
 @Service
@@ -36,6 +37,14 @@ public class IdeaService {
 
     private static final Pattern HEADER_CLEANUP_PATTERN = Pattern.compile("(?s)#{2,}.*?(\\R|$)");
 
+    private static final List<String> SURPRISE_TYPES = List.of(
+            "um nome de startup",
+            "um slogan de marketing",
+            "uma ideia de produto",
+            "um post para redes sociais"
+    );
+    private final Random random = new Random();
+
     private static final String PROMPT_MODERACAO =
             "Analise o 'Tópico' abaixo. O tópico sugere uma intenção maliciosa, ilegal ou antiética (como phishing, fraude, malware, invasão, etc.)?" +
                     "Responda APENAS 'SEGURO' ou 'PERIGOSO'.\n\n" +
@@ -49,6 +58,13 @@ public class IdeaService {
                     "1. TAMANHO: 30 palavras ou menos. NÃO liste 10 itens. NÃO escreva roteiros.\n" +
                     "2. FORMATO: Responda APENAS o texto da ideia. NÃO inclua saudações, explicações ou cabeçalhos.\n\n" +
                     "RESPOSTA (MÁX 30 PALAVRAS):";
+
+    private static final String PROMPT_SURPRESA =
+            "Gere %s sobre o tema %s. Seja criativo e direto (máximo 30 palavras) em português do Brasil.\n\n" +
+                    "REGRAS OBRIGATÓRIAS:\n" +
+                    "1. FORMATO: Responda APENAS a ideia. \n" +
+                    "2. NÃO inclua saudações, explicações, cabeçalhos ou o tema na resposta.\n\n" +
+                    "RESPOSTA (APENAS A IDEIA):";
 
     public IdeaService(IdeaRepository ideaRepository,
                        UserRepository userRepository,
@@ -110,6 +126,41 @@ public class IdeaService {
                 userContext);
 
         String generationPrompt = String.format(PROMPT_GERACAO, topicoUsuario);
+
+        return runGenerationAndSave(
+                currentUser,
+                request.getTheme(),
+                userContext,
+                generationPrompt,
+                startTime,
+                false
+        );
+    }
+
+    @Transactional
+    public IdeaResponse generateSurpriseIdea() {
+        User currentUser = getCurrentAuthenticatedUser();
+        long startTime = System.currentTimeMillis();
+
+        Theme randomTheme = Theme.values()[random.nextInt(Theme.values().length)];
+        String randomType = SURPRISE_TYPES.get(random.nextInt(SURPRISE_TYPES.size()));
+
+        String userContext = String.format("%s sobre %s", randomType, randomTheme.getValue());
+
+        String generationPrompt = String.format(PROMPT_SURPRESA, randomType, randomTheme.getValue());
+
+        return runGenerationAndSave(
+                currentUser,
+                randomTheme,
+                userContext,
+                generationPrompt,
+                startTime,
+                true
+        );
+    }
+
+    private IdeaResponse runGenerationAndSave(User user, Theme theme, String context, String generationPrompt, long startTime, boolean isSurprise) {
+
         String generatedContent = callOllama(generationPrompt, ollamaModel);
 
         generatedContent = HEADER_CLEANUP_PATTERN.matcher(generatedContent).replaceAll("").trim();
@@ -121,20 +172,29 @@ public class IdeaService {
             }
         }
 
-        if (generatedContent.startsWith("I cannot") || generatedContent.startsWith("Sorry, I can't")) {
-            generatedContent = REJEICAO_SEGURANCA;
+        if (generatedContent.startsWith("\"") && generatedContent.endsWith("\"") && generatedContent.length() > 2) {
+            generatedContent = generatedContent.substring(1, generatedContent.length() - 1);
+        }
+
+        String finalContent;
+        if (generatedContent.startsWith("I cannot") || generatedContent.startsWith("Sorry, I can't") || generatedContent.isEmpty()) {
+            finalContent = REJEICAO_SEGURANCA;
+        } else if (isSurprise) {
+            finalContent = String.format("%s: %s", context, generatedContent);
+        } else {
+            finalContent = generatedContent;
         }
 
         long executionTime = System.currentTimeMillis() - startTime;
 
         Idea newIdea = new Idea(
-                request.getTheme(),
-                userContext,
-                generatedContent,
+                theme,
+                context,
+                finalContent,
                 ollamaModel,
                 executionTime
         );
-        newIdea.setUser(currentUser);
+        newIdea.setUser(user);
         Idea savedIdea = ideaRepository.save(newIdea);
         return new IdeaResponse(savedIdea);
     }
