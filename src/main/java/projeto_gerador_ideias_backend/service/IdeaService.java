@@ -1,6 +1,7 @@
 package projeto_gerador_ideias_backend.service;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -20,6 +21,7 @@ import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import java.util.regex.Pattern;
 
@@ -28,7 +30,7 @@ public class IdeaService {
 
     private final IdeaRepository ideaRepository;
     private final UserRepository userRepository;
-    private final WebClient webClient;
+    private final OllamaCacheableService ollamaService;
 
     @Value("${ollama.model}")
     private String ollamaModel;
@@ -68,73 +70,59 @@ public class IdeaService {
 
     public IdeaService(IdeaRepository ideaRepository,
                        UserRepository userRepository,
-                       WebClient.Builder webClientBuilder,
-                       @Value("${ollama.base-url}") String ollamaBaseUrl) {
+                       OllamaCacheableService ollamaService) {
         this.ideaRepository = ideaRepository;
         this.userRepository = userRepository;
-        this.webClient = webClientBuilder.baseUrl(ollamaBaseUrl).build();
+        this.ollamaService = ollamaService;
     }
-
-    /**
-     * Helper genérico para chamar o Ollama com um modelo e prompt específicos
-     */
-    private String callOllama(String prompt, String modelName) {
-        OllamaRequest ollamaRequest = new OllamaRequest(modelName, prompt);
-        try {
-            OllamaResponse ollamaResponse = this.webClient.post()
-                    .uri("/api/chat")
-                    .bodyValue(ollamaRequest)
-                    .retrieve()
-                    .bodyToMono(OllamaResponse.class)
-                    .block();
-
-            if (ollamaResponse != null && ollamaResponse.getMessage() != null) {
-                return ollamaResponse.getMessage().getContent().trim();
-            } else {
-                throw new RuntimeException("Resposta nula ou inválida do Ollama (/api/chat).");
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Erro ao se comunicar com a IA (Ollama): " + e.getMessage(), e);
-        }
-    }
-
 
     @Transactional
     public IdeaResponse generateIdea(IdeaRequest request) {
         User currentUser = getCurrentAuthenticatedUser();
-        long startTime = System.currentTimeMillis();
-        String userContext = request.getContext();
 
-        String moderationPrompt = String.format(PROMPT_MODERACAO, userContext);
-        String moderationResult = callOllama(moderationPrompt, ollamaModel);
+        Optional<Idea> userSpecificIdea = ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
+                currentUser, request.getTheme(), request.getContext()
+        );
+
+        if (userSpecificIdea.isPresent()) {
+            return new IdeaResponse(userSpecificIdea.get());
+        }
+
+        long startTime = System.currentTimeMillis();
+        String aiGeneratedContent = getCachedAiResponse(request.getTheme(), request.getContext());
+
+        long executionTime = System.currentTimeMillis() - startTime;
+
+        Idea newIdea = new Idea(
+                request.getTheme(),
+                request.getContext(),
+                aiGeneratedContent,
+                ollamaModel,
+                executionTime
+        );
+        newIdea.setUser(currentUser);
+        Idea savedIdea = ideaRepository.save(newIdea);
+
+        return new IdeaResponse(savedIdea);
+    }
+
+    @Cacheable(value = "aiResponseCache", key = "#theme.name() + '-' + #context")
+    public String getCachedAiResponse(Theme theme, String context) {
+
+        String moderationPrompt = String.format(PROMPT_MODERACAO, context);
+        String moderationResult = ollamaService.getAiResponse(moderationPrompt);
 
         if (moderationResult.contains("PERIGOSO")) {
-            long executionTime = System.currentTimeMillis() - startTime;
-            Idea newIdea = new Idea(
-                    request.getTheme(), userContext, REJEICAO_SEGURANCA,
-                    ollamaModel, executionTime
-            );
-            newIdea.setUser(currentUser);
-            return new IdeaResponse(newIdea);
-
-        } else if (!moderationResult.contains("SEGURO")) {
-            throw new RuntimeException("Falha na moderação: A IA retornou uma resposta inesperada. Tente novamente em alguns segundos.");
+            return REJEICAO_SEGURANCA;
         }
 
         String topicoUsuario = String.format("Tema: %s, Contexto: %s",
-                request.getTheme().getValue(),
-                userContext);
-
+                theme.getValue(),
+                context);
         String generationPrompt = String.format(PROMPT_GERACAO, topicoUsuario);
+        String generatedContent = ollamaService.getAiResponse(generationPrompt);
 
-        return runGenerationAndSave(
-                currentUser,
-                request.getTheme(),
-                userContext,
-                generationPrompt,
-                startTime,
-                false
-        );
+        return cleanUpAiResponse(generatedContent, context, false);
     }
 
     @Transactional
@@ -144,25 +132,28 @@ public class IdeaService {
 
         Theme randomTheme = Theme.values()[random.nextInt(Theme.values().length)];
         String randomType = SURPRISE_TYPES.get(random.nextInt(SURPRISE_TYPES.size()));
-
         String userContext = String.format("%s sobre %s", randomType, randomTheme.getValue());
 
         String generationPrompt = String.format(PROMPT_SURPRESA, randomType, randomTheme.getValue());
 
-        return runGenerationAndSave(
-                currentUser,
+        String aiContent = ollamaService.getAiResponse(generationPrompt);
+        String finalContent = cleanUpAiResponse(aiContent, userContext, true);
+
+        long executionTime = System.currentTimeMillis() - startTime;
+
+        Idea newIdea = new Idea(
                 randomTheme,
                 userContext,
-                generationPrompt,
-                startTime,
-                true
+                finalContent,
+                ollamaModel,
+                executionTime
         );
+        newIdea.setUser(currentUser);
+        Idea savedIdea = ideaRepository.save(newIdea);
+        return new IdeaResponse(savedIdea);
     }
 
-    private IdeaResponse runGenerationAndSave(User user, Theme theme, String context, String generationPrompt, long startTime, boolean isSurprise) {
-
-        String generatedContent = callOllama(generationPrompt, ollamaModel);
-
+    private String cleanUpAiResponse(String generatedContent, String context, boolean isSurprise) {
         generatedContent = HEADER_CLEANUP_PATTERN.matcher(generatedContent).replaceAll("").trim();
 
         if (generatedContent.startsWith("Embora seja impossível")) {
@@ -184,19 +175,7 @@ public class IdeaService {
         } else {
             finalContent = generatedContent;
         }
-
-        long executionTime = System.currentTimeMillis() - startTime;
-
-        Idea newIdea = new Idea(
-                theme,
-                context,
-                finalContent,
-                ollamaModel,
-                executionTime
-        );
-        newIdea.setUser(user);
-        Idea savedIdea = ideaRepository.save(newIdea);
-        return new IdeaResponse(savedIdea);
+        return finalContent;
     }
 
     public List<IdeaResponse> listarHistoricoIdeiasFiltrado(String theme, LocalDateTime startDate, LocalDateTime endDate) {

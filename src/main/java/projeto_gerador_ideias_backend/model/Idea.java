@@ -7,8 +7,13 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+
 @Entity
-@Table(name = "ideas")
+@Table(name = "ideas", indexes = {
+        @Index(name = "idx_idea_user_lookup", columnList = "user_id, theme, context")
+})
 @Data
 @NoArgsConstructor
 public class Idea {
