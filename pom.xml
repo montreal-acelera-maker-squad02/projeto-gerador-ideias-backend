@@ -21,13 +21,10 @@
 	<properties>
 		<java.version>17</java.version>
 		<lombok.version>1.18.32</lombok.version>
-<<<<<<< HEAD
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-=======
 		<sonar.organization>chaveprojetoaceleramaker</sonar.organization>
 		<sonar.projectKey>projeto-gerador-ideias-backend</sonar.projectKey>
->>>>>>> df0a6d928c0e7eaeca6aac45e3ebeb35f8ebcbd6
 	</properties>
 
 	<dependencies>
