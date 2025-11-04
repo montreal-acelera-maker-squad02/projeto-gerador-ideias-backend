@@ -26,6 +26,7 @@ public class Idea {
 
     @Lob
     @Column(nullable = false, columnDefinition = "TEXT")
+    @Basic(fetch = FetchType.EAGER)
     private String generatedContent;
 
     @Column(nullable = false)
