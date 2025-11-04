@@ -62,6 +62,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
     }
 
+    @ExceptionHandler(TokenLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleTokenLimitExceeded(TokenLimitExceededException ex) {
+        ErrorResponse error = new ErrorResponse("Limite de tokens atingido", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(ChatPermissionException.class)
+    public ResponseEntity<ErrorResponse> handleChatPermission(ChatPermissionException ex) {
+        ErrorResponse error = new ErrorResponse("Acesso negado", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleGenericRuntimeException(RuntimeException ex) {
         ErrorResponse error = new ErrorResponse("Erro interno do servidor", ex.getMessage());
