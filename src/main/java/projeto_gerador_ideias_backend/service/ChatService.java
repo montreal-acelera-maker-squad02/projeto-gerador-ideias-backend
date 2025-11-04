@@ -254,6 +254,7 @@ public class ChatService {
         );
     }
 
+    @Transactional(readOnly = true)
     public List<IdeaSummaryResponse> getUserIdeasSummary() {
         User currentUser = getCurrentAuthenticatedUser();
         List<Idea> ideas = ideaRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId());

@@ -199,6 +199,7 @@ public class IdeaService {
         return new IdeaResponse(savedIdea);
     }
 
+    @Transactional(readOnly = true)
     public List<IdeaResponse> listarHistoricoIdeiasFiltrado(String theme, LocalDateTime startDate, LocalDateTime endDate) {
         List<Idea> ideias;
 
@@ -222,6 +223,7 @@ public class IdeaService {
         return ideias.stream().map(IdeaResponse::new).toList();
     }
 
+    @Transactional(readOnly = true)
     public List<IdeaResponse> listarIdeiasPorUsuario(Long userId) {
         List<Idea> ideias = ideaRepository.findByUserIdOrderByCreatedAtDesc(userId);
         if (ideias.isEmpty()) {
