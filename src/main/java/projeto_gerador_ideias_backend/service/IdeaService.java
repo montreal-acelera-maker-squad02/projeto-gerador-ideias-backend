@@ -2,6 +2,8 @@ package projeto_gerador_ideias_backend.service;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +24,7 @@ import java.util.regex.Pattern;
 
 @Service
 @Data
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class IdeaService {
 
     private final IdeaRepository ideaRepository;
@@ -50,6 +52,7 @@ public class IdeaService {
                     "2. FORMATO: Responda APENAS o texto da ideia. NÃO inclua saudações, explicações ou cabeçalhos.\n\n" +
                     "RESPOSTA (MÁX 30 PALAVRAS):";
 
+    @Autowired
     public IdeaService(IdeaRepository ideaRepository,
                        WebClient.Builder webClientBuilder,
                        @Value("${ollama.base-url}") String ollamaBaseUrl, UserRepository userRepository) {
@@ -58,11 +61,6 @@ public class IdeaService {
         this.webClient = webClientBuilder.baseUrl(ollamaBaseUrl).build();
     }
 
-    public IdeaService(IdeaRepository ideaRepository, WebClient.Builder webClientBuilder, String baseUrl, IdeaRepository ideaRepository1, WebClient webClient, UserRepository userRepository) {
-        this.ideaRepository = ideaRepository1;
-        this.webClient = webClient;
-        this.userRepository = userRepository;
-    }
 
     /**
      * Helper genérico para chamar o Ollama com um modelo e prompt específicos
