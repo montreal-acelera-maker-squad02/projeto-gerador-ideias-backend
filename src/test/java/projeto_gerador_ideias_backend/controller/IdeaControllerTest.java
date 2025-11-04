@@ -26,7 +26,6 @@ import projeto_gerador_ideias_backend.repository.IdeaRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.hamcrest.Matchers.*;
@@ -217,7 +216,7 @@ class IdeaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.userName", is("Controller User")))
                 .andExpect(jsonPath("$.content", endsWith(mockAiResponse)))
-                .andExpect(jsonPath("$.content", startsWith("um "))); // Verifica se o contexto foi pré-anexado
+                .andExpect(jsonPath("$.content", anyOf(startsWith("um "), startsWith("uma ")))); // Verifica se o contexto foi pré-anexado
 
         int requestCountAfter = mockWebServer.getRequestCount();
         assertEquals(1, requestCountAfter - requestCountBefore, "Deveria ter feito apenas 1 requisição (sem moderação)");

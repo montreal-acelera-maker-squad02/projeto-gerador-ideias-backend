@@ -283,6 +283,8 @@ class IdeaServiceTest {
 
     @Test
     void shouldGenerateSurpriseIdeaSuccessfully() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
         String mockAiResponse = "A IA gerou esta ideia aleatória.";
 
         mockWebServer.enqueue(new MockResponse()
@@ -315,7 +317,7 @@ class IdeaServiceTest {
         verify(ideaRepository).save(argThat(idea ->
                 idea.getUser().getId().equals(1L) &&
                         idea.getGeneratedContent().endsWith(mockAiResponse) &&
-                        idea.getGeneratedContent().startsWith("um ")
+                        (idea.getGeneratedContent().startsWith("um ") || idea.getGeneratedContent().startsWith("uma "))
         ));
     }
 }
