@@ -127,4 +127,43 @@ public class IdeaController {
         }
     }
 
+    // FAVORITAR IDEIAS
+    @Operation(summary = "Favoritar uma ideia")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Ideia favoritada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Erro de validação"),
+            @ApiResponse(responseCode = "404", description = "Usuário ou ideia não encontrados")
+    })
+    @PostMapping("/{ideaId}/favorite/{userId}")
+    public ResponseEntity<?> favoritarIdeia(@PathVariable Long userId, @PathVariable Long ideaId) {
+        try {
+            ideaService.favoritarIdeia(userId, ideaId);
+            return ResponseEntity.ok("Ideia favoritada com sucesso.");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Erro ao favoritar ideia: " + e.getMessage());
+        }
+    }
+
+
+    // DESFAVORITAR IDEIAS
+    @Operation(summary = "Remover ideia dos favoritos")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Ideia removida dos favoritos com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Usuário ou ideia não encontrados")
+    })
+    @DeleteMapping("/{ideaId}/favorite/{userId}")
+    public ResponseEntity<?> desfavoritarIdeia(@PathVariable Long userId, @PathVariable Long ideaId) {
+        try {
+            ideaService.desfavoritarIdeia(userId, ideaId);
+            return ResponseEntity.ok("Ideia removida dos favoritos com sucesso.");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Erro ao remover ideia dos favoritos: " + e.getMessage());
+        }
+    }
 }
