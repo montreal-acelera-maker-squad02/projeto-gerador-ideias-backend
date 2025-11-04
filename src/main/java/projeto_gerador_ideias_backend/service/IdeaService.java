@@ -1,5 +1,7 @@
 package projeto_gerador_ideias_backend.service;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -11,7 +13,9 @@ import projeto_gerador_ideias_backend.dto.OllamaRequest;
 import projeto_gerador_ideias_backend.dto.OllamaResponse;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
+import projeto_gerador_ideias_backend.model.User;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
+import projeto_gerador_ideias_backend.repository.UserRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -20,10 +24,13 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
+@Data
+@AllArgsConstructor
 public class IdeaService {
 
     private final IdeaRepository ideaRepository;
     private final WebClient webClient;
+    private final UserRepository userRepository;
 
     @Value("${ollama.model}")
     private String ollamaModel;
@@ -48,9 +55,16 @@ public class IdeaService {
 
     public IdeaService(IdeaRepository ideaRepository,
                        WebClient.Builder webClientBuilder,
-                       @Value("${ollama.base-url}") String ollamaBaseUrl) {
+                       @Value("${ollama.base-url}") String ollamaBaseUrl, UserRepository userRepository) {
         this.ideaRepository = ideaRepository;
+        this.userRepository = userRepository;
         this.webClient = webClientBuilder.baseUrl(ollamaBaseUrl).build();
+    }
+
+    public IdeaService(IdeaRepository ideaRepository, WebClient.Builder webClientBuilder, String baseUrl, IdeaRepository ideaRepository1, WebClient webClient, UserRepository userRepository) {
+        this.ideaRepository = ideaRepository1;
+        this.webClient = webClient;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -163,4 +177,23 @@ public class IdeaService {
         return ideias.stream().map(IdeaResponse::new).toList();
     }
 
+    public void favoritarIdeia(Long userId, Long ideaId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
+        Idea idea = ideaRepository.findById(ideaId)
+                .orElseThrow(() -> new IllegalArgumentException("Ideia não encontrada."));
+
+        user.getFavoriteIdeas().add(idea);
+        userRepository.save(user);
+    }
+
+    public void desfavoritarIdeia(Long userId, Long ideaId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
+        Idea idea = ideaRepository.findById(ideaId)
+                .orElseThrow(() -> new IllegalArgumentException("Ideia não encontrada."));
+
+        user.getFavoriteIdeas().remove(idea);
+        userRepository.save(user);
+    }
 }
