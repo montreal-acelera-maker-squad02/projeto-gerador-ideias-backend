@@ -3,7 +3,6 @@ package projeto_gerador_ideias_backend.service;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -20,8 +19,6 @@ import projeto_gerador_ideias_backend.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.regex.Pattern;
-
-import java.util.stream.Collectors;
 
 @Service
 @Data

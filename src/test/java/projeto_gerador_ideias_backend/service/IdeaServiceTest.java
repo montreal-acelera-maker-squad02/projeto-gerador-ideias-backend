@@ -17,6 +17,7 @@ import projeto_gerador_ideias_backend.dto.OllamaResponse;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
+import projeto_gerador_ideias_backend.repository.UserRepository;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -34,7 +35,7 @@ class IdeaServiceTest {
 
     @Mock
     private IdeaRepository ideaRepository;
-
+    private UserRepository userRepository;
     private IdeaService ideaService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -46,7 +47,7 @@ class IdeaServiceTest {
 
         String baseUrl = String.format("http://localhost:%s", mockWebServer.getPort());
         WebClient.Builder webClientBuilder = WebClient.builder();
-        ideaService = new IdeaService(ideaRepository, webClientBuilder, baseUrl);
+        ideaService = new IdeaService(ideaRepository, webClientBuilder, baseUrl, userRepository);
         ReflectionTestUtils.setField(ideaService, "ollamaModel", "mistral-test");
 
     }
