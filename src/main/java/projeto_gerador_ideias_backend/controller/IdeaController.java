@@ -46,6 +46,22 @@ public class IdeaController {
         return ResponseEntity.ok(response);
     }
 
+    @Operation(
+            summary = "Gerar Ideia Aleatória (Surpreenda-me)",
+            description = "Gera uma nova ideia totalmente aleatória (tema e tipo) pela IA, sem necessidade de enviar dados. Útil para o botão 'Surpreenda-me'."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Ideia aleatória gerada com sucesso",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = IdeaResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Usuário não autenticado"),
+            @ApiResponse(responseCode = "500", description = "Erro interno no servidor (ex: falha ao conectar com o Ollama)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping("/surprise-me")
+    public ResponseEntity<IdeaResponse> generateSurpriseIdea() {
+        IdeaResponse response = ideaService.generateSurpriseIdea();
+        return ResponseEntity.ok(response);
+    }
 
     // LISTAR HISTORICO DE IDEIAS COM FILTROS
 

@@ -17,9 +17,15 @@ import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.model.User;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
+import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Random;
 import java.util.regex.Pattern;
 
 @Service
@@ -28,6 +34,7 @@ import java.util.regex.Pattern;
 public class IdeaService {
 
     private final IdeaRepository ideaRepository;
+    private final UserRepository userRepository;
     private final WebClient webClient;
     private final UserRepository userRepository;
 
@@ -37,6 +44,14 @@ public class IdeaService {
     private static final String REJEICAO_SEGURANCA = "Desculpe, não posso gerar ideias sobre esse tema.";
 
     private static final Pattern HEADER_CLEANUP_PATTERN = Pattern.compile("(?s)#{2,}.*?(\\R|$)");
+
+    private static final List<String> SURPRISE_TYPES = List.of(
+            "um nome de startup",
+            "um slogan de marketing",
+            "uma ideia de produto",
+            "um post para redes sociais"
+    );
+    private final Random random = new Random();
 
     private static final String PROMPT_MODERACAO =
             "Analise o 'Tópico' abaixo. O tópico sugere uma intenção maliciosa, ilegal ou antiética (como phishing, fraude, malware, invasão, etc.)?" +
@@ -52,8 +67,16 @@ public class IdeaService {
                     "2. FORMATO: Responda APENAS o texto da ideia. NÃO inclua saudações, explicações ou cabeçalhos.\n\n" +
                     "RESPOSTA (MÁX 30 PALAVRAS):";
 
+    private static final String PROMPT_SURPRESA =
+            "Gere %s sobre o tema %s. Seja criativo e direto (máximo 30 palavras) em português do Brasil.\n\n" +
+                    "REGRAS OBRIGATÓRIAS:\n" +
+                    "1. FORMATO: Responda APENAS a ideia. \n" +
+                    "2. NÃO inclua saudações, explicações, cabeçalhos ou o tema na resposta.\n\n" +
+                    "RESPOSTA (APENAS A IDEIA):";
+    
     @Autowired
     public IdeaService(IdeaRepository ideaRepository,
+                       UserRepository userRepository,
                        WebClient.Builder webClientBuilder,
                        @Value("${ollama.base-url}") String ollamaBaseUrl, UserRepository userRepository) {
         this.ideaRepository = ideaRepository;
@@ -88,24 +111,24 @@ public class IdeaService {
 
     @Transactional
     public IdeaResponse generateIdea(IdeaRequest request) {
+        User currentUser = getCurrentAuthenticatedUser();
         long startTime = System.currentTimeMillis();
         String userContext = request.getContext();
 
         String moderationPrompt = String.format(PROMPT_MODERACAO, userContext);
         String moderationResult = callOllama(moderationPrompt, ollamaModel);
 
-        if (moderationResult.contains("PERIGOSO") || !moderationResult.contains("SEGURO")) {
-
+        if (moderationResult.contains("PERIGOSO")) {
             long executionTime = System.currentTimeMillis() - startTime;
-
             Idea newIdea = new Idea(
-                    request.getTheme(),
-                    userContext,
-                    REJEICAO_SEGURANCA,
-                    ollamaModel,
-                    executionTime
+                    request.getTheme(), userContext, REJEICAO_SEGURANCA,
+                    ollamaModel, executionTime
             );
+            newIdea.setUser(currentUser);
             return new IdeaResponse(newIdea);
+
+        } else if (!moderationResult.contains("SEGURO")) {
+            throw new RuntimeException("Falha na moderação: A IA retornou uma resposta inesperada. Tente novamente em alguns segundos.");
         }
 
         String topicoUsuario = String.format("Tema: %s, Contexto: %s",
@@ -113,6 +136,41 @@ public class IdeaService {
                 userContext);
 
         String generationPrompt = String.format(PROMPT_GERACAO, topicoUsuario);
+
+        return runGenerationAndSave(
+                currentUser,
+                request.getTheme(),
+                userContext,
+                generationPrompt,
+                startTime,
+                false
+        );
+    }
+
+    @Transactional
+    public IdeaResponse generateSurpriseIdea() {
+        User currentUser = getCurrentAuthenticatedUser();
+        long startTime = System.currentTimeMillis();
+
+        Theme randomTheme = Theme.values()[random.nextInt(Theme.values().length)];
+        String randomType = SURPRISE_TYPES.get(random.nextInt(SURPRISE_TYPES.size()));
+
+        String userContext = String.format("%s sobre %s", randomType, randomTheme.getValue());
+
+        String generationPrompt = String.format(PROMPT_SURPRESA, randomType, randomTheme.getValue());
+
+        return runGenerationAndSave(
+                currentUser,
+                randomTheme,
+                userContext,
+                generationPrompt,
+                startTime,
+                true
+        );
+    }
+
+    private IdeaResponse runGenerationAndSave(User user, Theme theme, String context, String generationPrompt, long startTime, boolean isSurprise) {
+
         String generatedContent = callOllama(generationPrompt, ollamaModel);
 
         generatedContent = HEADER_CLEANUP_PATTERN.matcher(generatedContent).replaceAll("").trim();
@@ -124,19 +182,29 @@ public class IdeaService {
             }
         }
 
-        if (generatedContent.startsWith("I cannot") || generatedContent.startsWith("Sorry, I can't")) {
-            generatedContent = REJEICAO_SEGURANCA;
+        if (generatedContent.startsWith("\"") && generatedContent.endsWith("\"") && generatedContent.length() > 2) {
+            generatedContent = generatedContent.substring(1, generatedContent.length() - 1);
+        }
+
+        String finalContent;
+        if (generatedContent.startsWith("I cannot") || generatedContent.startsWith("Sorry, I can't") || generatedContent.isEmpty()) {
+            finalContent = REJEICAO_SEGURANCA;
+        } else if (isSurprise) {
+            finalContent = String.format("%s: %s", context, generatedContent);
+        } else {
+            finalContent = generatedContent;
         }
 
         long executionTime = System.currentTimeMillis() - startTime;
 
         Idea newIdea = new Idea(
-                request.getTheme(),
-                userContext,
-                generatedContent,
+                theme,
+                context,
+                finalContent,
                 ollamaModel,
                 executionTime
         );
+        newIdea.setUser(user);
         Idea savedIdea = ideaRepository.save(newIdea);
         return new IdeaResponse(savedIdea);
     }
@@ -191,4 +259,20 @@ public class IdeaService {
         user.getFavoriteIdeas().remove(idea);
         userRepository.save(user);
     }
+    /**
+     * Busca o usuário autenticado no contexto de segurança.
+     */
+    private User getCurrentAuthenticatedUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserDetails)) {
+            throw new ResourceNotFoundException("Usuário não autenticado. Não é possível gerar ideias.");
+        }
+
+        String userEmail = ((UserDetails) authentication.getPrincipal()).getUsername();
+
+        return userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário autenticado não encontrado no banco de dados: " + userEmail));
+    }
+
 }
