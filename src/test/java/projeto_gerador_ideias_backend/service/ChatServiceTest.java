@@ -17,6 +17,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import projeto_gerador_ideias_backend.dto.*;
 import projeto_gerador_ideias_backend.exceptions.ChatPermissionException;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
+import projeto_gerador_ideias_backend.exceptions.TokenLimitExceededException;
 import projeto_gerador_ideias_backend.exceptions.ValidationException;
 import projeto_gerador_ideias_backend.model.*;
 import projeto_gerador_ideias_backend.repository.*;
@@ -220,7 +221,7 @@ class ChatServiceTest {
         assertNotNull(response);
         assertEquals("assistant", response.getRole());
         assertNotNull(response.getContent());
-        verify(chatMessageRepository, times(2)).save(any(ChatMessage.class)); // User + Assistant
+        verify(chatMessageRepository, times(2)).save(any(ChatMessage.class));
     }
 
     @Test
@@ -298,6 +299,41 @@ class ChatServiceTest {
         when(chatSessionRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> chatService.getSession(999L));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenTokenLimitExceeded() throws Exception {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+        session.setLastResetAt(LocalDateTime.now());
+        session.setTokensUsed(1000);
+
+        ChatMessageRequest messageRequest = new ChatMessageRequest();
+        messageRequest.setMessage("Teste");
+
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+        when(chatSessionRepository.findById(1L)).thenReturn(Optional.of(session));
+        when(chatSessionRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(Collections.singletonList(session));
+
+        assertThrows(TokenLimitExceededException.class, () -> chatService.sendMessage(1L, messageRequest));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenUserDoesNotOwnSession() {
+        User otherUser = new User();
+        otherUser.setId(2L);
+        otherUser.setEmail("other@example.com");
+
+        ChatSession session = new ChatSession(otherUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        ChatMessageRequest messageRequest = new ChatMessageRequest();
+        messageRequest.setMessage("Teste");
+
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+        when(chatSessionRepository.findById(1L)).thenReturn(Optional.of(session));
+
+        assertThrows(ChatPermissionException.class, () -> chatService.sendMessage(1L, messageRequest));
     }
 }
 

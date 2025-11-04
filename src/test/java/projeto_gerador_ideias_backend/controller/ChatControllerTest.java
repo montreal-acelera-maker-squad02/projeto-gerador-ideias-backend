@@ -241,7 +241,7 @@ class ChatControllerTest {
         session = chatSessionRepository.save(session);
 
         ChatMessageRequest messageRequest = new ChatMessageRequest();
-        messageRequest.setMessage("x".repeat(1001)); // Excede limite de 1000 caracteres
+        messageRequest.setMessage("x".repeat(1001));
 
         mockMvc.perform(post("/api/chat/sessions/" + session.getId() + "/messages")
                         .contentType(MediaType.APPLICATION_JSON)
