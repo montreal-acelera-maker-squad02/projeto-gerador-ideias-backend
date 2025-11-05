@@ -141,7 +141,10 @@ public class IdeaController {
             ideaService.favoritarIdeia(ideaId);
             return ResponseEntity.ok("Ideia favoritada com sucesso.");
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+            if (e.getMessage().contains("não encontrada")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+            }
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Erro ao favoritar ideia: " + e.getMessage());
@@ -163,7 +166,10 @@ public class IdeaController {
             ideaService.desfavoritarIdeia(ideaId);
             return ResponseEntity.ok("Ideia removida dos favoritos com sucesso.");
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+            if (e.getMessage().contains("não encontrada")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+            }
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Erro ao remover ideia dos favoritos: " + e.getMessage());

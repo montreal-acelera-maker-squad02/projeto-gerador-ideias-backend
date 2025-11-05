@@ -75,6 +75,12 @@ class IdeaControllerTest {
 
     @BeforeEach
     void setUpDatabase() {
+        userRepository.findAll().forEach(user -> {
+            if (user.getFavoriteIdeas() != null && !user.getFavoriteIdeas().isEmpty()) {
+                user.getFavoriteIdeas().clear();
+                userRepository.save(user);
+            }
+        });
         ideaRepository.deleteAll();
         userRepository.deleteAll();
 
@@ -87,6 +93,7 @@ class IdeaControllerTest {
 
     @AfterEach
     void tearDownDatabase() {
+
         ideaRepository.deleteAll();
         userRepository.deleteAll();
     }
@@ -362,79 +369,82 @@ class IdeaControllerTest {
                 .andExpect(content().string(containsString("Erro interno")));
     }
 
+
     @Test
     @WithMockUser(username = testUserEmail)
     @Transactional
     void shouldFavoritarIdeiaSuccessfully() throws Exception {
-        User user = userRepository.findByEmail(testUserEmail).orElse(null);
+        User user = userRepository.findByEmail(testUserEmail).orElseThrow();
+        user.getFavoriteIdeas().clear();
+        userRepository.saveAndFlush(user);
+
         Idea idea = new Idea(Theme.TECNOLOGIA, "Contexto", "Ideia", "modelo", 100L);
         idea.setUser(user);
         idea = ideaRepository.save(idea);
 
-        mockMvc.perform(post("/api/ideas/" + idea.getId() + "/favorite/" + user.getId()))
+        mockMvc.perform(post("/api/ideas/" + idea.getId() + "/favorite"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Ideia favoritada com sucesso."));
+        User updatedUser = userRepository.findByEmail(testUserEmail).orElseThrow();
+        assertEquals(1, updatedUser.getFavoriteIdeas().size());
     }
+
 
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturn404WhenFavoritingNonExistentIdea() throws Exception {
-        User user = userRepository.findByEmail(testUserEmail).orElse(null);
-
-        mockMvc.perform(post("/api/ideas/99999/favorite/" + user.getId()))
+        mockMvc.perform(post("/api/ideas/99999/favorite"))
                 .andExpect(status().isNotFound());
     }
+
 
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturn404WhenFavoritingWithInvalidId() throws Exception {
-        User user = userRepository.findByEmail(testUserEmail).orElse(null);
-
-        mockMvc.perform(post("/api/ideas/" + Long.MAX_VALUE + "/favorite/" + user.getId()))
+        mockMvc.perform(post("/api/ideas/" + Long.MAX_VALUE + "/favorite"))
                 .andExpect(status().isNotFound());
     }
 
+
     @Test
     @WithMockUser(username = testUserEmail)
-    @Transactional
     void shouldDesfavoritarIdeiaSuccessfully() throws Exception {
-        User user = userRepository.findByEmail(testUserEmail).orElse(null);
+        User user = userRepository.findByEmail(testUserEmail).orElseThrow();
+
         Idea idea = new Idea(Theme.TECNOLOGIA, "Contexto", "Ideia", "modelo", 100L);
         idea.setUser(user);
         idea = ideaRepository.save(idea);
 
-        mockMvc.perform(post("/api/ideas/" + idea.getId() + "/favorite/" + user.getId()))
+
+        mockMvc.perform(post("/api/ideas/" + idea.getId() + "/favorite"))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(delete("/api/ideas/" + idea.getId() + "/favorite/" + user.getId()))
+
+        mockMvc.perform(delete("/api/ideas/" + idea.getId() + "/favorite"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Ideia removida dos favoritos com sucesso."));
     }
 
+
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturn404WhenDesfavoritingNonExistentIdea() throws Exception {
-        User user = userRepository.findByEmail(testUserEmail).orElse(null);
-
-        mockMvc.perform(delete("/api/ideas/99999/favorite/" + user.getId()))
+        mockMvc.perform(delete("/api/ideas/99999/favorite"))
                 .andExpect(status().isNotFound());
     }
+
 
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturn404WhenDesfavoritingWithInvalidId() throws Exception {
-        User user = userRepository.findByEmail(testUserEmail).orElse(null);
-
-        mockMvc.perform(delete("/api/ideas/" + Long.MAX_VALUE + "/favorite/" + user.getId()))
+        mockMvc.perform(delete("/api/ideas/" + Long.MAX_VALUE + "/favorite"))
                 .andExpect(status().isNotFound());
     }
+
 
     @Test
     @WithMockUser
     void shouldReturn404WhenGetIdeasByUserWithInvalidId() throws Exception {
-        ideaRepository.deleteAll();
-        userRepository.deleteAll();
-
         mockMvc.perform(get("/api/ideas/user/" + Long.MAX_VALUE + "/ideas"))
                 .andExpect(status().isNotFound());
     }

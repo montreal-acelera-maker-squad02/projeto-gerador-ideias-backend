@@ -12,6 +12,7 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -26,12 +27,8 @@ import projeto_gerador_ideias_backend.repository.IdeaRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 
 import java.io.IOException;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -84,6 +81,12 @@ class IdeaServiceTest {
 
     @AfterEach
     void tearDownEach() throws IOException {
+        userRepository.findAll().forEach(user -> {
+            user.getFavoriteIdeas().clear();
+            userRepository.save(user);
+        });
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
         mockWebServer.shutdown();
         SecurityContextHolder.clearContext();
     }
@@ -501,48 +504,6 @@ class IdeaServiceTest {
     }
 
     @Test
-    void shouldNotFavoritarIdeiaAlreadyFavorited() {
-        Idea idea = new Idea();
-        idea.setId(1L);
-        idea.setTheme(Theme.TECNOLOGIA);
-        idea.setContext("Contexto");
-        idea.setGeneratedContent("Ideia");
-
-        Set<Idea> favoriteIdeas = new java.util.HashSet<>();
-        favoriteIdeas.add(idea);
-        testUser.setFavoriteIdeas(favoriteIdeas);
-
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
-        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
-
-        ideaService.favoritarIdeia(1L, 1L);
-
-        verify(userRepository, never()).save(any(User.class));
-        verify(userRepository, never()).flush();
-    }
-
-    @Test
-    void shouldNotDesfavoritarIdeiaNotFavorited() {
-        Idea idea = new Idea();
-        idea.setId(1L);
-        idea.setTheme(Theme.TECNOLOGIA);
-        idea.setContext("Contexto");
-        idea.setGeneratedContent("Ideia");
-
-        Set<Idea> favoriteIdeas = new java.util.HashSet<>();
-        testUser.setFavoriteIdeas(favoriteIdeas);
-
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
-        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
-        when(userRepository.save(any(User.class))).thenReturn(testUser);
-
-        ideaService.desfavoritarIdeia(1L, 1L);
-
-        verify(userRepository).save(testUser);
-        assertTrue(testUser.getFavoriteIdeas().isEmpty());
-    }
-
-    @Test
     void shouldFavoritarIdeiaSuccessfully() {
         Idea idea = new Idea();
         idea.setId(1L);
@@ -550,36 +511,129 @@ class IdeaServiceTest {
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia");
 
-        Set<Idea> favoriteIdeas = new java.util.HashSet<>();
-        testUser.setFavoriteIdeas(favoriteIdeas);
+        testUser.setFavoriteIdeas(new HashSet<>());
+        testUser.setEmail("test@example.com");
 
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+        UserDetails userDetails = mock(UserDetails.class);
+        when(userDetails.getUsername()).thenReturn("test@example.com");
+
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+
+        SecurityContextHolder.setContext(securityContext);
+
+
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
         when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
-        when(userRepository.save(any(User.class))).thenReturn(testUser);
+        when(userRepository.saveAndFlush(any(User.class))).thenReturn(testUser);
 
-        ideaService.favoritarIdeia(1L, 1L);
-
-        verify(userRepository).save(argThat(user -> user.getFavoriteIdeas().contains(idea)));
+        ideaService.favoritarIdeia(1L);
+        verify(userRepository).saveAndFlush(argThat(user -> user.getFavoriteIdeas().contains(idea)));
     }
 
     @Test
-    void shouldDesfavoritarIdeiaSuccessfully() {
+    void shouldNotDesfavoritarIdeaNotFavorited() {
+        testUser.setEmail("test@example.com");
+        testUser.setFavoriteIdeas(new HashSet<>());
+
+        UserDetails userDetails = mock(UserDetails.class);
+        when(userDetails.getUsername()).thenReturn("test@example.com");
+
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+
+        SecurityContextHolder.setContext(securityContext);
+
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setTheme(Theme.TECNOLOGIA);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia");
 
-        Set<Idea> favoriteIdeas = new java.util.HashSet<>();
-        favoriteIdeas.add(idea);
-        testUser.setFavoriteIdeas(favoriteIdeas);
-
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
         when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
-        when(userRepository.save(any(User.class))).thenReturn(testUser);
 
-        ideaService.desfavoritarIdeia(1L, 1L);
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> ideaService.desfavoritarIdeia(1L));
 
-        verify(userRepository).save(argThat(user -> !user.getFavoriteIdeas().contains(idea)));
+        assertEquals("Ideia não está favoritada.", ex.getMessage());
+
+        verify(userRepository, never()).saveAndFlush(any(User.class));
+    }
+
+    @Test
+    void shouldNotFavoritarIdeaAlreadyFavorited() {
+        testUser.setEmail("test@example.com");
+
+        Idea idea = new Idea();
+        idea.setId(1L);
+        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setContext("Contexto");
+        idea.setGeneratedContent("Ideia");
+
+        Set<Idea> favorites = new HashSet<>();
+        favorites.add(idea);
+        testUser.setFavoriteIdeas(favorites);
+
+        UserDetails userDetails = mock(UserDetails.class);
+        when(userDetails.getUsername()).thenReturn("test@example.com");
+
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> ideaService.favoritarIdeia(1L));
+
+        assertEquals("Ideia já está favoritada.", ex.getMessage());
+
+        verify(userRepository, never()).saveAndFlush(any(User.class));
+    }
+
+    @Test
+    void shouldDesfavoritarIdeiaSuccessfully() {
+        testUser.setEmail("test@example.com");
+
+        UserDetails userDetails = mock(UserDetails.class);
+        when(userDetails.getUsername()).thenReturn("test@example.com");
+
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+
+        SecurityContextHolder.setContext(securityContext);
+
+        Idea idea = new Idea();
+        idea.setId(1L);
+        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setContext("Contexto");
+        idea.setGeneratedContent("Ideia");
+
+        Set<Idea> favorites = new HashSet<>();
+        favorites.add(idea);
+        testUser.setFavoriteIdeas(favorites);
+
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
+        when(userRepository.saveAndFlush(any(User.class))).thenReturn(testUser);
+
+        ideaService.desfavoritarIdeia(1L);
+
+        verify(userRepository).saveAndFlush(argThat(user -> !user.getFavoriteIdeas().contains(idea)));
     }
 }
