@@ -16,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import projeto_gerador_ideias_backend.dto.ChatMessageRequest;
 import projeto_gerador_ideias_backend.dto.OllamaResponse;
@@ -38,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 class ChatControllerTest {
 
     public static MockWebServer mockWebServer;
@@ -242,6 +244,94 @@ class ChatControllerTest {
 
         ChatMessageRequest messageRequest = new ChatMessageRequest();
         messageRequest.setMessage("x".repeat(1001));
+
+        mockMvc.perform(post("/api/chat/sessions/" + session.getId() + "/messages")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(messageRequest)))
+                .andDo(print())
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @WithMockUser(username = "chat-controller@example.com")
+    void shouldReturn404WhenIdeaNotFound() throws Exception {
+        StartChatRequest request = new StartChatRequest();
+        request.setIdeaId(99999L);
+
+        mockMvc.perform(post("/api/chat/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser(username = "chat-controller@example.com")
+    void shouldReturn403WhenIdeaBelongsToAnotherUser() throws Exception {
+        User otherUser = new User();
+        otherUser.setEmail("other@example.com");
+        otherUser.setName("Other User");
+        otherUser.setPassword(passwordEncoder.encode("password"));
+        otherUser = userRepository.save(otherUser);
+
+        Idea idea = new Idea();
+        idea.setUser(otherUser);
+        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setContext("Contexto");
+        idea.setGeneratedContent("Ideia");
+        idea.setModelUsed("mistral");
+        idea.setExecutionTimeMs(1000L);
+        idea = ideaRepository.save(idea);
+
+        StartChatRequest request = new StartChatRequest();
+        request.setIdeaId(idea.getId());
+
+        mockMvc.perform(post("/api/chat/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "chat-controller@example.com")
+    void shouldReturn404WhenGettingNonExistentSession() throws Exception {
+        mockMvc.perform(get("/api/chat/sessions/99999"))
+                .andDo(print())
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser(username = "chat-controller@example.com")
+    void shouldReturn400WhenSendingDangerousMessage() throws Exception {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setLastResetAt(LocalDateTime.now());
+        session = chatSessionRepository.save(session);
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("PERIGOSO"))
+                .addHeader("Content-Type", "application/json"));
+
+        ChatMessageRequest messageRequest = new ChatMessageRequest();
+        messageRequest.setMessage("Conteúdo perigoso");
+
+        mockMvc.perform(post("/api/chat/sessions/" + session.getId() + "/messages")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(messageRequest)))
+                .andDo(print())
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @WithMockUser(username = "chat-controller@example.com")
+    void shouldReturn400WhenTokenLimitExceeded() throws Exception {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setLastResetAt(LocalDateTime.now());
+        session.setTokensUsed(1000);
+        session = chatSessionRepository.save(session);
+
+        ChatMessageRequest messageRequest = new ChatMessageRequest();
+        messageRequest.setMessage("Teste");
 
         mockMvc.perform(post("/api/chat/sessions/" + session.getId() + "/messages")
                         .contentType(MediaType.APPLICATION_JSON)
