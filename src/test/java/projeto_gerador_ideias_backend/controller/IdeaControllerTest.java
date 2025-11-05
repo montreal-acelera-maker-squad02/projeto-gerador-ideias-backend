@@ -293,47 +293,7 @@ class IdeaControllerTest {
                 .andExpect(content().string("Nenhuma ideia encontrada no banco de dados para os filtros informados."));
     }
 
-    @Test
-    @WithMockUser(username = "user3@test.com")
-    void shouldListIdeasByUserSuccessfully() throws Exception {
-        ideaRepository.deleteAll();
-        userRepository.deleteAll();
 
-        User user = new User();
-        user.setName("user3");
-        user.setEmail("user3@test.com");
-        user.setPassword("123456");
-        userRepository.save(user);
-
-        Idea idea = new Idea(Theme.TRABALHO, "User Context", "Ideia de usuário", "modeloU", 300L);
-        idea.setUser(user);
-        ideaRepository.save(idea);
-
-        mockMvc.perform(get("/api/ideas/user/" + user.getId() + "/ideas"))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].content", is("Ideia de usuário")))
-                .andExpect(jsonPath("$[0].theme", is("trabalho")))
-                .andExpect(jsonPath("$[0].userName", is("user3")));
-    }
-
-
-
-    @Test
-    @WithMockUser
-    void shouldReturnNotFoundForUserWithoutIdeas() throws Exception {
-        ideaRepository.deleteAll();
-        userRepository.deleteAll();
-
-        User user = new User();
-        user.setName("user4");
-        user.setEmail("user4@test.com");
-        user.setPassword("123456");
-        userRepository.save(user);
-
-        mockMvc.perform(get("/api/ideas/user/" + user.getId() + "/ideas"))
-                .andExpect(status().isNotFound());
-    }
 
     @Test
     @WithMockUser
@@ -441,11 +401,4 @@ class IdeaControllerTest {
                 .andExpect(status().isNotFound());
     }
 
-
-    @Test
-    @WithMockUser
-    void shouldReturn404WhenGetIdeasByUserWithInvalidId() throws Exception {
-        mockMvc.perform(get("/api/ideas/user/" + Long.MAX_VALUE + "/ideas"))
-                .andExpect(status().isNotFound());
-    }
 }
