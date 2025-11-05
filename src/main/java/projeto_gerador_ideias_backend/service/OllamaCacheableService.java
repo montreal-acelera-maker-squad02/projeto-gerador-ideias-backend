@@ -21,11 +21,26 @@ public class OllamaCacheableService {
     }
 
     /**
+     * Método que realmente chama a IA.
      * A anotação @Cacheable armazena o 'String' retornado em um cache chamado 'aiResponseCache'.
      * A chave é o próprio prompt.
      */
     @Cacheable(value = "aiResponseCache", key = "#prompt")
     public String getAiResponse(String prompt) {
+        return internalCallOllama(prompt);
+    }
+
+    /**
+     * Método chama a IA diretamente, IGNORANDO o cache @Cacheable.
+     */
+    public String getAiResponseBypassingCache(String prompt) {
+        return internalCallOllama(prompt);
+    }
+
+    /**
+     * Método privado que contém a lógica real da chamada ao Ollama.
+     */
+    private String internalCallOllama(String prompt) {
         OllamaRequest ollamaRequest = new OllamaRequest(ollamaModel, prompt);
         try {
             OllamaResponse ollamaResponse = this.webClient.post()

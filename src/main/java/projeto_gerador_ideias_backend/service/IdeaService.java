@@ -77,19 +77,22 @@ public class IdeaService {
     }
 
     @Transactional
-    public IdeaResponse generateIdea(IdeaRequest request) {
+    public IdeaResponse generateIdea(IdeaRequest request, boolean skipCache) {
         User currentUser = getCurrentAuthenticatedUser();
 
-        Optional<Idea> userSpecificIdea = ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
-                currentUser, request.getTheme(), request.getContext()
-        );
+        if (skipCache == false) {
+            Optional<Idea> userSpecificIdea = ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
+                    currentUser, request.getTheme(), request.getContext()
+            );
 
-        if (userSpecificIdea.isPresent()) {
-            return new IdeaResponse(userSpecificIdea.get());
+            if (userSpecificIdea.isPresent()) {
+                return new IdeaResponse(userSpecificIdea.get());
+            }
         }
 
         long startTime = System.currentTimeMillis();
-        String aiGeneratedContent = getCachedAiResponse(request.getTheme(), request.getContext());
+
+        String aiGeneratedContent = getCachedAiResponse(request.getTheme(), request.getContext(), skipCache);
 
         long executionTime = System.currentTimeMillis() - startTime;
 
@@ -106,11 +109,19 @@ public class IdeaService {
         return new IdeaResponse(savedIdea);
     }
 
-    @Cacheable(value = "aiResponseCache", key = "#theme.name() + '-' + #context")
-    public String getCachedAiResponse(Theme theme, String context) {
+    /**
+     * Este método decide se deve usar o cache técnico ou ir direto para a IA.
+     */
+    public String getCachedAiResponse(Theme theme, String context, boolean skipCache) {
 
         String moderationPrompt = String.format(PROMPT_MODERACAO, context);
-        String moderationResult = ollamaService.getAiResponse(moderationPrompt);
+        String moderationResult;
+
+        if (skipCache) {
+            moderationResult = ollamaService.getAiResponseBypassingCache(moderationPrompt);
+        } else {
+            moderationResult = ollamaService.getAiResponse(moderationPrompt);
+        }
 
         if (moderationResult.contains("PERIGOSO")) {
             return REJEICAO_SEGURANCA;
@@ -120,7 +131,13 @@ public class IdeaService {
                 theme.getValue(),
                 context);
         String generationPrompt = String.format(PROMPT_GERACAO, topicoUsuario);
-        String generatedContent = ollamaService.getAiResponse(generationPrompt);
+        String generatedContent;
+
+        if (skipCache) {
+            generatedContent = ollamaService.getAiResponseBypassingCache(generationPrompt);
+        } else {
+            generatedContent = ollamaService.getAiResponse(generationPrompt);
+        }
 
         return cleanUpAiResponse(generatedContent, context, false);
     }
@@ -136,7 +153,8 @@ public class IdeaService {
 
         String generationPrompt = String.format(PROMPT_SURPRESA, randomType, randomTheme.getValue());
 
-        String aiContent = ollamaService.getAiResponse(generationPrompt);
+        // "Surpreenda-me" sempre ignora o cache para ser aleatório
+        String aiContent = ollamaService.getAiResponseBypassingCache(generationPrompt);
         String finalContent = cleanUpAiResponse(aiContent, userContext, true);
 
         long executionTime = System.currentTimeMillis() - startTime;
