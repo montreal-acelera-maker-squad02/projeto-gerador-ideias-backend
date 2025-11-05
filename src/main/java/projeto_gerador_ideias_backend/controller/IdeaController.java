@@ -116,17 +116,14 @@ public class IdeaController {
             @ApiResponse(responseCode = "500", description = "Erro interno no servidor")
     })
     @GetMapping("/my-ideas")
-    public ResponseEntity<?> getMyIdeas() {
+    public ResponseEntity<List<IdeaResponse>> getMyIdeas() {
         try {
             List<IdeaResponse> ideias = ideaService.listarMinhasIdeias();
             return ResponseEntity.ok(ideias);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (IllegalArgumentException | ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Erro ao buscar ideias do usuário: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
@@ -139,7 +136,7 @@ public class IdeaController {
             @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
     })
     @PostMapping("/{ideaId}/favorite")
-    public ResponseEntity<?> favoritarIdeia(@PathVariable Long ideaId) {
+    public ResponseEntity<String> favoritarIdeia(@PathVariable Long ideaId) {
         try {
             ideaService.favoritarIdeia(ideaId);
             return ResponseEntity.ok("Ideia favoritada com sucesso.");
@@ -164,7 +161,7 @@ public class IdeaController {
             @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
     })
     @DeleteMapping("/{ideaId}/favorite")
-    public ResponseEntity<?> desfavoritarIdeia(@PathVariable Long ideaId) {
+    public ResponseEntity<String> desfavoritarIdeia(@PathVariable Long ideaId) {
         try {
             ideaService.desfavoritarIdeia(ideaId);
             return ResponseEntity.ok("Ideia removida dos favoritos com sucesso.");
