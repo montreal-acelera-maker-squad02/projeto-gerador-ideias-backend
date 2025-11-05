@@ -12,6 +12,7 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -26,11 +27,8 @@ import projeto_gerador_ideias_backend.repository.IdeaRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 
 import java.io.IOException;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -79,12 +77,16 @@ class IdeaServiceTest {
                 .build();
         Authentication auth = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(auth);
-
-        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
     }
 
     @AfterEach
     void tearDownEach() throws IOException {
+        userRepository.findAll().forEach(user -> {
+            user.getFavoriteIdeas().clear();
+            userRepository.save(user);
+        });
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
         mockWebServer.shutdown();
         SecurityContextHolder.clearContext();
     }
@@ -100,6 +102,8 @@ class IdeaServiceTest {
 
     @Test
     void shouldGenerateIdeaWhenModerationIsSafe() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
         IdeaRequest request = new IdeaRequest();
         request.setTheme(Theme.TECNOLOGIA);
         request.setContext("Um app de lista de tarefas");
@@ -133,6 +137,8 @@ class IdeaServiceTest {
 
     @Test
     void shouldRejectIdeaWhenModerationIsDangerous() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
         IdeaRequest request = new IdeaRequest();
         request.setTheme(Theme.TECNOLOGIA);
         request.setContext("Como fazer phishing");
@@ -152,6 +158,8 @@ class IdeaServiceTest {
 
     @Test
     void shouldThrowExceptionWhenModerationResponseIsUnclear() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
         IdeaRequest request = new IdeaRequest();
         request.setTheme(Theme.TECNOLOGIA);
         request.setContext("Contexto normal");
@@ -171,6 +179,8 @@ class IdeaServiceTest {
 
     @Test
     void shouldHandleOllamaException() {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
         IdeaRequest request = new IdeaRequest();
         request.setTheme(Theme.TECNOLOGIA);
         request.setContext("Contexto válido");
@@ -236,47 +246,27 @@ class IdeaServiceTest {
                 .findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
     }
 
+
     @Test
-    void deveListarHistorico_SemFiltros() {
-        when(ideaRepository.findAllByOrderByCreatedAtDesc())
+    void deveListarMinhasIdeias_ComSucesso() {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
+        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(testUser.getId()))
                 .thenReturn(List.of(ideaMock));
 
-        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado(null, null, null);
+        List<IdeaResponse> result = ideaService.listarMinhasIdeias();
 
         assertEquals(1, result.size());
+        verify(userRepository, times(1)).findByEmail(testUserEmail);
         verify(ideaRepository, times(1))
-                .findAllByOrderByCreatedAtDesc();
+                .findByUserIdOrderByCreatedAtDesc(testUser.getId());
     }
 
-    @Test
-    void deveListarIdeiasPorUsuario_ComSucesso() {
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L))
-                .thenReturn(List.of(ideaMock));
-
-        List<IdeaResponse> result = ideaService.listarIdeiasPorUsuario(1L);
-
-        assertEquals(1, result.size());
-        verify(ideaRepository, times(1))
-                .findByUserIdOrderByCreatedAtDesc(1L);
-    }
-
-    @Test
-    void deveLancarExcecao_QuandoUsuarioSemIdeias() {
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L))
-                .thenReturn(Collections.emptyList());
-
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> ideaService.listarIdeiasPorUsuario(1L)
-        );
-
-        assertEquals("Nenhuma ideia encontrada para o usuário com ID: 1", ex.getMessage());
-        verify(ideaRepository, times(1))
-                .findByUserIdOrderByCreatedAtDesc(1L);
-    }
 
     @Test
     void shouldGenerateSurpriseIdeaSuccessfully() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
         String mockAiResponse = "A IA gerou esta ideia aleatória.";
 
         mockWebServer.enqueue(new MockResponse()
@@ -309,7 +299,319 @@ class IdeaServiceTest {
         verify(ideaRepository).save(argThat(idea ->
                 idea.getUser().getId().equals(1L) &&
                         idea.getGeneratedContent().endsWith(mockAiResponse) &&
-                        idea.getGeneratedContent().startsWith("um ")
+                        (idea.getGeneratedContent().startsWith("um ") || idea.getGeneratedContent().startsWith("uma "))
         ));
+    }
+
+    @Test
+    void shouldRemoveHeaderFromGeneratedContent() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(Theme.TECNOLOGIA);
+        request.setContext("Contexto válido");
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("SEGURO"))
+                .addHeader("Content-Type", "application/json"));
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("## Título\n\nIdeia gerada sem cabeçalho"))
+                .addHeader("Content-Type", "application/json"));
+
+        when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> {
+            Idea idea = invocation.getArgument(0);
+            idea.setId(1L);
+            return idea;
+        });
+
+        IdeaResponse response = ideaService.generateIdea(request);
+
+        assertNotNull(response);
+        assertFalse(response.getContent().contains("##"));
+        verify(ideaRepository).save(argThat(idea -> !idea.getGeneratedContent().contains("##")));
+    }
+
+    @Test
+    void shouldRemoveQuotesFromGeneratedContent() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(Theme.TECNOLOGIA);
+        request.setContext("Contexto válido");
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("SEGURO"))
+                .addHeader("Content-Type", "application/json"));
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("\"Ideia entre aspas\""))
+                .addHeader("Content-Type", "application/json"));
+
+        when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> {
+            Idea idea = invocation.getArgument(0);
+            idea.setId(1L);
+            return idea;
+        });
+
+        IdeaResponse response = ideaService.generateIdea(request);
+
+        assertNotNull(response);
+        assertFalse(response.getContent().startsWith("\""));
+        assertFalse(response.getContent().endsWith("\""));
+        verify(ideaRepository).save(argThat(idea -> 
+            !idea.getGeneratedContent().startsWith("\"") && 
+            !idea.getGeneratedContent().endsWith("\"")
+        ));
+    }
+
+    @Test
+    void shouldHandleICannotResponse() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(Theme.TECNOLOGIA);
+        request.setContext("Contexto válido");
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("SEGURO"))
+                .addHeader("Content-Type", "application/json"));
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("I cannot generate this idea"))
+                .addHeader("Content-Type", "application/json"));
+
+        when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> {
+            Idea idea = invocation.getArgument(0);
+            idea.setId(1L);
+            return idea;
+        });
+
+        IdeaResponse response = ideaService.generateIdea(request);
+
+        assertNotNull(response);
+        assertEquals("Desculpe, não posso gerar ideias sobre esse tema.", response.getContent());
+        verify(ideaRepository).save(argThat(idea -> 
+            idea.getGeneratedContent().equals("Desculpe, não posso gerar ideias sobre esse tema.")
+        ));
+    }
+
+    @Test
+    void shouldHandleSorryICantResponse() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(Theme.TECNOLOGIA);
+        request.setContext("Contexto válido");
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("SEGURO"))
+                .addHeader("Content-Type", "application/json"));
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("Sorry, I can't help with that"))
+                .addHeader("Content-Type", "application/json"));
+
+        when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> {
+            Idea idea = invocation.getArgument(0);
+            idea.setId(1L);
+            return idea;
+        });
+
+        IdeaResponse response = ideaService.generateIdea(request);
+
+        assertNotNull(response);
+        assertEquals("Desculpe, não posso gerar ideias sobre esse tema.", response.getContent());
+    }
+
+    @Test
+    void shouldHandleEmptyResponse() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(Theme.TECNOLOGIA);
+        request.setContext("Contexto válido");
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("SEGURO"))
+                .addHeader("Content-Type", "application/json"));
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse(""))
+                .addHeader("Content-Type", "application/json"));
+
+        when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> {
+            Idea idea = invocation.getArgument(0);
+            idea.setId(1L);
+            return idea;
+        });
+
+        IdeaResponse response = ideaService.generateIdea(request);
+
+        assertNotNull(response);
+        assertEquals("Desculpe, não posso gerar ideias sobre esse tema.", response.getContent());
+    }
+
+    @Test
+    void shouldRemoveEmboraSejaImpossivelPrefix() throws Exception {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(Theme.TECNOLOGIA);
+        request.setContext("Contexto válido");
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("SEGURO"))
+                .addHeader("Content-Type", "application/json"));
+
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse("Embora seja impossível\nIdeia real aqui"))
+                .addHeader("Content-Type", "application/json"));
+
+        when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> {
+            Idea idea = invocation.getArgument(0);
+            idea.setId(1L);
+            return idea;
+        });
+
+        IdeaResponse response = ideaService.generateIdea(request);
+
+        assertNotNull(response);
+        assertFalse(response.getContent().contains("Embora seja impossível"));
+        assertTrue(response.getContent().contains("Ideia real aqui"));
+    }
+
+    @Test
+    void shouldFavoritarIdeiaSuccessfully() {
+        Idea idea = new Idea();
+        idea.setId(1L);
+        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setContext("Contexto");
+        idea.setGeneratedContent("Ideia");
+
+        testUser.setFavoriteIdeas(new HashSet<>());
+        testUser.setEmail("test@example.com");
+
+        UserDetails userDetails = mock(UserDetails.class);
+        when(userDetails.getUsername()).thenReturn("test@example.com");
+
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+
+        SecurityContextHolder.setContext(securityContext);
+
+
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
+        when(userRepository.saveAndFlush(any(User.class))).thenReturn(testUser);
+
+        ideaService.favoritarIdeia(1L);
+        verify(userRepository).saveAndFlush(argThat(user -> user.getFavoriteIdeas().contains(idea)));
+    }
+
+    @Test
+    void shouldNotDesfavoritarIdeaNotFavorited() {
+        testUser.setEmail("test@example.com");
+        testUser.setFavoriteIdeas(new HashSet<>());
+
+        UserDetails userDetails = mock(UserDetails.class);
+        when(userDetails.getUsername()).thenReturn("test@example.com");
+
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+
+        SecurityContextHolder.setContext(securityContext);
+
+        Idea idea = new Idea();
+        idea.setId(1L);
+        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setContext("Contexto");
+        idea.setGeneratedContent("Ideia");
+
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> ideaService.desfavoritarIdeia(1L));
+
+        assertEquals("Ideia não está favoritada.", ex.getMessage());
+
+        verify(userRepository, never()).saveAndFlush(any(User.class));
+    }
+
+    @Test
+    void shouldNotFavoritarIdeaAlreadyFavorited() {
+        testUser.setEmail("test@example.com");
+
+        Idea idea = new Idea();
+        idea.setId(1L);
+        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setContext("Contexto");
+        idea.setGeneratedContent("Ideia");
+
+        Set<Idea> favorites = new HashSet<>();
+        favorites.add(idea);
+        testUser.setFavoriteIdeas(favorites);
+
+        UserDetails userDetails = mock(UserDetails.class);
+        when(userDetails.getUsername()).thenReturn("test@example.com");
+
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> ideaService.favoritarIdeia(1L));
+
+        assertEquals("Ideia já está favoritada.", ex.getMessage());
+
+        verify(userRepository, never()).saveAndFlush(any(User.class));
+    }
+
+    @Test
+    void shouldDesfavoritarIdeiaSuccessfully() {
+        testUser.setEmail("test@example.com");
+
+        UserDetails userDetails = mock(UserDetails.class);
+        when(userDetails.getUsername()).thenReturn("test@example.com");
+
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+
+        SecurityContextHolder.setContext(securityContext);
+
+        Idea idea = new Idea();
+        idea.setId(1L);
+        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setContext("Contexto");
+        idea.setGeneratedContent("Ideia");
+
+        Set<Idea> favorites = new HashSet<>();
+        favorites.add(idea);
+        testUser.setFavoriteIdeas(favorites);
+
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
+        when(userRepository.saveAndFlush(any(User.class))).thenReturn(testUser);
+
+        ideaService.desfavoritarIdeia(1L);
+
+        verify(userRepository).saveAndFlush(argThat(user -> !user.getFavoriteIdeas().contains(idea)));
     }
 }

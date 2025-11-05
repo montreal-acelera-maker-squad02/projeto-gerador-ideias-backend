@@ -1,18 +1,19 @@
 package projeto_gerador_ideias_backend.model;
 
-import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -22,56 +23,53 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
-import jakarta.persistence.Index;
-import jakarta.persistence.Table;
-
 @Entity
-@Table(name = "ideas", indexes = {
-        @Index(name = "idx_idea_user_lookup", columnList = "user_id, theme, context")
+@Table(name = "chat_messages", indexes = {
+    @Index(name = "idx_chat_message_session_id", columnList = "session_id"),
+    @Index(name = "idx_chat_message_created_at", columnList = "session_id,created_at")
 })
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = {"user"})
-public class Idea {
+@ToString(exclude = {"session"})
+public class ChatMessage {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @EqualsAndHashCode.Include
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "session_id", nullable = false)
+    private ChatSession session;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Theme theme;
-
-    @Column(nullable = false)
-    private String context;
+    private MessageRole role;
 
     @Lob
     @Column(nullable = false, columnDefinition = "TEXT")
-    @Basic(fetch = FetchType.EAGER)
-    private String generatedContent;
+    private String content;
 
     @Column(nullable = false)
-    private String modelUsed;
-
-    @Column(nullable = false)
-    private Long executionTimeMs;
+    private Integer tokensUsed;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    public enum MessageRole {
+        USER,
+        ASSISTANT
+    }
 
-    public Idea(Theme theme, String context, String generatedContent, String modelUsed, Long executionTimeMs) {
-        this.theme = theme;
-        this.context = context;
-        this.generatedContent = generatedContent;
-        this.modelUsed = modelUsed;
-        this.executionTimeMs = executionTimeMs;
+    public ChatMessage(ChatSession session, MessageRole role, String content, Integer tokensUsed) {
+        this.session = session;
+        this.role = role;
+        this.content = content;
+        this.tokensUsed = tokensUsed;
     }
 }
+

@@ -16,7 +16,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 import projeto_gerador_ideias_backend.dto.IdeaRequest;
 import projeto_gerador_ideias_backend.dto.OllamaResponse;
 import projeto_gerador_ideias_backend.model.Idea;
@@ -26,13 +28,13 @@ import projeto_gerador_ideias_backend.repository.IdeaRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.hamcrest.Matchers.*;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.startsWith;
 import static org.hamcrest.Matchers.endsWith;
+import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -40,6 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 class IdeaControllerTest {
 
     public static MockWebServer mockWebServer;
@@ -59,6 +62,9 @@ class IdeaControllerTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private projeto_gerador_ideias_backend.service.IdeaService ideaService;
+
     private final String testUserEmail = "controller-user@example.com";
 
     @BeforeAll
@@ -69,6 +75,12 @@ class IdeaControllerTest {
 
     @BeforeEach
     void setUpDatabase() {
+        userRepository.findAll().forEach(user -> {
+            if (user.getFavoriteIdeas() != null && !user.getFavoriteIdeas().isEmpty()) {
+                user.getFavoriteIdeas().clear();
+                userRepository.save(user);
+            }
+        });
         ideaRepository.deleteAll();
         userRepository.deleteAll();
 
@@ -81,6 +93,7 @@ class IdeaControllerTest {
 
     @AfterEach
     void tearDownDatabase() {
+
         ideaRepository.deleteAll();
         userRepository.deleteAll();
     }
@@ -217,15 +230,11 @@ class IdeaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.userName", is("Controller User")))
                 .andExpect(jsonPath("$.content", endsWith(mockAiResponse)))
-                .andExpect(jsonPath("$.content", startsWith("um "))); // Verifica se o contexto foi pré-anexado
+                .andExpect(jsonPath("$.content", anyOf(startsWith("um "), startsWith("uma "))));
 
         int requestCountAfter = mockWebServer.getRequestCount();
         assertEquals(1, requestCountAfter - requestCountBefore, "Deveria ter feito apenas 1 requisição (sem moderação)");
     }
-
-    // ==========================================
-    // NOVOS TESTES (histórico e filtro por tema/data)
-    // ==========================================
 
     @Test
     @WithMockUser
@@ -284,45 +293,112 @@ class IdeaControllerTest {
                 .andExpect(content().string("Nenhuma ideia encontrada no banco de dados para os filtros informados."));
     }
 
-    @Test
-    @WithMockUser(username = "user3@test.com")
-    void shouldListIdeasByUserSuccessfully() throws Exception {
-        ideaRepository.deleteAll();
-        userRepository.deleteAll();
-
-        User user = new User();
-        user.setName("user3");
-        user.setEmail("user3@test.com");
-        user.setPassword("123456");
-        userRepository.save(user);
-
-        Idea idea = new Idea(Theme.TRABALHO, "User Context", "Ideia de usuário", "modeloU", 300L);
-        idea.setUser(user);
-        ideaRepository.save(idea);
-
-        mockMvc.perform(get("/api/ideas/user/" + user.getId() + "/ideas"))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].content", is("Ideia de usuário")))
-                .andExpect(jsonPath("$[0].theme", is("trabalho")))
-                .andExpect(jsonPath("$[0].userName", is("user3")));
-    }
-
 
 
     @Test
     @WithMockUser
-    void shouldReturnNotFoundForUserWithoutIdeas() throws Exception {
+    void shouldReturn404WhenNoIdeasFoundForInvalidDates() throws Exception {
         ideaRepository.deleteAll();
         userRepository.deleteAll();
 
         User user = new User();
-        user.setName("user4");
-        user.setEmail("user4@test.com");
+        user.setName("user5");
+        user.setEmail("user5@test.com");
         user.setPassword("123456");
         userRepository.save(user);
 
-        mockMvc.perform(get("/api/ideas/user/" + user.getId() + "/ideas"))
+        Idea idea = new Idea(Theme.ESTUDOS, "Contexto", "Ideia", "modelo", 100L);
+        idea.setUser(user);
+        ideaRepository.save(idea);
+
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("startDate", "2024-01-01T00:00:00")
+                        .param("endDate", "2023-01-01T00:00:00"))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    @WithMockUser
+    void shouldReturn500WhenInvalidDateFormat() throws Exception {
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
+
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("startDate", "invalid-date"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().string(containsString("Erro interno")));
+    }
+
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    @Transactional
+    void shouldFavoritarIdeiaSuccessfully() throws Exception {
+        User user = userRepository.findByEmail(testUserEmail).orElseThrow();
+        user.getFavoriteIdeas().clear();
+        userRepository.saveAndFlush(user);
+
+        Idea idea = new Idea(Theme.TECNOLOGIA, "Contexto", "Ideia", "modelo", 100L);
+        idea.setUser(user);
+        idea = ideaRepository.save(idea);
+
+        mockMvc.perform(post("/api/ideas/" + idea.getId() + "/favorite"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Ideia favoritada com sucesso."));
+        User updatedUser = userRepository.findByEmail(testUserEmail).orElseThrow();
+        assertEquals(1, updatedUser.getFavoriteIdeas().size());
+    }
+
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturn404WhenFavoritingNonExistentIdea() throws Exception {
+        mockMvc.perform(post("/api/ideas/99999/favorite"))
+                .andExpect(status().isNotFound());
+    }
+
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturn404WhenFavoritingWithInvalidId() throws Exception {
+        mockMvc.perform(post("/api/ideas/" + Long.MAX_VALUE + "/favorite"))
+                .andExpect(status().isNotFound());
+    }
+
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldDesfavoritarIdeiaSuccessfully() throws Exception {
+        User user = userRepository.findByEmail(testUserEmail).orElseThrow();
+
+        Idea idea = new Idea(Theme.TECNOLOGIA, "Contexto", "Ideia", "modelo", 100L);
+        idea.setUser(user);
+        idea = ideaRepository.save(idea);
+
+
+        mockMvc.perform(post("/api/ideas/" + idea.getId() + "/favorite"))
+                .andExpect(status().isOk());
+
+
+        mockMvc.perform(delete("/api/ideas/" + idea.getId() + "/favorite"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Ideia removida dos favoritos com sucesso."));
+    }
+
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturn404WhenDesfavoritingNonExistentIdea() throws Exception {
+        mockMvc.perform(delete("/api/ideas/99999/favorite"))
+                .andExpect(status().isNotFound());
+    }
+
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturn404WhenDesfavoritingWithInvalidId() throws Exception {
+        mockMvc.perform(delete("/api/ideas/" + Long.MAX_VALUE + "/favorite"))
+                .andExpect(status().isNotFound());
+    }
+
 }

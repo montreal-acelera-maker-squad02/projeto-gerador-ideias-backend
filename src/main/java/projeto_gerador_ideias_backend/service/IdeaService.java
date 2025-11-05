@@ -21,6 +21,7 @@ import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.Optional;
 import java.util.Random;
 import java.util.regex.Pattern;
@@ -196,6 +197,7 @@ public class IdeaService {
         return finalContent;
     }
 
+    @Transactional(readOnly = true)
     public List<IdeaResponse> listarHistoricoIdeiasFiltrado(String theme, LocalDateTime startDate, LocalDateTime endDate) {
         List<Idea> ideias;
 
@@ -219,17 +221,20 @@ public class IdeaService {
         return ideias.stream().map(IdeaResponse::new).toList();
     }
 
-    public List<IdeaResponse> listarIdeiasPorUsuario(Long userId) {
-        List<Idea> ideias = ideaRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    @Transactional(readOnly = true)
+    public List<IdeaResponse> listarMinhasIdeias() {
+
+        User user = getCurrentAuthenticatedUser();
+        List<Idea> ideias = ideaRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+
         if (ideias.isEmpty()) {
-            throw new IllegalArgumentException("Nenhuma ideia encontrada para o usuário com ID: " + userId);
+            throw new IllegalArgumentException("Nenhuma ideia encontrada para o usuário: " + user.getEmail());
         }
+
+
         return ideias.stream().map(IdeaResponse::new).toList();
     }
 
-    /**
-     * Busca o usuário autenticado no contexto de segurança.
-     */
     private User getCurrentAuthenticatedUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
@@ -243,4 +248,32 @@ public class IdeaService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário autenticado não encontrado no banco de dados: " + userEmail));
     }
 
+    // FAVORITAR IDEIA
+    @Transactional
+    public void favoritarIdeia(Long ideaId) {
+        User user = getCurrentAuthenticatedUser();
+        Idea idea = ideaRepository.findById(ideaId)
+                .orElseThrow(() -> new IllegalArgumentException("Ideia não encontrada."));
+        if (user.getFavoriteIdeas().contains(idea)) {
+            throw new IllegalArgumentException("Ideia já está favoritada.");
+        }
+        user.getFavoriteIdeas().add(idea);
+        userRepository.saveAndFlush(user);
+    }
+
+
+    // DESFAVORITAR IDEIA
+    @Transactional
+    public void desfavoritarIdeia(Long ideaId) {
+        User user = getCurrentAuthenticatedUser();
+        Idea idea = ideaRepository.findById(ideaId)
+                .orElseThrow(() -> new IllegalArgumentException("Ideia não encontrada."));
+        if (!user.getFavoriteIdeas().contains(idea)) {
+            throw new IllegalArgumentException("Ideia não está favoritada.");
+        }
+
+        user.getFavoriteIdeas().remove(idea);
+
+        userRepository.saveAndFlush(user);
+    }
 }
