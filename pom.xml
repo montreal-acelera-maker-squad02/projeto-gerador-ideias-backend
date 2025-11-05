@@ -24,11 +24,10 @@
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<lombok.version>1.18.32</lombok.version>
 		<jacoco.version>0.8.11</jacoco.version>
-		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<sonar.organization>chaveprojetoaceleramaker</sonar.organization>
 		<sonar.projectKey>projeto-gerador-ideias-backend</sonar.projectKey>
 		<sonar.coverage.jacoco.xmlReportPaths>${project.basedir}/target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+		<sonar.coverage.exclusions>**/dto/**/*,**/model/**/*,**/exceptions/**/*</sonar.coverage.exclusions>
 	</properties>
 
 	<dependencies>
@@ -68,6 +67,12 @@
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
 			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>test</scope>
+			<version>2.2.224</version>
 		</dependency>
 
 		<!-- Swagger / OpenAPI -->
