@@ -134,10 +134,11 @@ public class IdeaController {
             @ApiResponse(responseCode = "400", description = "Erro de validação"),
             @ApiResponse(responseCode = "404", description = "Usuário ou ideia não encontrados")
     })
-    @PostMapping("/{ideaId}/favorite/{userId}")
-    public ResponseEntity<?> favoritarIdeia(@PathVariable Long userId, @PathVariable Long ideaId) {
+
+    @PostMapping("/{ideaId}/favorite")
+    public ResponseEntity<?> favoritarIdeia(@PathVariable Long ideaId) {
         try {
-            ideaService.favoritarIdeia(userId, ideaId);
+            ideaService.favoritarIdeia(ideaId);
             return ResponseEntity.ok("Ideia favoritada com sucesso.");
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
@@ -154,10 +155,10 @@ public class IdeaController {
             @ApiResponse(responseCode = "200", description = "Ideia removida dos favoritos com sucesso"),
             @ApiResponse(responseCode = "404", description = "Usuário ou ideia não encontrados")
     })
-    @DeleteMapping("/{ideaId}/favorite/{userId}")
-    public ResponseEntity<?> desfavoritarIdeia(@PathVariable Long userId, @PathVariable Long ideaId) {
+    @DeleteMapping("/{ideaId}/favorite")
+    public ResponseEntity<?> desfavoritarIdeia(@PathVariable Long ideaId) {
         try {
-            ideaService.desfavoritarIdeia(userId, ideaId);
+            ideaService.desfavoritarIdeia(ideaId);
             return ResponseEntity.ok("Ideia removida dos favoritos com sucesso.");
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
