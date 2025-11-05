@@ -239,33 +239,32 @@ public class IdeaService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário autenticado não encontrado no banco de dados: " + userEmail));
     }
 
+    // FAVORITAR IDEIA
     @Transactional
-    public void favoritarIdeia(Long userId, Long ideaId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
+    public void favoritarIdeia(Long ideaId) {
+        User user = getCurrentAuthenticatedUser();
         Idea idea = ideaRepository.findById(ideaId)
                 .orElseThrow(() -> new IllegalArgumentException("Ideia não encontrada."));
-
-        Set<Idea> favorites = user.getFavoriteIdeas();
-
-        boolean alreadyFavorite = favorites.stream()
-                .anyMatch(fav -> fav.getId().equals(ideaId));
-        
-        if (!alreadyFavorite) {
-            favorites.add(idea);
-            userRepository.save(user);
+        if (user.getFavoriteIdeas().contains(idea)) {
+            throw new IllegalArgumentException("Ideia já está favoritada.");
         }
+        user.getFavoriteIdeas().add(idea);
+        userRepository.saveAndFlush(user);
     }
 
-    @Transactional
-    public void desfavoritarIdeia(Long userId, Long ideaId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
-        ideaRepository.findById(ideaId)
-                .orElseThrow(() -> new IllegalArgumentException("Ideia não encontrada."));
 
-        Set<Idea> favorites = user.getFavoriteIdeas();
-        favorites.removeIf(fav -> fav.getId().equals(ideaId));
-        userRepository.save(user);
+    // DESFAVORITAR IDEIA
+    @Transactional
+    public void desfavoritarIdeia(Long ideaId) {
+        User user = getCurrentAuthenticatedUser();
+        Idea idea = ideaRepository.findById(ideaId)
+                .orElseThrow(() -> new IllegalArgumentException("Ideia não encontrada."));
+        if (!user.getFavoriteIdeas().contains(idea)) {
+            throw new IllegalArgumentException("Ideia não está favoritada.");
+        }
+
+        user.getFavoriteIdeas().remove(idea);
+
+        userRepository.saveAndFlush(user);
     }
 }
