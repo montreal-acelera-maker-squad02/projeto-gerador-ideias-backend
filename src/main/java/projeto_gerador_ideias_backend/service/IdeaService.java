@@ -20,6 +20,7 @@ import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.Random;
 import java.util.regex.Pattern;
 
@@ -75,9 +76,6 @@ public class IdeaService {
         this.webClient = webClientBuilder.baseUrl(ollamaBaseUrl).build();
     }
 
-    /**
-     * Helper genérico para chamar o Ollama com um modelo e prompt específicos
-     */
     private String callOllama(String prompt, String modelName) {
         OllamaRequest ollamaRequest = new OllamaRequest(modelName, prompt);
         try {
@@ -204,19 +202,15 @@ public class IdeaService {
     public List<IdeaResponse> listarHistoricoIdeiasFiltrado(String theme, LocalDateTime startDate, LocalDateTime endDate) {
         List<Idea> ideias;
 
-        // Pesquisa com todos filtros
         if (theme != null && startDate != null && endDate != null) {
             ideias = ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()), startDate, endDate);
         }
-        // Pesquisa com tema
         else if (theme != null) {
             ideias = ideaRepository.findByThemeOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()));
         }
-        // Pesquisa Pesquisa com a data
         else if (startDate != null && endDate != null) {
             ideias = ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
         }
-        // Pesquisa sem filtros
         else {
             ideias = ideaRepository.findAllByOrderByCreatedAtDesc();
         }
@@ -233,9 +227,6 @@ public class IdeaService {
         return ideias.stream().map(IdeaResponse::new).toList();
     }
 
-    /**
-     * Busca o usuário autenticado no contexto de segurança.
-     */
     private User getCurrentAuthenticatedUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
@@ -258,8 +249,15 @@ public class IdeaService {
         Idea idea = ideaRepository.findById(ideaId)
                 .orElseThrow(() -> new IllegalArgumentException("Ideia não encontrada."));
 
-        user.getFavoriteIdeas().add(idea);
-        userRepository.save(user);
+        Set<Idea> favorites = user.getFavoriteIdeas();
+
+        boolean alreadyFavorite = favorites.stream()
+                .anyMatch(fav -> fav.getId().equals(ideaId));
+        
+        if (!alreadyFavorite) {
+            favorites.add(idea);
+            userRepository.save(user);
+        }
     }
 
 
@@ -271,7 +269,8 @@ public class IdeaService {
         Idea idea = ideaRepository.findById(ideaId)
                 .orElseThrow(() -> new IllegalArgumentException("Ideia não encontrada."));
 
-        user.getFavoriteIdeas().remove(idea);
+        Set<Idea> favorites = user.getFavoriteIdeas();
+        favorites.removeIf(fav -> fav.getId().equals(ideaId));
         userRepository.save(user);
     }
 }
