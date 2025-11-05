@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import projeto_gerador_ideias_backend.dto.ErrorResponse;
 import projeto_gerador_ideias_backend.dto.IdeaRequest;
 import projeto_gerador_ideias_backend.dto.IdeaResponse;
+import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
 import projeto_gerador_ideias_backend.service.IdeaService;
 
 import java.time.LocalDateTime;
@@ -103,23 +104,25 @@ public class IdeaController {
     }
 
 
-    // LISTAR IDEIAS DO USUARIO
+    // LISTAR MINHAS IDEIAS (Autenticado)
     @Operation(
-            summary = "Listar Ideias de um Usuário",
-            description = "Retorna todas as ideias criadas por um usuário específico, ordenadas da mais recente para a mais antiga."
+            summary = "Listar Minhas Ideias",
+            description = "Retorna todas as ideias criadas pelo usuário autenticado, ordenadas da mais recente para a mais antiga."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Ideias do usuário encontradas com sucesso"),
-            @ApiResponse(responseCode = "404", description = "Nenhuma ideia encontrada para o usuário informado"),
-            @ApiResponse(responseCode = "400", description = "ID de usuário inválido"),
+            @ApiResponse(responseCode = "401", description = "Usuário não autenticado"),
+            @ApiResponse(responseCode = "404", description = "Nenhuma ideia encontrada para o usuário autenticado"),
             @ApiResponse(responseCode = "500", description = "Erro interno no servidor")
     })
-    @GetMapping("/user/{userId}/ideas")
-    public ResponseEntity<?> getIdeasByUser(@PathVariable Long userId) {
+    @GetMapping("/my-ideas")
+    public ResponseEntity<?> getMyIdeas() {
         try {
-            List<IdeaResponse> ideias = ideaService.listarIdeiasPorUsuario(userId);
+            List<IdeaResponse> ideias = ideaService.listarMinhasIdeias();
             return ResponseEntity.ok(ideias);
         } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (ResourceNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

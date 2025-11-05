@@ -246,44 +246,22 @@ class IdeaServiceTest {
                 .findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
     }
 
+
     @Test
-    void deveListarHistorico_SemFiltros() {
-        when(ideaRepository.findAllByOrderByCreatedAtDesc())
+    void deveListarMinhasIdeias_ComSucesso() {
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
+        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(testUser.getId()))
                 .thenReturn(List.of(ideaMock));
 
-        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado(null, null, null);
+        List<IdeaResponse> result = ideaService.listarMinhasIdeias();
 
         assertEquals(1, result.size());
+        verify(userRepository, times(1)).findByEmail(testUserEmail);
         verify(ideaRepository, times(1))
-                .findAllByOrderByCreatedAtDesc();
+                .findByUserIdOrderByCreatedAtDesc(testUser.getId());
     }
 
-    @Test
-    void deveListarIdeiasPorUsuario_ComSucesso() {
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L))
-                .thenReturn(List.of(ideaMock));
-
-        List<IdeaResponse> result = ideaService.listarIdeiasPorUsuario(1L);
-
-        assertEquals(1, result.size());
-        verify(ideaRepository, times(1))
-                .findByUserIdOrderByCreatedAtDesc(1L);
-    }
-
-    @Test
-    void deveLancarExcecao_QuandoUsuarioSemIdeias() {
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L))
-                .thenReturn(Collections.emptyList());
-
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> ideaService.listarIdeiasPorUsuario(1L)
-        );
-
-        assertEquals("Nenhuma ideia encontrada para o usuário com ID: 1", ex.getMessage());
-        verify(ideaRepository, times(1))
-                .findByUserIdOrderByCreatedAtDesc(1L);
-    }
 
     @Test
     void shouldGenerateSurpriseIdeaSuccessfully() throws Exception {

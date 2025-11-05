@@ -218,11 +218,16 @@ public class IdeaService {
     }
 
     @Transactional(readOnly = true)
-    public List<IdeaResponse> listarIdeiasPorUsuario(Long userId) {
-        List<Idea> ideias = ideaRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    public List<IdeaResponse> listarMinhasIdeias() {
+
+        User user = getCurrentAuthenticatedUser();
+        List<Idea> ideias = ideaRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+
         if (ideias.isEmpty()) {
-            throw new IllegalArgumentException("Nenhuma ideia encontrada para o usuário com ID: " + userId);
+            throw new IllegalArgumentException("Nenhuma ideia encontrada para o usuário: " + user.getEmail());
         }
+
+
         return ideias.stream().map(IdeaResponse::new).toList();
     }
 
