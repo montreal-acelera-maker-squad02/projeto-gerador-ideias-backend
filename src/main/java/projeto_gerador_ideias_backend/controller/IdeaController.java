@@ -131,8 +131,9 @@ public class IdeaController {
     @Operation(summary = "Favoritar uma ideia")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Ideia favoritada com sucesso"),
-            @ApiResponse(responseCode = "400", description = "Erro de validação"),
-            @ApiResponse(responseCode = "404", description = "Usuário ou ideia não encontrados")
+            @ApiResponse(responseCode = "400", description = "Erro de validação (Ideia já favoritada)"),
+            @ApiResponse(responseCode = "404", description = "Ideia não encontrada"),
+            @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
     })
     @PostMapping("/{ideaId}/favorite")
     public ResponseEntity<?> favoritarIdeia(@PathVariable Long ideaId) {
@@ -152,7 +153,9 @@ public class IdeaController {
     @Operation(summary = "Remover ideia dos favoritos")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Ideia removida dos favoritos com sucesso"),
-            @ApiResponse(responseCode = "404", description = "Usuário ou ideia não encontrados")
+            @ApiResponse(responseCode = "400", description = "Erro de validação (Ideia não favoritada)"),
+            @ApiResponse(responseCode = "404", description = "Ideia não encontrada"),
+            @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
     })
     @DeleteMapping("/{ideaId}/favorite")
     public ResponseEntity<?> desfavoritarIdeia(@PathVariable Long ideaId) {
