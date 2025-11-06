@@ -425,10 +425,14 @@ public class ChatService {
 
     private OllamaServiceException handleWebClientException(
             org.springframework.web.reactive.function.client.WebClientResponseException e, String modelName) {
+        String responseBody = e.getResponseBodyAsString();
+        String errorDetail = (responseBody != null && !responseBody.isBlank()) 
+                ? responseBody 
+                : e.getMessage();
         String errorMessage = String.format(
             "Erro ao se comunicar com a IA (Ollama): %s %s. Verifique se o Ollama está rodando e se o modelo '%s' está disponível.",
             e.getStatusCode(), 
-            e.getResponseBodyAsString() != null ? e.getResponseBodyAsString() : e.getMessage(),
+            errorDetail,
             modelName
         );
         return new OllamaServiceException(errorMessage, e);
