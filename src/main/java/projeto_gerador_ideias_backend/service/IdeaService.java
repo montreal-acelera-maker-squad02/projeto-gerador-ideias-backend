@@ -17,6 +17,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
+import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
@@ -48,26 +49,33 @@ public class IdeaService {
     );
     private final Random random = new Random();
 
-    private static final String PROMPT_MODERACAO =
-            "Analise o 'Tópico' abaixo. O tópico sugere uma intenção maliciosa, ilegal ou antiética (como phishing, fraude, malware, invasão, etc.)?" +
-                    "Responda APENAS 'SEGURO' ou 'PERIGOSO'.\n\n" +
-                    "Tópico: \"%s\"\n\n" +
-                    "RESPOSTA (SEGURO ou PERIGOSO):";
+    private static final String PROMPT_MODERACAO = """
+            Analise o 'Tópico' abaixo. O tópico sugere uma intenção maliciosa, ilegal ou antiética (como phishing, fraude, malware, invasão, etc.)?
+            Responda APENAS 'SEGURO' ou 'PERIGOSO'.
+            
+            Tópico: "%s"
+            
+            RESPOSTA (SEGURO ou PERIGOSO):""";
 
-    private static final String PROMPT_GERACAO =
-            "Gere uma ideia concisa (30 palavras ou menos) em português do Brasil sobre o Tópico.\n\n" +
-                    "Tópico: \"%s\"\n\n" +
-                    "REGRAS OBRIGATÓRIAS:\n" +
-                    "1. TAMANHO: 30 palavras ou menos. NÃO liste 10 itens. NÃO escreva roteiros.\n" +
-                    "2. FORMATO: Responda APENAS o texto da ideia. NÃO inclua saudações, explicações ou cabeçalhos.\n\n" +
-                    "RESPOSTA (MÁX 30 PALAVRAS):";
+    private static final String PROMPT_GERACAO = """
+            Gere uma ideia concisa (30 palavras ou menos) em português do Brasil sobre o Tópico.
+            
+            Tópico: "%s"
+            
+            REGRAS OBRIGATÓRIAS:
+            1. TAMANHO: 30 palavras ou menos. NÃO liste 10 itens. NÃO escreva roteiros.
+            2. FORMATO: Responda APENAS o texto da ideia. NÃO inclua saudações, explicações ou cabeçalhos.
+            
+            RESPOSTA (MÁX 30 PALAVRAS):""";
 
-    private static final String PROMPT_SURPRESA =
-            "Gere %s sobre o tema %s. Seja criativo e direto (máximo 30 palavras) em português do Brasil.\n\n" +
-                    "REGRAS OBRIGATÓRIAS:\n" +
-                    "1. FORMATO: Responda APENAS a ideia. \n" +
-                    "2. NÃO inclua saudações, explicações, cabeçalhos ou o tema na resposta.\n\n" +
-                    "RESPOSTA (APENAS A IDEIA):";
+    private static final String PROMPT_SURPRESA = """
+            Gere %s sobre o tema %s. Seja criativo e direto (máximo 30 palavras) em português do Brasil.
+            
+            REGRAS OBRIGATÓRIAS:
+            1. FORMATO: Responda APENAS a ideia. 
+            2. NÃO inclua saudações, explicações, cabeçalhos ou o tema na resposta.
+            
+            RESPOSTA (APENAS A IDEIA):""";
 
     public IdeaService(IdeaRepository ideaRepository,
                        UserRepository userRepository,
@@ -201,19 +209,15 @@ public class IdeaService {
     public List<IdeaResponse> listarHistoricoIdeiasFiltrado(String theme, LocalDateTime startDate, LocalDateTime endDate) {
         List<Idea> ideias;
 
-        // Pesquisa com todos filtros
         if (theme != null && startDate != null && endDate != null) {
             ideias = ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()), startDate, endDate);
         }
-        // Pesquisa com tema
         else if (theme != null) {
             ideias = ideaRepository.findByThemeOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()));
         }
-        // Pesquisa Pesquisa com a data
         else if (startDate != null && endDate != null) {
             ideias = ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
         }
-        // Pesquisa sem filtros
         else {
             ideias = ideaRepository.findAllByOrderByCreatedAtDesc();
         }

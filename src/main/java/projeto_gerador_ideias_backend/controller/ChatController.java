@@ -4,7 +4,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,14 +26,12 @@ public class ChatController {
             summary = "Iniciar sessão de chat",
             description = "Inicia uma nova sessão de chat. Pode ser vinculada a uma ideia específica (ideaId) ou livre (sem ideaId). Tokens são renovados a cada 24 horas."
     )
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Sessão de chat iniciada ou recuperada com sucesso",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChatSessionResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Erro de validação ou permissão",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Ideia não encontrada",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Sessão de chat iniciada ou recuperada com sucesso",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChatSessionResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Erro de validação ou permissão",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Ideia não encontrada",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     @PostMapping("/start")
     public ResponseEntity<ChatSessionResponse> startChat(@Valid @RequestBody StartChatRequest request) {
         ChatSessionResponse response = chatService.startChat(request);
@@ -45,14 +42,12 @@ public class ChatController {
             summary = "Enviar mensagem no chat",
             description = "Envia uma mensagem na sessão de chat. A mensagem é moderada para chat livre. Consome tokens do limite diário."
     )
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Mensagem enviada e resposta da IA retornada com sucesso",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChatMessageResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Limite de tokens atingido ou conteúdo inadequado",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Sessão não encontrada",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Mensagem enviada e resposta da IA retornada com sucesso",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChatMessageResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Limite de tokens atingido ou conteúdo inadequado",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Sessão não encontrada",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     @PostMapping("/sessions/{sessionId}/messages")
     public ResponseEntity<ChatMessageResponse> sendMessage(
             @PathVariable Long sessionId,
@@ -65,10 +60,8 @@ public class ChatController {
             summary = "Obter histórico de ideias resumidas",
             description = "Retorna o histórico de ideias do usuário autenticado, cada uma resumida em 4 palavras para exibição rápida no chatbot."
     )
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Lista de ideias resumidas retornada com sucesso"),
-            @ApiResponse(responseCode = "401", description = "Usuário não autenticado")
-    })
+    @ApiResponse(responseCode = "200", description = "Lista de ideias resumidas retornada com sucesso")
+    @ApiResponse(responseCode = "401", description = "Usuário não autenticado")
     @GetMapping("/ideas/summary")
     public ResponseEntity<List<IdeaSummaryResponse>> getUserIdeasSummary() {
         List<IdeaSummaryResponse> response = chatService.getUserIdeasSummary();
@@ -79,14 +72,12 @@ public class ChatController {
             summary = "Obter sessão de chat",
             description = "Retorna os detalhes de uma sessão de chat específica, incluindo todas as mensagens persistidas."
     )
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Sessão retornada com sucesso",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChatSessionResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Sem permissão para acessar esta sessão",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Sessão não encontrada",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Sessão retornada com sucesso",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChatSessionResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Sem permissão para acessar esta sessão",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Sessão não encontrada",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     @GetMapping("/sessions/{sessionId}")
     public ResponseEntity<ChatSessionResponse> getSession(@PathVariable Long sessionId) {
         ChatSessionResponse response = chatService.getSession(sessionId);

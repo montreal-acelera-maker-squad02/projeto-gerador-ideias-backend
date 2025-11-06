@@ -28,6 +28,7 @@ import projeto_gerador_ideias_backend.repository.IdeaRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.hamcrest.Matchers.*;
@@ -37,7 +38,6 @@ import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
@@ -189,7 +189,7 @@ class IdeaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error", is("Erro interno do servidor")))
+                .andExpect(jsonPath("$.error", is("Erro ao comunicar com a IA")))
                 .andExpect(jsonPath("$.message", is("Falha na moderação: A IA retornou uma resposta inesperada. Tente novamente em alguns segundos.")));
 
         int requestCountAfter = mockWebServer.getRequestCount();
@@ -399,6 +399,195 @@ class IdeaControllerTest {
     void shouldReturn404WhenDesfavoritingWithInvalidId() throws Exception {
         mockMvc.perform(delete("/api/ideas/" + Long.MAX_VALUE + "/favorite"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldGetMyIdeasSuccessfully() throws Exception {
+        User user = userRepository.findByEmail(testUserEmail).orElseThrow();
+        
+        LocalDateTime now = LocalDateTime.now();
+        
+        Idea idea1 = new Idea(Theme.TECNOLOGIA, "Contexto 1", "Ideia 1", "modelo", 100L);
+        idea1.setUser(user);
+        idea1.setCreatedAt(now.minusSeconds(1));
+        idea1 = ideaRepository.saveAndFlush(idea1);
+        
+        Idea idea2 = new Idea(Theme.ESTUDOS, "Contexto 2", "Ideia 2", "modelo", 150L);
+        idea2.setUser(user);
+        idea2.setCreatedAt(now);
+        ideaRepository.saveAndFlush(idea2);
+
+        mockMvc.perform(get("/api/ideas/my-ideas"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].content", is("Ideia 2")))
+                .andExpect(jsonPath("$[1].content", is("Ideia 1")));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturn404WhenNoIdeasForUser() throws Exception {
+        ideaRepository.deleteAll();
+        
+        mockMvc.perform(get("/api/ideas/my-ideas"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().string(containsString("Nenhuma ideia encontrada")));
+    }
+
+    @Test
+    @WithMockUser(username = "nonexistent@example.com")
+    void shouldReturn404WhenUserNotFoundInGetMyIdeas() throws Exception {
+        mockMvc.perform(get("/api/ideas/my-ideas"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().string(containsString("Usuário autenticado não encontrado")));
+    }
+
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    @Transactional
+    void shouldReturnBadRequestWhenFavoritingAlreadyFavoritedIdea() throws Exception {
+        User user = userRepository.findByEmail(testUserEmail).orElseThrow();
+        
+        Idea idea = new Idea(Theme.TECNOLOGIA, "Contexto", "Ideia", "modelo", 100L);
+        idea.setUser(user);
+        idea = ideaRepository.save(idea);
+        
+        ideaService.favoritarIdeia(idea.getId());
+
+        mockMvc.perform(post("/api/ideas/" + idea.getId() + "/favorite"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string("Ideia já está favoritada."));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturn500WhenExceptionInFavoritarIdeia() throws Exception {
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
+        
+        mockMvc.perform(post("/api/ideas/1/favorite"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().string(containsString("Erro ao favoritar ideia")));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturnBadRequestWhenDesfavoritingNotFavoritedIdea() throws Exception {
+        User user = userRepository.findByEmail(testUserEmail).orElseThrow();
+        
+        Idea idea = new Idea(Theme.TECNOLOGIA, "Contexto", "Ideia", "modelo", 100L);
+        idea.setUser(user);
+        idea = ideaRepository.save(idea);
+
+        mockMvc.perform(delete("/api/ideas/" + idea.getId() + "/favorite"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string("Ideia não está favoritada."));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturn500WhenExceptionInDesfavoritarIdeia() throws Exception {
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
+        
+        mockMvc.perform(delete("/api/ideas/1/favorite"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().string(containsString("Erro ao remover ideia dos favoritos")));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturn500WhenSurpriseIdeaGenerationFails() throws Exception {
+        mockWebServer.enqueue(new MockResponse()
+                .setResponseCode(500)
+                .setBody("Internal Server Error")
+                .addHeader("Content-Type", "application/json"));
+
+        mockMvc.perform(post("/api/ideas/surprise-me"))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturn500WhenIdeaGenerationFails() throws Exception {
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(Theme.TECNOLOGIA);
+        request.setContext("Contexto válido");
+        
+        mockWebServer.enqueue(new MockResponse()
+                .setResponseCode(500)
+                .setBody("Internal Server Error")
+                .addHeader("Content-Type", "application/json"));
+
+        mockMvc.perform(post("/api/ideas/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    @WithMockUser
+    void shouldReturnBadRequestWhenIllegalArgumentExceptionInGetAllIdeas() throws Exception {
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("theme", "INVALID_THEME"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(containsString("Erro de validação")));
+    }
+
+    @Test
+    @WithMockUser
+    void shouldListIdeasWithDateFilters() throws Exception {
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
+
+        User user = new User();
+        user.setName("user3");
+        user.setEmail("user3@test.com");
+        user.setPassword("123456");
+        userRepository.save(user);
+
+        Idea idea = new Idea(Theme.ESTUDOS, "Contexto", "Ideia", "modelo", 100L);
+        idea.setUser(user);
+        ideaRepository.save(idea);
+
+        LocalDateTime startDate = LocalDateTime.now().minusDays(1);
+        LocalDateTime endDate = LocalDateTime.now().plusDays(1);
+
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("startDate", startDate.toString())
+                        .param("endDate", endDate.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+    }
+
+    @Test
+    @WithMockUser
+    void shouldListIdeasWithThemeAndDateFilters() throws Exception {
+        ideaRepository.deleteAll();
+        userRepository.deleteAll();
+
+        User user = new User();
+        user.setName("user4");
+        user.setEmail("user4@test.com");
+        user.setPassword("123456");
+        userRepository.save(user);
+
+        Idea idea = new Idea(Theme.TECNOLOGIA, "Contexto", "Ideia", "modelo", 100L);
+        idea.setUser(user);
+        ideaRepository.save(idea);
+
+        LocalDateTime startDate = LocalDateTime.now().minusDays(1);
+        LocalDateTime endDate = LocalDateTime.now().plusDays(1);
+
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("theme", "TECNOLOGIA")
+                        .param("startDate", startDate.toString())
+                        .param("endDate", endDate.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].theme", is("tecnologia")));
     }
 
 }

@@ -188,7 +188,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void shouldSendMessageInFreeChatSuccessfully() throws Exception {
+    void shouldSendMessageInFreeChatSuccessfully() throws JsonProcessingException {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setId(1L);
         session.setLastResetAt(LocalDateTime.now());
@@ -235,7 +235,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void shouldThrowExceptionWhenMessageIsDangerous() throws Exception {
+    void shouldThrowExceptionWhenMessageIsDangerous() throws JsonProcessingException {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setId(1L);
         session.setLastResetAt(LocalDateTime.now());
@@ -302,7 +302,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void shouldThrowExceptionWhenTokenLimitExceeded() throws Exception {
+    void shouldThrowExceptionWhenTokenLimitExceeded() {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setId(1L);
         session.setLastResetAt(LocalDateTime.now());
@@ -478,7 +478,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void shouldSendMessageInIdeaBasedChatWithoutModeration() throws Exception {
+    void shouldSendMessageInIdeaBasedChatWithoutModeration() throws JsonProcessingException {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
@@ -518,7 +518,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void shouldIncludeMessageHistoryInContext() throws Exception {
+    void shouldIncludeMessageHistoryInContext() throws JsonProcessingException {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setId(1L);
         session.setLastResetAt(LocalDateTime.now());
@@ -557,7 +557,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void shouldResetTokensWhen24HoursPassedInSendMessage() throws Exception {
+    void shouldResetTokensWhen24HoursPassedInSendMessage() throws JsonProcessingException {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setId(1L);
         session.setLastResetAt(LocalDateTime.now().minusHours(25));
@@ -598,7 +598,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void shouldThrowExceptionWhenTokensInsufficientBeforeSending() throws Exception {
+    void shouldThrowExceptionWhenTokensInsufficientBeforeSending() throws JsonProcessingException {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setId(1L);
         session.setLastResetAt(LocalDateTime.now());
@@ -633,9 +633,8 @@ class ChatServiceTest {
 
 
     @Test
-    void shouldHandleOllamaConnectionRefused() throws Exception {
-        MockWebServer disconnectedServer = new MockWebServer();
-        try {
+    void shouldHandleOllamaConnectionRefused() throws IOException {
+        try (MockWebServer disconnectedServer = new MockWebServer()) {
             disconnectedServer.start();
             int port = disconnectedServer.getPort();
             disconnectedServer.shutdown();
@@ -670,13 +669,11 @@ class ChatServiceTest {
 
             assertTrue(exception.getMessage().contains("conectar") || exception.getMessage().contains("Connection") || 
                        exception.getMessage().contains("Ollama"));
-        } finally {
-            disconnectedServer.shutdown();
         }
     }
 
     @Test
-    void shouldHandleOllamaErrorResponse() throws Exception {
+    void shouldHandleOllamaErrorResponse() throws JsonProcessingException {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setId(1L);
         session.setLastResetAt(LocalDateTime.now());
