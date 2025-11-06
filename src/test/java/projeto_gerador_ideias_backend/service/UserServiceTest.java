@@ -3,6 +3,9 @@ package projeto_gerador_ideias_backend.service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,7 +23,6 @@ import projeto_gerador_ideias_backend.exceptions.ValidationException;
 import projeto_gerador_ideias_backend.exceptions.WrongPasswordException;
 import projeto_gerador_ideias_backend.model.User;
 import projeto_gerador_ideias_backend.repository.UserRepository;
-import projeto_gerador_ideias_backend.service.JwtService;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -141,56 +143,31 @@ class UserServiceTest {
         verify(userRepository, never()).save(any(User.class));
     }
     
-    @Test
-    void shouldThrowExceptionWhenPasswordLacksUppercase() {
+    @ParameterizedTest
+    @MethodSource("invalidPasswordProvider")
+    void shouldThrowExceptionWhenPasswordIsInvalid(String email, String password, String confirmPassword) {
         RegisterRequest request = new RegisterRequest();
         request.setName("João Silva");
-        request.setEmail("joao2@example.com");
-        request.setPassword("senha@123");
-        request.setConfirmPassword("senha@123");
+        request.setEmail(email);
+        request.setPassword(password);
+        request.setConfirmPassword(confirmPassword);
         
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
         
         assertThrows(ValidationException.class, () -> userService.registerUser(request));
+        
+        verify(userRepository, times(1)).existsByEmail(anyString());
+        verify(passwordEncoder, never()).encode(anyString());
+        verify(userRepository, never()).save(any(User.class));
     }
     
-    @Test
-    void shouldThrowExceptionWhenPasswordLacksLowercase() {
-        RegisterRequest request = new RegisterRequest();
-        request.setName("João Silva");
-        request.setEmail("joao3@example.com");
-        request.setPassword("SENHA@123");
-        request.setConfirmPassword("SENHA@123");
-        
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
-        
-        assertThrows(ValidationException.class, () -> userService.registerUser(request));
-    }
-    
-    @Test
-    void shouldThrowExceptionWhenPasswordLacksDigit() {
-        RegisterRequest request = new RegisterRequest();
-        request.setName("João Silva");
-        request.setEmail("joao4@example.com");
-        request.setPassword("Senha@Boa");
-        request.setConfirmPassword("Senha@Boa");
-        
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
-        
-        assertThrows(ValidationException.class, () -> userService.registerUser(request));
-    }
-    
-    @Test
-    void shouldThrowExceptionWhenPasswordLacksSpecialChar() {
-        RegisterRequest request = new RegisterRequest();
-        request.setName("João Silva");
-        request.setEmail("joao5@example.com");
-        request.setPassword("Senha123");
-        request.setConfirmPassword("Senha123");
-        
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
-        
-        assertThrows(ValidationException.class, () -> userService.registerUser(request));
+    private static java.util.stream.Stream<Arguments> invalidPasswordProvider() {
+        return java.util.stream.Stream.of(
+            Arguments.of("joao2@example.com", "senha@123", "senha@123"), // falta maiúscula
+            Arguments.of("joao3@example.com", "SENHA@123", "SENHA@123"), // falta minúscula
+            Arguments.of("joao4@example.com", "Senha@Boa", "Senha@Boa"), // falta dígito
+            Arguments.of("joao5@example.com", "Senha123", "Senha123")   // falta caractere especial
+        );
     }
     
     @Test
@@ -222,9 +199,8 @@ class UserServiceTest {
         UpdateUserRequest request = new UpdateUserRequest();
         request.setName("Novo Nome");
         
-        assertThrows(ResourceNotFoundException.class, () -> 
-            userService.updateUser(java.util.UUID.randomUUID().toString(), request)
-        );
+        String uuid = java.util.UUID.randomUUID().toString();
+        assertThrows(ResourceNotFoundException.class, () -> userService.updateUser(uuid, request));
     }
     
     @Test
@@ -241,8 +217,9 @@ class UserServiceTest {
         request.setPassword("NovaSenha@123");
         request.setConfirmPassword("NovaSenha@123");
         
+        String uuid = existingUser.getUuid().toString();
         ValidationException exception = assertThrows(ValidationException.class, () ->
-            userService.updateUser(existingUser.getUuid().toString(), request)
+            userService.updateUser(uuid, request)
         );
         
         assertEquals("A senha atual é obrigatória para alterar sua senha", exception.getMessage());
@@ -264,8 +241,9 @@ class UserServiceTest {
         request.setPassword("NovaSenha@123");
         request.setConfirmPassword("NovaSenha@123");
         
+        String uuid = existingUser.getUuid().toString();
         assertThrows(WrongPasswordException.class, () ->
-            userService.updateUser(existingUser.getUuid().toString(), request)
+            userService.updateUser(uuid, request)
         );
     }
     
@@ -285,8 +263,9 @@ class UserServiceTest {
         request.setPassword("NovaSenha@123");
         request.setConfirmPassword("SenhaDiferente@456");
         
+        String uuid = existingUser.getUuid().toString();
         ValidationException exception = assertThrows(ValidationException.class, () ->
-            userService.updateUser(existingUser.getUuid().toString(), request)
+            userService.updateUser(uuid, request)
         );
         
         assertEquals("As novas senhas não coincidem", exception.getMessage());
@@ -308,8 +287,9 @@ class UserServiceTest {
         request.setPassword("senha123"); 
         request.setConfirmPassword("senha123");
         
+        String uuid = existingUser.getUuid().toString();
         ValidationException exception = assertThrows(ValidationException.class, () ->
-            userService.updateUser(existingUser.getUuid().toString(), request)
+            userService.updateUser(uuid, request)
         );
         
         assertTrue(exception.getMessage().contains("8 caracteres"));
