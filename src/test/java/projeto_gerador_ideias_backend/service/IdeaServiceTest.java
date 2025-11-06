@@ -16,6 +16,8 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.test.util.ReflectionTestUtils;
+import static org.mockito.ArgumentMatchers.eq;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.reactive.function.client.WebClient;
 import projeto_gerador_ideias_backend.dto.IdeaRequest;
 import projeto_gerador_ideias_backend.dto.IdeaResponse;
@@ -212,10 +214,11 @@ class IdeaServiceTest {
     @Test
     void deveListarHistorico_ComTemaEData() {
         when(ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(
-                Theme.TECNOLOGIA, startDate, endDate))
-                .thenReturn(List.of(ideaMock));
+                eq(Theme.TECNOLOGIA), eq(startDate), eq(endDate)
+        )).thenReturn(List.of(ideaMock));
 
-        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado("TECNOLOGIA", startDate, endDate);
+        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado(
+                null, "TECNOLOGIA", startDate, endDate);
 
         assertEquals(1, result.size());
         verify(ideaRepository, times(1))
@@ -224,10 +227,11 @@ class IdeaServiceTest {
 
     @Test
     void deveListarHistorico_ApenasComTema() {
-        when(ideaRepository.findByThemeOrderByCreatedAtDesc(Theme.TECNOLOGIA))
+        when(ideaRepository.findByThemeOrderByCreatedAtDesc(eq(Theme.TECNOLOGIA)))
                 .thenReturn(List.of(ideaMock));
 
-        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado("TECNOLOGIA", null, null);
+        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado(
+                null, "TECNOLOGIA", null, null);
 
         assertEquals(1, result.size());
         verify(ideaRepository, times(1))
@@ -236,16 +240,29 @@ class IdeaServiceTest {
 
     @Test
     void deveListarHistorico_ApenasComDatas() {
-        when(ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate))
+        when(ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(eq(startDate), eq(endDate)))
                 .thenReturn(List.of(ideaMock));
 
-        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado(null, startDate, endDate);
+        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado(
+                null, null, startDate, endDate);
 
         assertEquals(1, result.size());
         verify(ideaRepository, times(1))
                 .findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
     }
 
+    @Test
+    void deveListarHistorico_SemFiltros() {
+        when(ideaRepository.findAllByOrderByCreatedAtDesc())
+                .thenReturn(List.of(ideaMock));
+
+        List<IdeaResponse> result = ideaService.listarHistoricoIdeiasFiltrado(
+                null, null, null, null);
+
+        assertEquals(1, result.size());
+        verify(ideaRepository, times(1))
+                .findAllByOrderByCreatedAtDesc();
+    }
 
     @Test
     void deveListarMinhasIdeias_ComSucesso() {
@@ -359,8 +376,8 @@ class IdeaServiceTest {
         assertNotNull(response);
         assertFalse(response.getContent().startsWith("\""));
         assertFalse(response.getContent().endsWith("\""));
-        verify(ideaRepository).save(argThat(idea -> 
-            !idea.getGeneratedContent().startsWith("\"") && 
+        verify(ideaRepository).save(argThat(idea ->
+            !idea.getGeneratedContent().startsWith("\"") &&
             !idea.getGeneratedContent().endsWith("\"")
         ));
     }
@@ -391,7 +408,7 @@ class IdeaServiceTest {
 
         assertNotNull(response);
         assertEquals("Desculpe, não posso gerar ideias sobre esse tema.", response.getContent());
-        verify(ideaRepository).save(argThat(idea -> 
+        verify(ideaRepository).save(argThat(idea ->
             idea.getGeneratedContent().equals("Desculpe, não posso gerar ideias sobre esse tema.")
         ));
     }

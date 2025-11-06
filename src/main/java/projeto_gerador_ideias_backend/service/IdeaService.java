@@ -1,5 +1,7 @@
 package projeto_gerador_ideias_backend.service;
 
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -207,20 +209,68 @@ public class IdeaService {
     }
 
     @Transactional(readOnly = true)
-    public List<IdeaResponse> listarHistoricoIdeiasFiltrado(String theme, LocalDateTime startDate, LocalDateTime endDate) {
+    public List<IdeaResponse> listarHistoricoIdeiasFiltrado(Long userId, String theme, LocalDateTime startDate,
+            LocalDateTime endDate) {
+
+        // Quando um userId é informado, mantemos o uso de Specification para aplicar o filtro por usuário
+        // (caso mais complexo). Quando não há userId, usamos métodos específicos do repositório para
+        // corresponder às expectativas dos testes (métodos findByTheme..., findByCreatedAtBetween..., etc.).
         List<Idea> ideias;
 
-        if (theme != null && startDate != null && endDate != null) {
-            ideias = ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()), startDate, endDate);
+        if (userId != null) {
+            Specification<Idea> spec = (root, query, criteriaBuilder) -> {
+                Predicate predicate = criteriaBuilder.conjunction();
+
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("user").get("id"), userId));
+
+                if (theme != null && !theme.isBlank()) {
+                    try {
+                        predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("theme"), Theme.valueOf(theme.toUpperCase())));
+                    } catch (IllegalArgumentException e) {
+                        throw new IllegalArgumentException("O tema '" + theme + "' é inválido.");
+                    }
+                }
+                if (startDate != null) {
+                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), startDate));
+                }
+                if (endDate != null) {
+                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), endDate));
+                }
+                query.orderBy(criteriaBuilder.desc(root.get("createdAt")));
+                return predicate;
+            };
+
+            ideias = ideaRepository.findAll(spec);
+        } else {
+            // Sem userId: escolher implementações diretas do repositório para facilitar mocking nos testes
+            boolean hasTheme = theme != null && !theme.isBlank();
+            boolean hasStartEnd = startDate != null && endDate != null;
+
+            if (hasTheme && hasStartEnd) {
+                Theme parsedTheme;
+                try {
+                    parsedTheme = Theme.valueOf(theme.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("O tema '" + theme + "' é inválido.");
+                }
+                ideias = ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(parsedTheme, startDate, endDate);
+            } else if (hasTheme) {
+                Theme parsedTheme;
+                try {
+                    parsedTheme = Theme.valueOf(theme.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("O tema '" + theme + "' é inválido.");
+                }
+                ideias = ideaRepository.findByThemeOrderByCreatedAtDesc(parsedTheme);
+            } else if (hasStartEnd) {
+                ideias = ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
+            } else {
+                ideias = ideaRepository.findAllByOrderByCreatedAtDesc();
+            }
         }
-        else if (theme != null) {
-            ideias = ideaRepository.findByThemeOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()));
-        }
-        else if (startDate != null && endDate != null) {
-            ideias = ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
-        }
-        else {
-            ideias = ideaRepository.findAllByOrderByCreatedAtDesc();
+
+        if (ideias.isEmpty()) {
+            throw new ResourceNotFoundException("Nenhuma ideia encontrada no banco de dados para os filtros informados.");
         }
 
         return ideias.stream().map(IdeaResponse::new).toList();
