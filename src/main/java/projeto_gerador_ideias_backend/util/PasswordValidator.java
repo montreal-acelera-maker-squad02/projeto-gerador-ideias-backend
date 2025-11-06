@@ -4,9 +4,13 @@ import java.util.regex.Pattern;
 
 public class PasswordValidator {
     
+    private PasswordValidator() {
+        // Construtor privado para evitar instanciação desta classe utilitária
+    }
+    
     private static final Pattern HAS_UPPERCASE = Pattern.compile("[A-Z]");
     private static final Pattern HAS_LOWERCASE = Pattern.compile("[a-z]");
-    private static final Pattern HAS_DIGIT = Pattern.compile("[0-9]");
+    private static final Pattern HAS_DIGIT = Pattern.compile("\\d");
     private static final Pattern HAS_SPECIAL_CHAR = Pattern.compile("[!@#$%^&*()_+\\-=\\[\\]{}|;':\",./<>?]");
     
     public static boolean isValid(String password) {
