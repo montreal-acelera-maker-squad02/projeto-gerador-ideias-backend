@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -40,8 +41,12 @@ public class IdeaController {
     @ApiResponse(responseCode = "500", description = "Erro interno no servidor (ex: falha ao conectar com o Ollama)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     @PostMapping("/generate")
-    public ResponseEntity<IdeaResponse> generateIdea(@Valid @RequestBody IdeaRequest request) {
-        IdeaResponse response = ideaService.generateIdea(request);
+    public ResponseEntity<IdeaResponse> generateIdea(
+            @Valid @RequestBody IdeaRequest request,
+            @Parameter(description = "Se 'true', ignora todos os caches (pessoal e técnico) e força uma nova chamada à IA.")
+            @RequestParam(required = false, defaultValue = "false") boolean skipCache
+    ) {
+        IdeaResponse response = ideaService.generateIdea(request, skipCache);
         return ResponseEntity.ok(response);
     }
 

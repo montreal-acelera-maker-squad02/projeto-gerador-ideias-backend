@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
+@SpringBootTest(properties = {"spring.cache.type=NONE",})
 @ExtendWith(OutputCaptureExtension.class)
 @ActiveProfiles("test")
 class LoggingAspectTest {
@@ -114,7 +114,7 @@ class LoggingAspectTest {
                 .setBody(createMockOllamaResponse("Crie testes para seus aspectos."))
                 .addHeader("Content-Type", "application/json"));
 
-        ideaService.generateIdea(request);
+        ideaService.generateIdea(request, false);
 
         String logs = output.getAll();
         assertThat(logs).contains(">> Iniciando: generateIdea() | Contexto: 'Como aprender AOP'");
@@ -148,7 +148,7 @@ class LoggingAspectTest {
         mockWebServer.enqueue(new MockResponse().setResponseCode(500));
 
         assertThrows(RuntimeException.class, () -> {
-            ideaService.generateIdea(request);
+            ideaService.generateIdea(request, false);
         });
 
         String logs = output.getAll();
@@ -168,7 +168,7 @@ class LoggingAspectTest {
                 .addHeader("Content-Type", "application/json"));
 
         assertDoesNotThrow(() -> {
-            ideaService.generateIdea(request);
+            ideaService.generateIdea(request, false);
         });
 
         String logs = output.getAll();
@@ -206,7 +206,7 @@ class LoggingAspectTest {
 
         MetricState initialState = getMetricState("generateIdea", "success");
 
-        ideaService.generateIdea(request);
+        ideaService.generateIdea(request, false);
 
         assertThat(getIdeasGeneratedCount()).isEqualTo(initialState.counterValue() + 1.0);
         assertThat(getTimerCount("generateIdea", "success")).isEqualTo(initialState.timerCount() + 1L);
@@ -227,7 +227,7 @@ class LoggingAspectTest {
         MetricState initialState = getMetricState("generateIdea", "success");
 
         assertDoesNotThrow(() -> {
-            ideaService.generateIdea(request);
+            ideaService.generateIdea(request, false);
         });
 
         assertThat(getIdeasGeneratedCount()).isEqualTo(initialState.counterValue());
@@ -264,7 +264,7 @@ class LoggingAspectTest {
         MetricState initialState = getMetricState("generateIdea", "failure");
 
         assertThrows(RuntimeException.class, () -> {
-            ideaService.generateIdea(request);
+            ideaService.generateIdea(request, false);
         });
 
         assertThat(getTimerCount("generateIdea", "failure")).isEqualTo(initialState.timerCount() + 1L);

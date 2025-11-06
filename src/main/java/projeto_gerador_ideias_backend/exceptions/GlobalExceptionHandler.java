@@ -7,28 +7,29 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-    
+
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ResponseEntity<ErrorResponse> handleEmailAlreadyExists(EmailAlreadyExistsException ex) {
         ErrorResponse error = new ErrorResponse(
-            "Cadastro não realizado",
-            "O email fornecido não pode ser usado para cadastro. Use outro email ou tente recuperar sua conta."
+                "Cadastro não realizado",
+                "O email fornecido não pode ser usado para cadastro. Use outro email ou tente recuperar sua conta."
         );
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
-    
+
     @ExceptionHandler(ValidationException.class)
     public ResponseEntity<ErrorResponse> handleValidation(ValidationException ex) {
         ErrorResponse error = new ErrorResponse("Erro de validação", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
-    
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
@@ -50,12 +51,28 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String name = ex.getName();
+
+        Class<?> type = ex.getRequiredType();
+        String requiredType = (type != null) ? type.getSimpleName() : "desconhecido";
+
+        Object val = ex.getValue();
+        String value = (val != null) ? val.toString() : "null";
+
+        String message = String.format("O parâmetro '%s' ('%s') não pôde ser convertido para o tipo '%s'.", name, value, requiredType);
+
+        ErrorResponse error = new ErrorResponse("Requisição Inválida", message);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFound(ResourceNotFoundException ex) {
         ErrorResponse error = new ErrorResponse("Recurso não encontrado", ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
-    
+
     @ExceptionHandler(WrongPasswordException.class)
     public ResponseEntity<ErrorResponse> handleWrongPassword(WrongPasswordException ex) {
         ErrorResponse error = new ErrorResponse("Erro de autenticação", ex.getMessage());
@@ -106,19 +123,19 @@ public class GlobalExceptionHandler {
             this.error = error;
             this.message = message;
         }
-        
+
         public String getError() {
             return error;
         }
-        
+
         public void setError(String error) {
             this.error = error;
         }
-        
+
         public String getMessage() {
             return message;
         }
-        
+
         public void setMessage(String message) {
             this.message = message;
         }

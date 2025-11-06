@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
+import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,4 +24,5 @@ public interface IdeaRepository extends JpaRepository<Idea, Long>, JpaSpecificat
 
     List<Idea> findByUserIdOrderByCreatedAtDesc(Long userId);
 
+    Optional<Idea> findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(User user, Theme theme, String context);
 }

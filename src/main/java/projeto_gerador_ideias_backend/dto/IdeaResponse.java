@@ -5,12 +5,15 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import projeto_gerador_ideias_backend.model.Idea;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
 @Schema(description = "Resposta contendo a ideia gerada pela IA")
-public class IdeaResponse {
+public class IdeaResponse implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     @Schema(description = "ID único da ideia (se foi salva no histórico)", example = "10")
     private Long id;
