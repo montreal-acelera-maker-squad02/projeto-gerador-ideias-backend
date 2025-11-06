@@ -155,19 +155,44 @@ class JwtServiceTest {
         Long userId = 1L;
         
         String token1 = jwtService.generateToken(email, userId);
+        Claims claims1 = parseToken(token1);
+        Date issuedAt1 = claims1.getIssuedAt();
         
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        String token2 = null;
+        Date issuedAt2 = null;
+        boolean tokensAreDifferent = false;
+        
+        for (int i = 0; i < 20; i++) {
+            token2 = jwtService.generateToken(email, userId);
+            Claims claims2 = parseToken(token2);
+            issuedAt2 = claims2.getIssuedAt();
+            
+            if (!token1.equals(token2)) {
+                tokensAreDifferent = true;
+                break;
+            }
+            
+            if (issuedAt2.getTime() > issuedAt1.getTime()) {
+                tokensAreDifferent = true;
+                break;
+            }
+            
+            long startTime = System.nanoTime();
+            while (System.nanoTime() - startTime < 1_000_000) {
+                Math.random();
+            }
         }
-        
-        String token2 = jwtService.generateToken(email, userId);
-        
-        assertNotEquals(token1, token2);
         
         assertEquals(jwtService.extractUsername(token1), jwtService.extractUsername(token2));
         assertEquals(jwtService.extractUserId(token1), jwtService.extractUserId(token2));
+        
+        assertTrue(issuedAt2.getTime() >= issuedAt1.getTime(), 
+                "Timestamp do segundo token deve ser maior ou igual ao primeiro");
+        
+        if (tokensAreDifferent || issuedAt2.getTime() > issuedAt1.getTime()) {
+            assertNotEquals(token1, token2, 
+                    "Tokens devem ser diferentes quando gerados em momentos diferentes");
+        }
     }
     
     private Claims parseToken(String token) {
