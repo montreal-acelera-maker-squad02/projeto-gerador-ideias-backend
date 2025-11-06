@@ -12,6 +12,7 @@ import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -54,6 +55,13 @@ public class User {
 
     @Column(nullable = false)
     private String password;
+
+    @Column(name = "generated_ideas_count", nullable = false)
+    private Long generatedIdeasCount = 0L;
+
+    @Version
+    @Column(nullable = false)
+    private Long version = 0L;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
