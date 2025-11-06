@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -26,10 +27,7 @@ import projeto_gerador_ideias_backend.repository.IdeaRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -55,6 +53,7 @@ class IdeaServiceTest {
 
     private User testUser;
     private Idea testIdea;
+    private final String testUserEmail = "test@example.com";
 
     @BeforeEach
     void setUp() {
@@ -202,18 +201,18 @@ class IdeaServiceTest {
         List<Idea> allIdeas = List.of(testIdea);
         when(ideaRepository.findAllByOrderByCreatedAtDesc()).thenReturn(allIdeas);
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, null, null);
+        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, null, null, null);
 
         assertEquals(1, response.size());
         verify(ideaRepository, times(1)).findAllByOrderByCreatedAtDesc();
     }
 
     @Test
-    void listarHistoricoIdeiasFiltrado_WithThemeFilter() {
+    void deveListarHistorico_ApenasComTema() {
         List<Idea> filteredIdeas = List.of(testIdea);
         when(ideaRepository.findByThemeOrderByCreatedAtDesc(Theme.TECNOLOGIA)).thenReturn(filteredIdeas);
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado("tecnologia", null, null);
+        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, "tecnologia", null, null);
 
         assertEquals(1, response.size());
         verify(ideaRepository, times(1)).findByThemeOrderByCreatedAtDesc(Theme.TECNOLOGIA);
@@ -226,7 +225,7 @@ class IdeaServiceTest {
         LocalDateTime end = LocalDateTime.now().plusDays(1);
         when(ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(start, end)).thenReturn(filteredIdeas);
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, start, end);
+        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, null, start, end);
 
         assertEquals(1, response.size());
         verify(ideaRepository, times(1)).findByCreatedAtBetweenOrderByCreatedAtDesc(start, end);
@@ -239,7 +238,7 @@ class IdeaServiceTest {
         LocalDateTime end = LocalDateTime.now().plusDays(1);
         when(ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.TECNOLOGIA, start, end)).thenReturn(filteredIdeas);
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado("tecnologia", start, end);
+        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, "tecnologia", start, end);
 
         assertEquals(1, response.size());
         verify(ideaRepository, times(1)).findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.TECNOLOGIA, start, end);
@@ -423,5 +422,73 @@ class IdeaServiceTest {
         String context = "Tipo: Tema";
         String cleaned = (String) ReflectionTestUtils.invokeMethod(ideaService, "cleanUpAiResponse", input, context, true);
         assertEquals("Tipo: Tema: Ideia surpresa gerada", cleaned);
+    }
+
+    @Test
+    void shouldListFavoritedIdeasSuccessfully() {
+        // Arrange
+        Idea idea1 = new Idea();
+        idea1.setId(1L);
+        idea1.setTheme(Theme.TECNOLOGIA);
+        idea1.setGeneratedContent("Ideia 1");
+        idea1.setExecutionTimeMs(1000L);
+
+        Idea idea2 = new Idea();
+        idea2.setId(2L);
+        idea2.setTheme(Theme.TRABALHO);
+        idea2.setGeneratedContent("Ideia 2");
+        idea2.setExecutionTimeMs(1000L);
+
+        Set<Idea> favorites = new HashSet<>();
+        favorites.add(idea1);
+        favorites.add(idea2);
+        testUser.setFavoriteIdeas(favorites);
+
+        UserDetails userDetails = mock(UserDetails.class);
+        when(userDetails.getUsername()).thenReturn(testUserEmail);
+
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
+        idea1.setUser(testUser);
+        idea2.setUser(testUser);
+        List<IdeaResponse> result = ideaService.listarIdeiasFavoritadas();
+
+        assertEquals(2, result.size());
+        assertTrue(result.stream().anyMatch(r -> r.getContent().equals("Ideia 1")));
+        assertTrue(result.stream().anyMatch(r -> r.getContent().equals("Ideia 2")));
+        assertEquals("Test User", result.get(0).getUserName());
+    }
+
+    @Test
+    void shouldThrowExceptionWhenNoFavoritedIdeas() {
+        // Arrange
+        testUser.setFavoriteIdeas(new HashSet<>()); // sem favoritos
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
+        // Act + Assert
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> ideaService.listarIdeiasFavoritadas());
+
+        assertEquals("Nenhuma ideia favoritada encontrada para este usuário.", ex.getMessage());
+    }
+
+    @Test
+    void shouldThrowExceptionWhenUserNotFound() {
+        // Arrange
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.empty());
+
+        // Act + Assert
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> ideaService.listarIdeiasFavoritadas());
+
+        assertEquals("Usuário autenticado não encontrado no banco de dados: test@example.com", ex.getMessage());
     }
 }
