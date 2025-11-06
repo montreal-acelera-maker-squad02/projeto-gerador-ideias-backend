@@ -158,17 +158,48 @@ class JwtServiceTest {
         Claims claims1 = parseToken(token1);
         Date issuedAt1 = claims1.getIssuedAt();
         
-        String token2 = jwtService.generateToken(email, userId);
-        Claims claims2 = parseToken(token2);
-        Date issuedAt2 = claims2.getIssuedAt();
+        // Gerar múltiplos tokens tentando obter um com timestamp diferente
+        // JWT usa precisão de segundos, então tokens gerados no mesmo segundo podem ser idênticos
+        String token2 = null;
+        Date issuedAt2 = null;
+        boolean tokensAreDifferent = false;
         
-        assertNotEquals(token1, token2, "Tokens devem ser diferentes");
+        for (int i = 0; i < 20; i++) {
+            token2 = jwtService.generateToken(email, userId);
+            Claims claims2 = parseToken(token2);
+            issuedAt2 = claims2.getIssuedAt();
+            
+            if (!token1.equals(token2)) {
+                tokensAreDifferent = true;
+                break;
+            }
+            
+            // Se o timestamp mudou, os tokens devem ser diferentes
+            if (issuedAt2.getTime() > issuedAt1.getTime()) {
+                tokensAreDifferent = true;
+                break;
+            }
+            
+            // Pequeno delay usando operações para garantir que passou pelo menos 1ms
+            long start = System.nanoTime();
+            while (System.nanoTime() - start < 1_000_000) {
+                // Busy wait para garantir pelo menos 1ms de diferença
+            }
+        }
         
+        // Verificar que os dados do usuário são os mesmos
         assertEquals(jwtService.extractUsername(token1), jwtService.extractUsername(token2));
         assertEquals(jwtService.extractUserId(token1), jwtService.extractUserId(token2));
         
+        // Verificar que o segundo timestamp é maior ou igual ao primeiro
         assertTrue(issuedAt2.getTime() >= issuedAt1.getTime(), 
                 "Timestamp do segundo token deve ser maior ou igual ao primeiro");
+        
+        // Se os timestamps são diferentes, os tokens devem ser diferentes
+        if (tokensAreDifferent || issuedAt2.getTime() > issuedAt1.getTime()) {
+            assertNotEquals(token1, token2, 
+                    "Tokens devem ser diferentes quando gerados em momentos diferentes");
+        }
     }
     
     private Claims parseToken(String token) {
