@@ -13,7 +13,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -377,19 +376,15 @@ class IdeaServiceTest {
 
     @Test
     void getCurrentAuthenticatedUser_ShouldThrowException_WhenUserNotInDb() {
-        UserDetails mockUserDetails = mock(UserDetails.class);
-        when(mockUserDetails.getUsername()).thenReturn("unknown@example.com");
-        Authentication authentication = new UsernamePasswordAuthenticationToken(
-                mockUserDetails, null, Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER")));
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        setupSecurityContext();
 
-        when(userRepository.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.empty());
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
             ideaService.listarMinhasIdeias();
         });
 
-        assertEquals("Usuário autenticado não encontrado no banco de dados: unknown@example.com", exception.getMessage());
+        assertEquals("Usuário autenticado não encontrado no banco de dados: " + testUserEmail, exception.getMessage());
     }
 
     @ParameterizedTest
@@ -426,39 +421,26 @@ class IdeaServiceTest {
 
     @Test
     void shouldListFavoritedIdeasSuccessfully() {
-        // Arrange
+        setupSecurityContext();
+
         Idea idea1 = new Idea();
         idea1.setId(1L);
         idea1.setTheme(Theme.TECNOLOGIA);
         idea1.setGeneratedContent("Ideia 1");
         idea1.setExecutionTimeMs(1000L);
+        idea1.setUser(testUser);
 
         Idea idea2 = new Idea();
         idea2.setId(2L);
         idea2.setTheme(Theme.TRABALHO);
         idea2.setGeneratedContent("Ideia 2");
         idea2.setExecutionTimeMs(1000L);
-
+        idea2.setUser(testUser);
         Set<Idea> favorites = new HashSet<>();
         favorites.add(idea1);
         favorites.add(idea2);
         testUser.setFavoriteIdeas(favorites);
 
-        UserDetails userDetails = mock(UserDetails.class);
-        when(userDetails.getUsername()).thenReturn(testUserEmail);
-
-        Authentication authentication = mock(Authentication.class);
-        when(authentication.getPrincipal()).thenReturn(userDetails);
-
-        SecurityContext securityContext = mock(SecurityContext.class);
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-
-        SecurityContextHolder.setContext(securityContext);
-
-        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
-
-        idea1.setUser(testUser);
-        idea2.setUser(testUser);
         List<IdeaResponse> result = ideaService.listarIdeiasFavoritadas();
 
         assertEquals(2, result.size());
@@ -469,11 +451,9 @@ class IdeaServiceTest {
 
     @Test
     void shouldThrowExceptionWhenNoFavoritedIdeas() {
-        // Arrange
-        testUser.setFavoriteIdeas(new HashSet<>()); // sem favoritos
-        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+        setupSecurityContext();
+        testUser.setFavoriteIdeas(new HashSet<>());
 
-        // Act + Assert
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
                 () -> ideaService.listarIdeiasFavoritadas());
 
@@ -482,13 +462,13 @@ class IdeaServiceTest {
 
     @Test
     void shouldThrowExceptionWhenUserNotFound() {
-        // Arrange
+        setupSecurityContext();
+
         when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.empty());
 
-        // Act + Assert
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
                 () -> ideaService.listarIdeiasFavoritadas());
 
-        assertEquals("Usuário autenticado não encontrado no banco de dados: test@example.com", ex.getMessage());
+        assertEquals("Usuário autenticado não encontrado no banco de dados: " + testUserEmail, ex.getMessage());
     }
 }

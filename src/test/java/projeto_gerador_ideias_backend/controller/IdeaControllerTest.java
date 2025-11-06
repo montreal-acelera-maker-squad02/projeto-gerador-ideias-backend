@@ -24,7 +24,6 @@ import projeto_gerador_ideias_backend.repository.UserRepository;
 import projeto_gerador_ideias_backend.service.IdeaService;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
@@ -165,7 +164,7 @@ class IdeaControllerTest {
     @WithMockUser
     void shouldListIdeasWithoutFilter() throws Exception {
         List<IdeaResponse> mockList = List.of(mockIdeaResponse, mockIdeaResponse);
-        when(ideaService.listarHistoricoIdeiasFiltrado(null, null, null)).thenReturn(mockList);
+        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), isNull(), isNull(), isNull())).thenReturn(mockList);
 
         mockMvc.perform(get("/api/ideas/history"))
                 .andExpect(status().isOk())
@@ -176,7 +175,7 @@ class IdeaControllerTest {
     @WithMockUser
     void shouldListIdeasWithThemeFilter() throws Exception {
         List<IdeaResponse> mockList = List.of(mockIdeaResponse);
-        when(ideaService.listarHistoricoIdeiasFiltrado(eq("ESTUDOS"), isNull(), isNull()))
+        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), eq("ESTUDOS"), isNull(), isNull()))
                 .thenReturn(mockList);
 
         mockMvc.perform(get("/api/ideas/history")
@@ -189,34 +188,31 @@ class IdeaControllerTest {
     @Test
     @WithMockUser
     void shouldReturnNotFoundWhenNoIdeasFound() throws Exception {
-        when(ideaService.listarHistoricoIdeiasFiltrado(any(), any(), any()))
-                .thenReturn(Collections.emptyList());
+        when(ideaService.listarHistoricoIdeiasFiltrado(any(), any(), any(), any()))
+                .thenThrow(new ResourceNotFoundException("Nenhuma ideia encontrada"));
 
         mockMvc.perform(get("/api/ideas/history")
                         .param("theme", "TECNOLOGIA"))
                 .andExpect(status().isNotFound())
-                .andExpect(content().string(containsString("Nenhuma ideia encontrada")));
+                .andExpect(jsonPath("$.error", is("Recurso não encontrado")))
+                .andExpect(jsonPath("$.message", is("Nenhuma ideia encontrada")));
     }
 
     @Test
     @WithMockUser
-    void shouldReturn404WhenNoIdeasFoundForInvalidDates() throws Exception {
-        ideaRepository.deleteAll();
-        userRepository.deleteAll();
+    void shouldReturn404WhenNoIdeasFoundForValidDates() throws Exception {
+        LocalDateTime start = LocalDateTime.parse("2099-01-01T00:00:00");
+        LocalDateTime end = LocalDateTime.parse("2099-01-31T23:59:59");
 
-        User user = new User();
-        user.setName("user5");
-        user.setEmail("user5@test.com");
-        user.setPassword("123456");
-        userRepository.save(user);
-
-        String dataInicioFora = "2099-01-01T00:00:00";
-        String dataFimFora = "2099-01-31T23:59:59";
+        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), isNull(), eq(start), eq(end)))
+                .thenThrow(new ResourceNotFoundException("Nenhuma ideia encontrada no banco de dados para os filtros informados."));
 
         mockMvc.perform(get("/api/ideas/history")
-                        .param("startDate", dataInicioFora)
-                        .param("endDate", dataFimFora))
-                .andExpect(status().isNotFound());
+                        .param("startDate", "2099-01-01T00:00:00")
+                        .param("endDate", "2099-01-31T23:59:59"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error", is("Recurso não encontrado")))
+                .andExpect(jsonPath("$.message", containsString("Nenhuma ideia encontrada")));
     }
 
     @Test
