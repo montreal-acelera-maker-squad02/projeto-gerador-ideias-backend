@@ -1,14 +1,10 @@
 package projeto_gerador_ideias_backend.service;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.reactive.function.client.WebClient;
 import projeto_gerador_ideias_backend.dto.IdeaRequest;
 import projeto_gerador_ideias_backend.dto.IdeaResponse;
-import projeto_gerador_ideias_backend.dto.OllamaRequest;
-import projeto_gerador_ideias_backend.dto.OllamaResponse;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
@@ -17,12 +13,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
-import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 import java.util.Optional;
 import java.util.Random;
 import java.util.regex.Pattern;
@@ -89,7 +83,7 @@ public class IdeaService {
     public IdeaResponse generateIdea(IdeaRequest request, boolean skipCache) {
         User currentUser = getCurrentAuthenticatedUser();
 
-        if (skipCache == false) {
+        if (!skipCache) {
             Optional<Idea> userSpecificIdea = ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
                     currentUser, request.getTheme(), request.getContext()
             );
