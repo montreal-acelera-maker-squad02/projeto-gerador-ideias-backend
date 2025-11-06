@@ -97,7 +97,7 @@ public class ChatService {
                 : findExistingFreeSession(currentUser);
         
         if (session == null) {
-            validateNewSessionCreation(currentUser, ideaId, idea);
+            validateNewSessionCreation(currentUser, ideaId);
             session = createNewSession(currentUser, ideaId != null 
                     ? ChatSession.ChatType.IDEA_BASED 
                     : ChatSession.ChatType.FREE, idea);
@@ -140,7 +140,7 @@ public class ChatService {
         return session.getTokensUsed() >= MAX_TOKENS_PER_DAY;
     }
 
-    private void validateNewSessionCreation(User currentUser, Long ideaId, Idea idea) {
+    private void validateNewSessionCreation(User currentUser, Long ideaId) {
         if (ideaId != null) {
             validateNoRecentlyBlockedIdeaBasedSessions(currentUser);
         }
@@ -426,9 +426,9 @@ public class ChatService {
     private OllamaServiceException handleWebClientException(
             org.springframework.web.reactive.function.client.WebClientResponseException e, String modelName) {
         String responseBody = e.getResponseBodyAsString();
-        String errorDetail = (responseBody != null && !responseBody.isBlank()) 
-                ? responseBody 
-                : e.getMessage();
+        String errorDetail = responseBody.isBlank() 
+                ? e.getMessage() 
+                : responseBody;
         String errorMessage = String.format(
             "Erro ao se comunicar com a IA (Ollama): %s %s. Verifique se o Ollama está rodando e se o modelo '%s' está disponível.",
             e.getStatusCode(), 
