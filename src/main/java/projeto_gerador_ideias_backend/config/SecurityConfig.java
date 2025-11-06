@@ -30,7 +30,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .headers(headers -> headers.frameOptions().disable());
+                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.disable()));
         return http.build();
     }
     
