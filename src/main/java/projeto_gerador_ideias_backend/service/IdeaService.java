@@ -22,6 +22,7 @@ import projeto_gerador_ideias_backend.model.User;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @Service
@@ -280,5 +281,25 @@ public class IdeaService {
         user.getFavoriteIdeas().remove(idea);
 
         userRepository.saveAndFlush(user);
+    }
+
+    // BUSCAR IDEIAS FAVORITAS
+    @Transactional(readOnly = true)
+    public List<IdeaResponse> listarIdeiasFavoritadas() {
+        User user = getCurrentAuthenticatedUser();
+
+        if (user == null) {
+            throw new ResourceNotFoundException("Usuário autenticado não encontrado.");
+        }
+
+        Set<Idea> favoritas = user.getFavoriteIdeas();
+
+        if (favoritas == null || favoritas.isEmpty()) {
+            throw new ResourceNotFoundException("Nenhuma ideia favoritada encontrada para este usuário.");
+        }
+
+        return favoritas.stream()
+                .map(IdeaResponse::new)
+                .toList();
     }
 }
