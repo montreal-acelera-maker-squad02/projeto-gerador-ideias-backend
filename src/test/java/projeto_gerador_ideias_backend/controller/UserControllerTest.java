@@ -22,8 +22,6 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import java.util.UUID;
-
 @WebMvcTest(controllers = UserController.class, 
         excludeAutoConfiguration = {
             org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class

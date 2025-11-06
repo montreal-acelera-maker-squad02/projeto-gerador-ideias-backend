@@ -2,7 +2,6 @@ package projeto_gerador_ideias_backend.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,24 +26,22 @@ public class AuthController {
         summary = "Realizar login",
         description = "Autentica o usuário e retorna um token JWT"
     )
-    @ApiResponses({
-        @ApiResponse(
-            responseCode = "200",
-            description = "Login realizado com sucesso"
-        ),
-        @ApiResponse(
-            responseCode = "400",
-            description = "Dados de entrada inválidos"
-        ),
-        @ApiResponse(
-            responseCode = "401",
-            description = "Credenciais inválidas"
-        ),
-        @ApiResponse(
-            responseCode = "404",
-            description = "Usuário não encontrado"
-        )
-    })
+    @ApiResponse(
+        responseCode = "200",
+        description = "Login realizado com sucesso"
+    )
+    @ApiResponse(
+        responseCode = "400",
+        description = "Dados de entrada inválidos"
+    )
+    @ApiResponse(
+        responseCode = "401",
+        description = "Credenciais inválidas"
+    )
+    @ApiResponse(
+        responseCode = "404",
+        description = "Usuário não encontrado"
+    )
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         LoginResponse response = userService.login(request);
@@ -55,20 +52,18 @@ public class AuthController {
         summary = "Registrar novo usuário",
         description = "Cria um novo usuário no sistema com validação de senha forte"
     )
-    @ApiResponses({
-        @ApiResponse(
-            responseCode = "201",
-            description = "Usuário criado com sucesso"
-        ),
-        @ApiResponse(
-            responseCode = "400",
-            description = "Erro de validação (senhas não coincidem, senha inválida, etc.)"
-        ),
-        @ApiResponse(
-            responseCode = "409",
-            description = "Email já está em uso"
-        )
-    })
+    @ApiResponse(
+        responseCode = "201",
+        description = "Usuário criado com sucesso"
+    )
+    @ApiResponse(
+        responseCode = "400",
+        description = "Erro de validação (senhas não coincidem, senha inválida, etc.)"
+    )
+    @ApiResponse(
+        responseCode = "409",
+        description = "Email já está em uso"
+    )
     @PostMapping("/register")
     public ResponseEntity<RegisterResponse> registerUser(@Valid @RequestBody RegisterRequest request) {
         RegisterResponse response = userService.registerUser(request);

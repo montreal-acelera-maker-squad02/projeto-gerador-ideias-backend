@@ -62,6 +62,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             } catch (Exception e) {
+                // Ignorado: fail-open para permitir que endpoints protegidos tratem a autenticação
             }
         }
         

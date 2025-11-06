@@ -9,6 +9,7 @@ import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
 import projeto_gerador_ideias_backend.exceptions.TokenLimitExceededException;
 import projeto_gerador_ideias_backend.exceptions.ChatPermissionException;
 import projeto_gerador_ideias_backend.exceptions.ValidationException;
+import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import projeto_gerador_ideias_backend.model.*;
 import projeto_gerador_ideias_backend.repository.*;
 
@@ -16,7 +17,6 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class ChatService {
@@ -25,17 +25,24 @@ public class ChatService {
     private static final int MAX_HISTORY_TOKENS = 300;
     private static final int MAX_HISTORY_MESSAGES = 10;
     
-    private static final String PROMPT_MODERACAO =
-            "Analise o 'Tópico' abaixo. O tópico sugere uma intenção maliciosa, ilegal ou antiética (como phishing, fraude, malware, invasão, discurso de ódio, preconceito, etc.)?" +
-                    "Responda APENAS 'SEGURO' ou 'PERIGOSO'.\n\n" +
-                    "Tópico: \"%s\"\n\n" +
-                    "RESPOSTA (SEGURO ou PERIGOSO):";
+    private static final String PROMPT_MODERACAO = """
+            Analise o 'Tópico' abaixo. O tópico sugere uma intenção maliciosa, ilegal ou antiética (como phishing, fraude, malware, invasão, discurso de ódio, preconceito, etc.)?
+            Responda APENAS 'SEGURO' ou 'PERIGOSO'.
+            
+            Tópico: "%s"
+            
+            RESPOSTA (SEGURO ou PERIGOSO):""";
 
-    private static final String PROMPT_CHAT_COM_IDEIA =
-            "Você está conversando com um usuário sobre a seguinte ideia que foi gerada anteriormente:\n\n" +
-                    "Ideia: \"%s\"\n\n" +
-                    "Contexto original: \"%s\"\n\n" +
-                    "Seja útil e criativo ao responder. Mantenha respostas concisas (máximo 100 palavras).";
+    private static final String PROMPT_CHAT_COM_IDEIA = """
+            Você está conversando com um usuário sobre a seguinte ideia que foi gerada anteriormente:
+            
+            Ideia: "%s"
+            
+            Contexto original: "%s"
+            
+            Seja útil e criativo ao responder. Mantenha respostas concisas (máximo 100 palavras).""";
+
+    private static final String ERROR_SESSION_NOT_FOUND = "Sessão não encontrada: ";
 
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
@@ -66,81 +73,99 @@ public class ChatService {
     @Transactional
     public ChatSessionResponse startChat(StartChatRequest request) {
         User currentUser = getCurrentAuthenticatedUser();
-        ChatSession.ChatType chatType = request.getIdeaId() != null 
-                ? ChatSession.ChatType.IDEA_BASED 
-                : ChatSession.ChatType.FREE;
+        Long ideaId = request.getIdeaId();
+        Idea idea = ideaId != null ? validateAndGetIdea(ideaId, currentUser) : null;
+        ChatSession session = findOrCreateSession(currentUser, ideaId, idea);
+        return buildSessionResponse(session, 
+                chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(session.getId()));
+    }
 
-        ChatSession session;
-        Idea idea = null;
-
-        if (request.getIdeaId() != null) {
-            idea = ideaRepository.findById(request.getIdeaId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Ideia não encontrada: " + request.getIdeaId()));
-            
-            if (!idea.getUser().getId().equals(currentUser.getId())) {
-                throw new ChatPermissionException("Você não tem permissão para usar esta ideia.");
-            }
-
-            session = chatSessionRepository.findByUserIdAndIdeaId(currentUser.getId(), request.getIdeaId())
-                    .orElse(null);
-            
-            if (session != null && session.getTokensUsed() >= MAX_TOKENS_PER_DAY) {
-                throw new TokenLimitExceededException(
-                    "Este chat já atingiu o limite de tokens. Você pode iniciar um novo chat com outra ideia após 24 horas."
-                );
-            }
-        } else {
-            session = chatSessionRepository.findByUserIdAndType(currentUser.getId(), ChatSession.ChatType.FREE)
-                    .orElse(null);
-            
-            if (session != null) {
-                long hoursSinceReset = ChronoUnit.HOURS.between(session.getLastResetAt(), LocalDateTime.now());
-                
-                if (session.getTokensUsed() >= MAX_TOKENS_PER_DAY) {
-                    if (hoursSinceReset >= 24) {
-                        session = null;
-                    } else {
-                        throw new TokenLimitExceededException(
-                            "Limite de tokens atingido. Tente novamente em 24 horas para iniciar um novo chat livre."
-                        );
-                    }
-                }
-            }
-        }
-
-        if (session == null) {
-            if (chatType == ChatSession.ChatType.IDEA_BASED && idea == null) {
-                throw new IllegalArgumentException("Tipo de chat IDEA_BASED requer uma ideia válida.");
-            }
-            
-            if (chatType == ChatSession.ChatType.IDEA_BASED) {
-                List<ChatSession> blockedSessions = chatSessionRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId());
-                boolean hasRecentlyBlocked = blockedSessions.stream()
-                        .filter(s -> s.getType() == ChatSession.ChatType.IDEA_BASED)
-                        .filter(s -> s.getTokensUsed() >= MAX_TOKENS_PER_DAY)
-                        .anyMatch(s -> {
-                            long hoursSinceLastReset = ChronoUnit.HOURS.between(s.getLastResetAt(), LocalDateTime.now());
-                            return hoursSinceLastReset < 24;
-                        });
-                
-                if (hasRecentlyBlocked) {
-                    throw new TokenLimitExceededException(
-                        "Você já atingiu o limite de tokens em um chat com ideia nas últimas 24 horas. Aguarde para iniciar um novo chat."
-                    );
-                }
-            }
-            
-            session = new ChatSession(currentUser, chatType, idea);
-            session = chatSessionRepository.save(session);
-        } else {
-            if (session.getIdea() != null) {
-                session.getIdea().getId();
-            }
-        }
-
-        List<ChatMessage> messages = chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(session.getId());
+    private Idea validateAndGetIdea(Long ideaId, User currentUser) {
+        Idea idea = ideaRepository.findById(ideaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Ideia não encontrada: " + ideaId));
         
-        return buildSessionResponse(session, messages);
+        if (!idea.getUser().getId().equals(currentUser.getId())) {
+            throw new ChatPermissionException("Você não tem permissão para usar esta ideia.");
+        }
+        
+        return idea;
+    }
+
+    private ChatSession findOrCreateSession(User currentUser, Long ideaId, Idea idea) {
+        ChatSession session = ideaId != null 
+                ? findExistingIdeaBasedSession(currentUser, ideaId)
+                : findExistingFreeSession(currentUser);
+        
+        if (session == null) {
+            validateNewSessionCreation(currentUser, ideaId, idea);
+            session = createNewSession(currentUser, ideaId != null 
+                    ? ChatSession.ChatType.IDEA_BASED 
+                    : ChatSession.ChatType.FREE, idea);
+        }
+        
+        return session;
+    }
+
+    private ChatSession findExistingIdeaBasedSession(User currentUser, Long ideaId) {
+        ChatSession session = chatSessionRepository.findByUserIdAndIdeaId(currentUser.getId(), ideaId)
+                .orElse(null);
+        
+        if (session != null && session.getTokensUsed() >= MAX_TOKENS_PER_DAY) {
+            throw new TokenLimitExceededException(
+                "Este chat já atingiu o limite de tokens. Você pode iniciar um novo chat com outra ideia após 24 horas."
+            );
+        }
+        
+        return session;
+    }
+
+    private ChatSession findExistingFreeSession(User currentUser) {
+        ChatSession session = chatSessionRepository.findByUserIdAndType(currentUser.getId(), ChatSession.ChatType.FREE)
+                .orElse(null);
+        
+        if (session == null || !isSessionBlocked(session)) {
+            return session;
+        }
+        
+        if (ChronoUnit.HOURS.between(session.getLastResetAt(), LocalDateTime.now()) >= 24) {
+            return null;
+        }
+        
+        throw new TokenLimitExceededException(
+            "Limite de tokens atingido. Tente novamente em 24 horas para iniciar um novo chat livre."
+        );
+    }
+
+    private boolean isSessionBlocked(ChatSession session) {
+        return session.getTokensUsed() >= MAX_TOKENS_PER_DAY;
+    }
+
+    private void validateNewSessionCreation(User currentUser, Long ideaId, Idea idea) {
+        if (ideaId != null) {
+            validateNoRecentlyBlockedIdeaBasedSessions(currentUser);
+        }
+    }
+
+    private void validateNoRecentlyBlockedIdeaBasedSessions(User currentUser) {
+        List<ChatSession> blockedSessions = chatSessionRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId());
+        boolean hasRecentlyBlocked = blockedSessions.stream()
+                .filter(s -> s.getType() == ChatSession.ChatType.IDEA_BASED)
+                .filter(s -> s.getTokensUsed() >= MAX_TOKENS_PER_DAY)
+                .anyMatch(s -> {
+                    long hoursSinceLastReset = ChronoUnit.HOURS.between(s.getLastResetAt(), LocalDateTime.now());
+                    return hoursSinceLastReset < 24;
+                });
+        
+        if (hasRecentlyBlocked) {
+            throw new TokenLimitExceededException(
+                "Você já atingiu o limite de tokens em um chat com ideia nas últimas 24 horas. Aguarde para iniciar um novo chat."
+            );
+        }
+    }
+
+    private ChatSession createNewSession(User currentUser, ChatSession.ChatType chatType, Idea idea) {
+        ChatSession session = new ChatSession(currentUser, chatType, idea);
+        return chatSessionRepository.save(session);
     }
 
     private int getTotalTokensUsedByUser(User user) {
@@ -159,7 +184,7 @@ public class ChatService {
     @Transactional
     public ChatMessageResponse sendMessage(Long sessionId, ChatMessageRequest request) {
         ChatSession session = chatSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Sessão não encontrada: " + sessionId));
+                .orElseThrow(() -> new ResourceNotFoundException(ERROR_SESSION_NOT_FOUND + sessionId));
 
         User currentUser = getCurrentAuthenticatedUser();
         if (!session.getUser().getId().equals(currentUser.getId())) {
@@ -178,7 +203,12 @@ public class ChatService {
         List<ChatMessage> previousMessages = chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(session.getId());
         
         String contextPrompt = buildContextPrompt(session, previousMessages);
-        String fullPrompt = contextPrompt + "\n\nUsuário: " + request.getMessage() + "\n\nAssistente:";
+        String fullPrompt = """
+                %s
+                
+                Usuário: %s
+                
+                Assistente:""".formatted(contextPrompt, request.getMessage());
         
         int promptTokens = estimateTokens(fullPrompt);
         
@@ -195,7 +225,7 @@ public class ChatService {
         }
         
         session = chatSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Sessão não encontrada: " + sessionId));
+                .orElseThrow(() -> new ResourceNotFoundException(ERROR_SESSION_NOT_FOUND + sessionId));
         totalTokensUsed = getTotalTokensUsedByUser(currentUser);
         
         int estimatedTotalForMessage = moderationTokens + messageTokens + promptTokens + 50;
@@ -219,15 +249,17 @@ public class ChatService {
             responseTokens = estimateTokens(aiResponse);
             
             session = chatSessionRepository.findById(sessionId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Sessão não encontrada: " + sessionId));
+                    .orElseThrow(() -> new ResourceNotFoundException(ERROR_SESSION_NOT_FOUND + sessionId));
             totalTokensUsed = getTotalTokensUsedByUser(currentUser);
             
             int totalTokensNeeded = promptTokens + responseTokens;
             if (totalTokensUsed + totalTokensNeeded > MAX_TOKENS_PER_DAY) {
                 throw new TokenLimitExceededException("Limite de tokens atingido. Tente novamente em 24 horas.");
             }
+        } catch (OllamaServiceException e) {
+            throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao processar mensagem: " + e.getMessage(), e);
+            throw new OllamaServiceException("Erro ao processar mensagem: " + e.getMessage(), e);
         }
 
         ChatMessage userMessage = new ChatMessage(session, ChatMessage.MessageRole.USER, request.getMessage(), messageTokens);
@@ -267,13 +299,13 @@ public class ChatService {
                     idea.getTheme().getValue(),
                     idea.getCreatedAt().toString()
             );
-        }).collect(Collectors.toList());
+        }).toList();
     }
 
     @Transactional(readOnly = true)
     public ChatSessionResponse getSession(Long sessionId) {
         ChatSession session = chatSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Sessão não encontrada: " + sessionId));
+                .orElseThrow(() -> new ResourceNotFoundException(ERROR_SESSION_NOT_FOUND + sessionId));
 
         User currentUser = getCurrentAuthenticatedUser();
         if (!session.getUser().getId().equals(currentUser.getId())) {
@@ -307,6 +339,10 @@ public class ChatService {
     private void checkAndResetTokensIfNeeded(ChatSession session) {
         long hoursSinceReset = ChronoUnit.HOURS.between(session.getLastResetAt(), LocalDateTime.now());
         if (hoursSinceReset >= 24) {
+            // Reset apenas na memória para cálculo correto de tokens restantes na resposta
+            // Não salva no banco pois este método é usado em transações read-only
+            session.setTokensUsed(0);
+            session.setLastResetAt(LocalDateTime.now());
         }
     }
 
@@ -352,52 +388,84 @@ public class ChatService {
     private String callOllama(String prompt, String modelName) {
         OllamaRequest ollamaRequest = new OllamaRequest(modelName, prompt);
         try {
-            OllamaResponse ollamaResponse = this.webClient.post()
-                    .uri("/api/chat")
-                    .bodyValue(ollamaRequest)
-                    .retrieve()
-                    .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(), 
-                        response -> response.bodyToMono(String.class)
-                            .map(body -> {
-                                String errorMsg = String.format("Erro HTTP %d do Ollama: %s", 
-                                    response.statusCode().value(), body);
-                                return new RuntimeException(errorMsg);
-                            }))
-                    .bodyToMono(OllamaResponse.class)
-                    .timeout(java.time.Duration.ofSeconds(60)) 
-                    .block();
-
-            if (ollamaResponse != null && ollamaResponse.getMessage() != null) {
-                return ollamaResponse.getMessage().getContent().trim();
-            } else {
-                throw new RuntimeException("Resposta nula ou inválida do Ollama (/api/chat).");
-            }
+            OllamaResponse ollamaResponse = executeOllamaRequest(ollamaRequest);
+            return extractResponseContent(ollamaResponse);
         } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
-            String errorMessage = String.format(
-                "Erro ao se comunicar com a IA (Ollama): %s %s. Verifique se o Ollama está rodando e se o modelo '%s' está disponível.",
-                e.getStatusCode(), 
-                e.getResponseBodyAsString() != null ? e.getResponseBodyAsString() : e.getMessage(),
-                modelName
-            );
-            throw new RuntimeException(errorMessage, e);
+            throw handleWebClientException(e, modelName);
+        } catch (OllamaServiceException e) {
+            throw e;
         } catch (Exception e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof java.util.concurrent.TimeoutException || 
-                (e.getMessage() != null && e.getMessage().toLowerCase().contains("timeout"))) {
-                throw new RuntimeException("Timeout ao se comunicar com a IA (Ollama). Tente novamente.", e);
-            }
-            if (e.getMessage() != null && 
-                (e.getMessage().contains("Connection refused") || 
-                 e.getMessage().contains("Connection reset") ||
-                 e.getMessage().contains("connect"))) {
-                throw new RuntimeException(
-                    String.format("Não foi possível conectar ao Ollama em %s. Verifique se o servidor está rodando.", 
-                        ollamaBaseUrl), e);
-            }
-            throw new RuntimeException(
-                String.format("Erro ao se comunicar com a IA (Ollama): %s. Modelo: %s", 
-                    e.getMessage(), modelName), e);
+            throw handleGenericException(e, modelName);
         }
+    }
+
+    private OllamaResponse executeOllamaRequest(OllamaRequest ollamaRequest) {
+        return this.webClient.post()
+                .uri("/api/chat")
+                .bodyValue(ollamaRequest)
+                .retrieve()
+                .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(), 
+                    response -> response.bodyToMono(String.class)
+                        .map(body -> {
+                            String errorMsg = String.format("Erro HTTP %d do Ollama: %s", 
+                                response.statusCode().value(), body);
+                            return new OllamaServiceException(errorMsg);
+                        }))
+                .bodyToMono(OllamaResponse.class)
+                .timeout(java.time.Duration.ofSeconds(60)) 
+                .block();
+    }
+
+    private String extractResponseContent(OllamaResponse ollamaResponse) {
+        if (ollamaResponse != null && ollamaResponse.getMessage() != null) {
+            return ollamaResponse.getMessage().getContent().trim();
+        }
+        throw new OllamaServiceException("Resposta nula ou inválida do Ollama (/api/chat).");
+    }
+
+    private OllamaServiceException handleWebClientException(
+            org.springframework.web.reactive.function.client.WebClientResponseException e, String modelName) {
+        String responseBody = e.getResponseBodyAsString();
+        String errorDetail = (responseBody != null && !responseBody.isBlank()) 
+                ? responseBody 
+                : e.getMessage();
+        String errorMessage = String.format(
+            "Erro ao se comunicar com a IA (Ollama): %s %s. Verifique se o Ollama está rodando e se o modelo '%s' está disponível.",
+            e.getStatusCode(), 
+            errorDetail,
+            modelName
+        );
+        return new OllamaServiceException(errorMessage, e);
+    }
+
+    private OllamaServiceException handleGenericException(Exception e, String modelName) {
+        if (isTimeoutException(e)) {
+            return new OllamaServiceException("Timeout ao se comunicar com a IA (Ollama). Tente novamente.", e);
+        }
+        if (isConnectionException(e)) {
+            return new OllamaServiceException(
+                String.format("Não foi possível conectar ao Ollama em %s. Verifique se o servidor está rodando.", 
+                    ollamaBaseUrl), e);
+        }
+        return new OllamaServiceException(
+            String.format("Erro ao se comunicar com a IA (Ollama): %s. Modelo: %s", 
+                e.getMessage(), modelName), e);
+    }
+
+    private boolean isTimeoutException(Exception e) {
+        Throwable cause = e.getCause();
+        return cause instanceof java.util.concurrent.TimeoutException || 
+               (e.getMessage() != null && e.getMessage().toLowerCase().contains("timeout"));
+    }
+
+    private boolean isConnectionException(Exception e) {
+        if (e.getMessage() == null) {
+            return false;
+        }
+        String message = e.getMessage();
+        return message.contains("Connection refused") || 
+               message.contains("Connection reset") ||
+               message.contains("connect");
     }
 
     private int estimateTokens(String text) {
@@ -420,7 +488,7 @@ public class ChatService {
                         null,
                         msg.getCreatedAt().toString()
                 ))
-                .collect(Collectors.toList());
+                .toList();
 
         User user = session.getUser();
         int totalTokensUsed = getTotalTokensUsedByUser(user);

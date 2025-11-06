@@ -16,11 +16,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
+import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 import java.util.Random;
 import java.util.regex.Pattern;
 
@@ -46,26 +46,33 @@ public class IdeaService {
     );
     private final Random random = new Random();
 
-    private static final String PROMPT_MODERACAO =
-            "Analise o 'Tópico' abaixo. O tópico sugere uma intenção maliciosa, ilegal ou antiética (como phishing, fraude, malware, invasão, etc.)?" +
-                    "Responda APENAS 'SEGURO' ou 'PERIGOSO'.\n\n" +
-                    "Tópico: \"%s\"\n\n" +
-                    "RESPOSTA (SEGURO ou PERIGOSO):";
+    private static final String PROMPT_MODERACAO = """
+            Analise o 'Tópico' abaixo. O tópico sugere uma intenção maliciosa, ilegal ou antiética (como phishing, fraude, malware, invasão, etc.)?
+            Responda APENAS 'SEGURO' ou 'PERIGOSO'.
+            
+            Tópico: "%s"
+            
+            RESPOSTA (SEGURO ou PERIGOSO):""";
 
-    private static final String PROMPT_GERACAO =
-            "Gere uma ideia concisa (30 palavras ou menos) em português do Brasil sobre o Tópico.\n\n" +
-                    "Tópico: \"%s\"\n\n" +
-                    "REGRAS OBRIGATÓRIAS:\n" +
-                    "1. TAMANHO: 30 palavras ou menos. NÃO liste 10 itens. NÃO escreva roteiros.\n" +
-                    "2. FORMATO: Responda APENAS o texto da ideia. NÃO inclua saudações, explicações ou cabeçalhos.\n\n" +
-                    "RESPOSTA (MÁX 30 PALAVRAS):";
+    private static final String PROMPT_GERACAO = """
+            Gere uma ideia concisa (30 palavras ou menos) em português do Brasil sobre o Tópico.
+            
+            Tópico: "%s"
+            
+            REGRAS OBRIGATÓRIAS:
+            1. TAMANHO: 30 palavras ou menos. NÃO liste 10 itens. NÃO escreva roteiros.
+            2. FORMATO: Responda APENAS o texto da ideia. NÃO inclua saudações, explicações ou cabeçalhos.
+            
+            RESPOSTA (MÁX 30 PALAVRAS):""";
 
-    private static final String PROMPT_SURPRESA =
-            "Gere %s sobre o tema %s. Seja criativo e direto (máximo 30 palavras) em português do Brasil.\n\n" +
-                    "REGRAS OBRIGATÓRIAS:\n" +
-                    "1. FORMATO: Responda APENAS a ideia. \n" +
-                    "2. NÃO inclua saudações, explicações, cabeçalhos ou o tema na resposta.\n\n" +
-                    "RESPOSTA (APENAS A IDEIA):";
+    private static final String PROMPT_SURPRESA = """
+            Gere %s sobre o tema %s. Seja criativo e direto (máximo 30 palavras) em português do Brasil.
+            
+            REGRAS OBRIGATÓRIAS:
+            1. FORMATO: Responda APENAS a ideia. 
+            2. NÃO inclua saudações, explicações, cabeçalhos ou o tema na resposta.
+            
+            RESPOSTA (APENAS A IDEIA):""";
 
     public IdeaService(IdeaRepository ideaRepository,
                        UserRepository userRepository,
@@ -89,10 +96,12 @@ public class IdeaService {
             if (ollamaResponse != null && ollamaResponse.getMessage() != null) {
                 return ollamaResponse.getMessage().getContent().trim();
             } else {
-                throw new RuntimeException("Resposta nula ou inválida do Ollama (/api/chat).");
+                throw new OllamaServiceException("Resposta nula ou inválida do Ollama (/api/chat).");
             }
+        } catch (OllamaServiceException e) {
+            throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao se comunicar com a IA (Ollama): " + e.getMessage(), e);
+            throw new OllamaServiceException("Erro ao se comunicar com a IA (Ollama): " + e.getMessage(), e);
         }
     }
 
@@ -116,7 +125,7 @@ public class IdeaService {
             return new IdeaResponse(newIdea);
 
         } else if (!moderationResult.contains("SEGURO")) {
-            throw new RuntimeException("Falha na moderação: A IA retornou uma resposta inesperada. Tente novamente em alguns segundos.");
+            throw new OllamaServiceException("Falha na moderação: A IA retornou uma resposta inesperada. Tente novamente em alguns segundos.");
         }
 
         String topicoUsuario = String.format("Tema: %s, Contexto: %s",
