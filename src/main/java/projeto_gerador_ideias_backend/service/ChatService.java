@@ -142,9 +142,6 @@ public class ChatService {
 
     private void validateNewSessionCreation(User currentUser, Long ideaId, Idea idea) {
         if (ideaId != null) {
-            if (idea == null) {
-                throw new IllegalArgumentException("Tipo de chat IDEA_BASED requer uma ideia válida.");
-            }
             validateNoRecentlyBlockedIdeaBasedSessions(currentUser);
         }
     }
