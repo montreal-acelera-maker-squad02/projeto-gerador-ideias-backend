@@ -150,4 +150,24 @@ public class IdeaController {
                     .body("Erro ao remover ideia dos favoritos: " + e.getMessage());
         }
     }
+
+    // LISTAR IDEIAS FAVORITAS DO USUARIO
+    @GetMapping("/favorites")
+    @Operation(summary = "Listar ideias favoritadas do usuário autenticado")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lista de ideias favoritadas retornada com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Usuário não encontrado ou sem ideias favoritadas"),
+            @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
+    })
+    public ResponseEntity<List<IdeaResponse>> getFavoriteIdeas() {
+        try {
+            List<IdeaResponse> favoritas = ideaService.listarIdeiasFavoritadas();
+            return ResponseEntity.ok(favoritas);
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .build();
+        }
+    }
 }

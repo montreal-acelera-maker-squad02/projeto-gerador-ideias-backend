@@ -22,6 +22,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import projeto_gerador_ideias_backend.dto.IdeaRequest;
 import projeto_gerador_ideias_backend.dto.IdeaResponse;
 import projeto_gerador_ideias_backend.dto.OllamaResponse;
+import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.model.User;
@@ -630,5 +631,73 @@ class IdeaServiceTest {
         ideaService.desfavoritarIdeia(1L);
 
         verify(userRepository).saveAndFlush(argThat(user -> !user.getFavoriteIdeas().contains(idea)));
+    }
+
+    @Test
+    void shouldListFavoritedIdeasSuccessfully() {
+        // Arrange
+        Idea idea1 = new Idea();
+        idea1.setId(1L);
+        idea1.setTheme(Theme.TECNOLOGIA);
+        idea1.setGeneratedContent("Ideia 1");
+        idea1.setExecutionTimeMs(1000L);
+
+        Idea idea2 = new Idea();
+        idea2.setId(2L);
+        idea2.setTheme(Theme.TRABALHO);
+        idea2.setGeneratedContent("Ideia 2");
+        idea2.setExecutionTimeMs(1000L);
+
+        Set<Idea> favorites = new HashSet<>();
+        favorites.add(idea1);
+        favorites.add(idea2);
+        testUser.setFavoriteIdeas(favorites);
+
+        UserDetails userDetails = mock(UserDetails.class);
+        when(userDetails.getUsername()).thenReturn(testUserEmail);
+
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
+        idea1.setUser(testUser);
+        idea2.setUser(testUser);
+        List<IdeaResponse> result = ideaService.listarIdeiasFavoritadas();
+
+        assertEquals(2, result.size());
+        assertTrue(result.stream().anyMatch(r -> r.getContent().equals("Ideia 1")));
+        assertTrue(result.stream().anyMatch(r -> r.getContent().equals("Ideia 2")));
+        assertEquals("Test User", result.get(0).getUserName());
+    }
+
+    @Test
+    void shouldThrowExceptionWhenNoFavoritedIdeas() {
+        // Arrange
+        testUser.setFavoriteIdeas(new HashSet<>()); // sem favoritos
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.of(testUser));
+
+        // Act + Assert
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> ideaService.listarIdeiasFavoritadas());
+
+        assertEquals("Nenhuma ideia favoritada encontrada para este usuário.", ex.getMessage());
+    }
+
+    @Test
+    void shouldThrowExceptionWhenUserNotFound() {
+        // Arrange
+        when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.empty());
+
+        // Act + Assert
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> ideaService.listarIdeiasFavoritadas());
+
+        assertEquals("Usuário autenticado não encontrado no banco de dados: test@example.com", ex.getMessage());
     }
 }
