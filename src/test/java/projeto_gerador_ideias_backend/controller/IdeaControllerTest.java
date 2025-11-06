@@ -406,15 +406,17 @@ class IdeaControllerTest {
     void shouldGetMyIdeasSuccessfully() throws Exception {
         User user = userRepository.findByEmail(testUserEmail).orElseThrow();
         
+        LocalDateTime now = LocalDateTime.now();
+        
         Idea idea1 = new Idea(Theme.TECNOLOGIA, "Contexto 1", "Ideia 1", "modelo", 100L);
         idea1.setUser(user);
+        idea1.setCreatedAt(now.minusSeconds(1));
         idea1 = ideaRepository.saveAndFlush(idea1);
-        
-        Thread.sleep(100);
         
         Idea idea2 = new Idea(Theme.ESTUDOS, "Contexto 2", "Ideia 2", "modelo", 150L);
         idea2.setUser(user);
-        idea2 = ideaRepository.saveAndFlush(idea2);
+        idea2.setCreatedAt(now);
+        ideaRepository.saveAndFlush(idea2);
 
         mockMvc.perform(get("/api/ideas/my-ideas"))
                 .andExpect(status().isOk())
