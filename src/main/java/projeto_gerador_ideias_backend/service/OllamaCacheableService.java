@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import projeto_gerador_ideias_backend.dto.OllamaRequest;
 import projeto_gerador_ideias_backend.dto.OllamaResponse;
+import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 
 @Service
 public class OllamaCacheableService {
@@ -51,12 +52,14 @@ public class OllamaCacheableService {
                     .block();
 
             if (ollamaResponse != null && ollamaResponse.getMessage() != null) {
-                return ollamaResponse.getMessage().getContent().trim();
+                 return ollamaResponse.getMessage().getContent().trim();
             } else {
-                throw new RuntimeException("Resposta nula ou inválida do Ollama (/api/chat).");
+                throw new OllamaServiceException("Resposta nula ou inválida do Ollama (/api/chat).");
             }
+        } catch (OllamaServiceException e) {
+            throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao se comunicar com a IA (Ollama): " + e.getMessage(), e);
+            throw new OllamaServiceException("Erro ao se comunicar com a IA (Ollama): " + e.getMessage(), e);
         }
     }
 }

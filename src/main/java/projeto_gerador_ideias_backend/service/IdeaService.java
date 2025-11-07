@@ -15,6 +15,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
+import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
@@ -30,6 +31,7 @@ public class IdeaService {
     private final IdeaRepository ideaRepository;
     private final UserRepository userRepository;
     private final OllamaCacheableService ollamaService;
+    private final FailureCounterService failureCounterService;
 
     @Value("${ollama.model}")
     private String ollamaModel;
@@ -76,10 +78,11 @@ public class IdeaService {
 
     public IdeaService(IdeaRepository ideaRepository,
                        UserRepository userRepository,
-                       OllamaCacheableService ollamaService) {
+                       OllamaCacheableService ollamaService, FailureCounterService failureCounterService) {
         this.ideaRepository = ideaRepository;
         this.userRepository = userRepository;
         this.ollamaService = ollamaService;
+        this.failureCounterService = failureCounterService;
     }
 
     @Transactional
@@ -98,7 +101,14 @@ public class IdeaService {
 
         long startTime = System.currentTimeMillis();
 
-        String aiGeneratedContent = getCachedAiResponse(request.getTheme(), request.getContext(), skipCache);
+        String aiGeneratedContent;
+        try {
+            aiGeneratedContent = getCachedAiResponse(request.getTheme(), request.getContext(), skipCache, currentUser);
+            failureCounterService.resetCounter(currentUser.getEmail());
+        } catch (OllamaServiceException e) {
+            failureCounterService.handleFailure(currentUser.getEmail(), currentUser.getName());
+            throw e;
+        }
 
         long executionTime = System.currentTimeMillis() - startTime;
 
@@ -118,7 +128,7 @@ public class IdeaService {
     /**
      * Este método decide se deve usar o cache técnico ou ir direto para a IA.
      */
-    public String getCachedAiResponse(Theme theme, String context, boolean skipCache) {
+    public String getCachedAiResponse(Theme theme, String context, boolean skipCache, User user) {
 
         String moderationPrompt = String.format(PROMPT_MODERACAO, context);
         String moderationResult;
@@ -157,14 +167,20 @@ public class IdeaService {
         String randomType = SURPRISE_TYPES.get(random.nextInt(SURPRISE_TYPES.size()));
         String userContext = String.format("%s sobre %s", randomType, randomTheme.getValue());
 
-        String generationPrompt = String.format(PROMPT_SURPRESA, randomType, randomTheme.getValue());
+        String aiContent;
+        try {
+            String generationPrompt = String.format(PROMPT_SURPRESA, randomType, randomTheme.getValue());
+            aiContent = ollamaService.getAiResponseBypassingCache(generationPrompt);
+            failureCounterService.resetCounter(currentUser.getEmail());
+        } catch (OllamaServiceException e) {
+            failureCounterService.handleFailure(currentUser.getEmail(), currentUser.getName());
+            throw e;
+        }
 
-        // "Surpreenda-me" sempre ignora o cache para ser aleatório
-        String aiContent = ollamaService.getAiResponseBypassingCache(generationPrompt);
         String finalContent = cleanUpAiResponse(aiContent, userContext, true);
 
         long executionTime = System.currentTimeMillis() - startTime;
-
+        
         Idea newIdea = new Idea(
                 randomTheme,
                 userContext,
@@ -206,9 +222,6 @@ public class IdeaService {
     public List<IdeaResponse> listarHistoricoIdeiasFiltrado(Long userId, String theme, LocalDateTime startDate,
             LocalDateTime endDate) {
 
-        // Quando um userId é informado, mantemos o uso de Specification para aplicar o filtro por usuário
-        // (caso mais complexo). Quando não há userId, usamos métodos específicos do repositório para
-        // corresponder às expectativas dos testes (métodos findByTheme..., findByCreatedAtBetween..., etc.).
         List<Idea> ideias;
 
         if (userId != null) {
@@ -236,7 +249,6 @@ public class IdeaService {
 
             ideias = ideaRepository.findAll(spec);
         } else {
-            // Sem userId: escolher implementações diretas do repositório para facilitar mocking nos testes
             boolean hasTheme = theme != null && !theme.isBlank();
             boolean hasStartEnd = startDate != null && endDate != null;
 
