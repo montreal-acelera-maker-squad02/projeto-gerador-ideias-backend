@@ -47,6 +47,9 @@ class IdeaServiceTest {
     @Mock
     private OllamaCacheableService ollamaService;
 
+    @Mock
+    private FailureCounterService failureCounterService;
+
     @InjectMocks
     private IdeaService ideaService;
 
