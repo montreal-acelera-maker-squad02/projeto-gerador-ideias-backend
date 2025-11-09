@@ -1,12 +1,14 @@
 package projeto_gerador_ideias_backend.exceptions;
 
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.FieldError;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import jakarta.persistence.OptimisticLockException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.HashMap;
@@ -31,14 +33,17 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        StringBuilder messages = new StringBuilder();
         ex.getBindingResult().getAllErrors().forEach(error -> {
-            String fieldName = ((FieldError) error).getField();
             String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
+            if (messages.length() > 0) {
+                messages.append("; ");
+            }
+            messages.append(errorMessage);
         });
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
+        ErrorResponse error = new ErrorResponse("Erro de validação", messages.toString());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -93,7 +98,43 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(OllamaServiceException.class)
     public ResponseEntity<ErrorResponse> handleOllamaServiceException(OllamaServiceException ex) {
+        String message = ex.getMessage();
+        HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+        
+        if (message != null) {
+            String lowerMessage = message.toLowerCase();
+
+            if (lowerMessage.contains("timeout") || 
+                lowerMessage.contains("conexão recusada") ||
+                lowerMessage.contains("connection refused") ||
+                lowerMessage.contains("não foi possível conectar") ||
+                lowerMessage.contains("verifique se o ollama está rodando") ||
+                lowerMessage.contains("ollama não está rodando") ||
+                lowerMessage.contains("para iniciar: ollama serve") ||
+                (lowerMessage.contains("erro http 4") && !lowerMessage.contains("falha na moderação"))) {
+                status = HttpStatus.BAD_REQUEST;
+            }
+
+            if (lowerMessage.contains("falha na moderação") ||
+                (lowerMessage.contains("erro http 5") && !lowerMessage.contains("verifique se o ollama está rodando")) ||
+                lowerMessage.contains("internal server error")) {
+                status = HttpStatus.INTERNAL_SERVER_ERROR;
+            }
+        }
+        
         ErrorResponse error = new ErrorResponse("Erro ao comunicar com a IA", ex.getMessage());
+        return ResponseEntity.status(status).body(error);
+    }
+
+    @ExceptionHandler(OptimisticLockException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLockException(OptimisticLockException ex) {
+        ErrorResponse error = new ErrorResponse("Conflito de versão", "A sessão foi atualizada por outra requisição. Tente novamente.");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler({InvalidDataAccessApiUsageException.class, IllegalTransactionStateException.class})
+    public ResponseEntity<ErrorResponse> handleTransactionException(Exception ex) {
+        ErrorResponse error = new ErrorResponse("Erro de transação", "Erro ao processar operação no banco de dados. Tente novamente.");
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 

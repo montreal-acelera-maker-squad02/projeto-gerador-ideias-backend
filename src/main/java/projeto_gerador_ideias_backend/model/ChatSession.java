@@ -11,7 +11,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PostLoad;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -54,11 +56,21 @@ public class ChatSession {
     @Column(nullable = false)
     private ChatType type;
 
+    /**
+     * @deprecated Este campo está deprecated. Use o cálculo de tokens baseado em ChatMessage ao invés.
+     */
     @Column(nullable = false)
+    @Deprecated(since = "1.0", forRemoval = true)
     private Integer tokensUsed = 0;
 
     @Column(nullable = false)
     private LocalDateTime lastResetAt;
+
+    @Column(columnDefinition = "TEXT")
+    private String cachedIdeaContent;
+
+    @Column(columnDefinition = "TEXT")
+    private String cachedIdeaContext;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
@@ -67,6 +79,24 @@ public class ChatSession {
     @UpdateTimestamp
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+    @Version
+    @Column(nullable = true)
+    private Long version;
+
+    @PostLoad
+    private void ensureVersion() {
+        if (this.version == null) {
+            this.version = 0L;
+        }
+    }
+    
+    @jakarta.persistence.PrePersist
+    private void prePersist() {
+        if (this.version == null) {
+            this.version = 0L;
+        }
+    }
 
     public enum ChatType {
         IDEA_BASED,  
@@ -86,8 +116,13 @@ public class ChatSession {
         this.user = user;
         this.type = type;
         this.idea = idea;
-        this.tokensUsed = 0;
         this.lastResetAt = LocalDateTime.now();
+        this.version = 0L;
+        
+        if (type == ChatType.IDEA_BASED) {
+            this.cachedIdeaContent = idea.getGeneratedContent();
+            this.cachedIdeaContext = idea.getContext();
+        }
     }
 }
 

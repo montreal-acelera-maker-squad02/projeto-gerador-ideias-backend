@@ -24,6 +24,17 @@ public class OllamaRequest {
         );
     }
 
+    public OllamaRequest(String model, String systemPrompt, List<Message> historyMessages, String userPrompt) {
+        this.model = model;
+        java.util.ArrayList<Message> allMessages = new java.util.ArrayList<>();
+        allMessages.add(new Message("system", systemPrompt));
+        if (historyMessages != null && !historyMessages.isEmpty()) {
+            allMessages.addAll(historyMessages);
+        }
+        allMessages.add(new Message("user", userPrompt));
+        this.messages = allMessages;
+    }
+
     @Data
     @NoArgsConstructor
     public static class Message {

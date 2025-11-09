@@ -23,7 +23,7 @@ public class FailureCounterService {
         this.emailService = emailService;
     }
 
-    public void handleFailure(String userEmail, String userName) {
+    public synchronized void handleFailure(String userEmail, String userName) {
         Cache.ValueWrapper valueWrapper = failureCache.get(userEmail);
         int currentFailures = (valueWrapper != null) ? (Integer) valueWrapper.get() : 0;
         currentFailures++;

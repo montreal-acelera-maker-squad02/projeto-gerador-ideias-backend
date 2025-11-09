@@ -24,7 +24,9 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.regex.Pattern;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 public class IdeaService {
 
@@ -304,12 +306,16 @@ public class IdeaService {
         }
 
         String userEmail = ((UserDetails) authentication.getPrincipal()).getUsername();
-
-        return userRepository.findByEmail(userEmail)
+        
+        User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário autenticado não encontrado no banco de dados: " + userEmail));
+        
+        log.debug("User authenticated - Email: {}, User found: id={}, name={}, email={}", 
+            userEmail, user.getId(), user.getName(), user.getEmail());
+        
+        return user;
     }
 
-    // FAVORITAR IDEIA
     @Transactional
     public void favoritarIdeia(Long ideaId) {
         User user = getCurrentAuthenticatedUser();
@@ -322,8 +328,6 @@ public class IdeaService {
         userRepository.saveAndFlush(user);
     }
 
-
-    // DESFAVORITAR IDEIA
     @Transactional
     public void desfavoritarIdeia(Long ideaId) {
         User user = getCurrentAuthenticatedUser();
@@ -342,10 +346,6 @@ public class IdeaService {
     @Transactional(readOnly = true)
     public List<IdeaResponse> listarIdeiasFavoritadas() {
         User user = getCurrentAuthenticatedUser();
-
-        if (user == null) {
-            throw new ResourceNotFoundException("Usuário autenticado não encontrado.");
-        }
 
         Set<Idea> favoritas = user.getFavoriteIdeas();
 
