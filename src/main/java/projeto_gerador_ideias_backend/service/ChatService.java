@@ -37,7 +37,6 @@ public class ChatService {
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final IdeaRepository ideaRepository;
-    private final UserRepository userRepository;
     private final ChatProperties chatProperties;
     private final TokenCalculationService tokenCalculationService;
     private final PromptBuilderService promptBuilderService;
@@ -53,7 +52,6 @@ public class ChatService {
             ChatSessionRepository chatSessionRepository,
             ChatMessageRepository chatMessageRepository,
             IdeaRepository ideaRepository,
-            UserRepository userRepository,
             ChatProperties chatProperties,
             TokenCalculationService tokenCalculationService,
             PromptBuilderService promptBuilderService,
@@ -65,7 +63,6 @@ public class ChatService {
         this.chatSessionRepository = chatSessionRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.ideaRepository = ideaRepository;
-        this.userRepository = userRepository;
         this.chatProperties = chatProperties;
         this.tokenCalculationService = tokenCalculationService;
         this.promptBuilderService = promptBuilderService;
@@ -88,6 +85,8 @@ public class ChatService {
                     return self;
                 }
             } catch (Exception e) {
+                // Se o proxy não estiver totalmente inicializado, usa 'this' como fallback
+                // Isso pode acontecer durante a inicialização do contexto do Spring
             }
         }
         return this;
@@ -152,30 +151,28 @@ public class ChatService {
     
     private void ensureIdeaContextCache(ChatSession session) {
         if (session.getType() == ChatSession.ChatType.IDEA_BASED && 
-            (session.getCachedIdeaContent() == null || session.getCachedIdeaContext() == null)) {
-            if (session.getIdea() != null) {
-                session.setCachedIdeaContent(session.getIdea().getGeneratedContent());
-                session.setCachedIdeaContext(session.getIdea().getContext());
-                log.debug("Populated idea context cache in memory", Map.of(
-                    LOG_KEY_SESSION_ID, session.getId(),
-                    LOG_KEY_IDEA_ID, session.getIdea().getId()
-                ));
-            }
+            (session.getCachedIdeaContent() == null || session.getCachedIdeaContext() == null) &&
+            session.getIdea() != null) {
+            session.setCachedIdeaContent(session.getIdea().getGeneratedContent());
+            session.setCachedIdeaContext(session.getIdea().getContext());
+            log.debug("Populated idea context cache in memory", Map.of(
+                LOG_KEY_SESSION_ID, session.getId(),
+                LOG_KEY_IDEA_ID, session.getIdea().getId()
+            ));
         }
     }
     
     private void ensureIdeaContextCacheAndSave(ChatSession session) {
         if (session.getType() == ChatSession.ChatType.IDEA_BASED && 
-            (session.getCachedIdeaContent() == null || session.getCachedIdeaContext() == null)) {
-            if (session.getIdea() != null) {
-                session.setCachedIdeaContent(session.getIdea().getGeneratedContent());
-                session.setCachedIdeaContext(session.getIdea().getContext());
-                chatSessionRepository.save(session);
-                log.debug("Populated and saved idea context cache", Map.of(
-                    LOG_KEY_SESSION_ID, session.getId(),
-                    LOG_KEY_IDEA_ID, session.getIdea().getId()
-                ));
-            }
+            (session.getCachedIdeaContent() == null || session.getCachedIdeaContext() == null) &&
+            session.getIdea() != null) {
+            session.setCachedIdeaContent(session.getIdea().getGeneratedContent());
+            session.setCachedIdeaContext(session.getIdea().getContext());
+            chatSessionRepository.save(session);
+            log.debug("Populated and saved idea context cache", Map.of(
+                LOG_KEY_SESSION_ID, session.getId(),
+                LOG_KEY_IDEA_ID, session.getIdea().getId()
+            ));
         }
     }
 
@@ -218,7 +215,7 @@ public class ChatService {
             recordSuccessMetrics(startTime, chatType, preparation.getMessageTokens(), ollamaResult.getTokens());
             return response;
         } catch (ValidationException | ResourceNotFoundException | ChatPermissionException | TokenLimitExceededException | OllamaServiceException e) {
-            handleKnownException(e, sessionId, startTime, chatType);
+            handleKnownException(e);
             throw e;
         } catch (InvalidDataAccessApiUsageException e) {
             log.error("Transaction error in sendMessage", Map.of(LOG_KEY_SESSION_ID, sessionId), e);
@@ -273,7 +270,7 @@ public class ChatService {
         chatMetricsService.recordTokenUsage(assistantTokens, "ASSISTANT");
     }
             
-    private void handleKnownException(Exception e, Long sessionId, long startTime, String chatType) {
+    private void handleKnownException(Exception e) {
         if (e instanceof ValidationException) {
             chatMetricsService.recordValidationError("message_limits");
         }
@@ -304,7 +301,7 @@ public class ChatService {
     }
 
     @Transactional
-    private MessagePreparationResult prepareMessage(Long sessionId, ChatMessageRequest request) {
+    MessagePreparationResult prepareMessage(Long sessionId, ChatMessageRequest request) {
         ChatSession session = findSessionWithRetry(sessionId);
         User currentUser = getCurrentAuthenticatedUser();
         if (!java.util.Objects.equals(session.getUser().getId(), currentUser.getId())) {
@@ -1024,7 +1021,7 @@ public class ChatService {
                     cleanedTitle = cleanedTitle.substring(colonIndex + 1).trim();
                 }
             }
-            cleanedTitle = cleanedTitle.replaceAll("([:;,\\.!?])+$", "").trim();
+            cleanedTitle = removeTrailingPunctuationFromString(cleanedTitle);
             
             String[] titleWords = cleanedTitle.split("\\s+");
             if (titleWords.length > 5) {
@@ -1080,7 +1077,7 @@ public class ChatService {
                                     "em", "no", "na", "nos", "nas", "com", "para", "por", "que",
                                     "mais", "menos", "maior", "menor", "melhor", "pior"};
         
-        String lastWord = words[words.length - 1].toLowerCase().replaceAll("[,;.!?:]+$", "");
+        String lastWord = removeTrailingPunctuationFromString(words[words.length - 1].toLowerCase());
         
         for (String incomplete : incompleteWords) {
             if (lastWord.equals(incomplete) && words.length > 1) {
@@ -1147,7 +1144,7 @@ public class ChatService {
             if (j > 0) {
                 summary.append(" ");
             }
-            String word = cleanCommas ? words[j].replaceAll("[,;]+$", "") : words[j];
+            String word = cleanCommas ? removeTrailingCommasAndSemicolons(words[j]) : words[j];
             summary.append(word);
         }
         String result = summary.toString().trim();
@@ -1176,6 +1173,38 @@ public class ChatService {
         return result;
     }
 
+    private String removeTrailingPunctuationFromString(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        String result = text;
+        while (result.length() > 0) {
+            char lastChar = result.charAt(result.length() - 1);
+            if (lastChar == ':' || lastChar == ';' || lastChar == ',' || lastChar == '.' || lastChar == '!' || lastChar == '?') {
+                result = result.substring(0, result.length() - 1);
+                } else {
+                break;
+            }
+        }
+        return result;
+    }
+
+    private String removeTrailingCommasAndSemicolons(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        String result = text;
+        while (result.length() > 0) {
+            char lastChar = result.charAt(result.length() - 1);
+            if (lastChar == ',' || lastChar == ';') {
+                result = result.substring(0, result.length() - 1);
+            } else {
+                break;
+            }
+        }
+        return result;
+    }
+
     private String[] removeIncompleteWords(String[] words, int maxWords) {
         String[] incompleteWords = {"mais", "menos", "maior", "menor", "melhor", "pior",
                                     "com", "de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas",
@@ -1183,7 +1212,7 @@ public class ChatService {
         
         String[] result = words;
         while (result.length > 1 && result.length <= maxWords) {
-            String lastWord = result[result.length - 1].toLowerCase().replaceAll("[,;.!?]+$", "");
+            String lastWord = removeTrailingPunctuationFromString(result[result.length - 1].toLowerCase());
             if (!isIncompleteWord(lastWord, incompleteWords)) {
                 break;
             }
