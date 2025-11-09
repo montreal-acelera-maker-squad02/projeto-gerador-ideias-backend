@@ -73,7 +73,6 @@ class ChatControllerTest {
 
     @DynamicPropertySource
     static void setProperties(DynamicPropertyRegistry registry) {
-        // Inicializar MockWebServer antes de configurar a propriedade
         if (mockWebServer == null) {
             try {
                 mockWebServer = new MockWebServer();
@@ -95,7 +94,6 @@ class ChatControllerTest {
 
     @BeforeEach
     void setUpDatabase() {
-        // Limpar cache antes de cada teste
         if (userCacheService != null) {
             userCacheService.invalidateAllCache();
             userCacheService.clearRequestCache();
@@ -111,7 +109,7 @@ class ChatControllerTest {
         testUser.setName("Chat Controller User");
         testUser.setPassword(passwordEncoder.encode("password"));
         testUser = userRepository.save(testUser);
-        userRepository.flush(); // Garantir que o usuário seja persistido antes dos testes
+        userRepository.flush();
     }
 
     @AfterEach
@@ -207,7 +205,7 @@ class ChatControllerTest {
         idea.setModelUsed("mistral");
         idea.setExecutionTimeMs(1000L);
         idea = ideaRepository.save(idea);
-        ideaRepository.flush(); // Garantir que a ideia seja persistida
+        ideaRepository.flush();
 
         mockMvc.perform(get("/api/chat/ideas/summary"))
                 .andDo(print())
@@ -324,9 +322,7 @@ class ChatControllerTest {
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
 
-        // Criar mensagens que somem 10000 tokens (aproximadamente 7500 palavras = 10000 tokens)
-        // Cada mensagem de usuário com ~2500 tokens (aproximadamente 1875 palavras)
-        String largeMessage = "word ".repeat(1875); // ~2500 tokens por mensagem
+        String largeMessage = "word ".repeat(1875);
         for (int i = 0; i < 4; i++) {
             projeto_gerador_ideias_backend.model.ChatMessage msg = 
                 new projeto_gerador_ideias_backend.model.ChatMessage(

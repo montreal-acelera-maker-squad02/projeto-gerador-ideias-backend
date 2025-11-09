@@ -91,7 +91,7 @@
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
 			<version>2.2.224</version>
-			<scope>runtime</scope>
+			<scope>test</scope>
 		</dependency>
 
 		<!-- Swagger / OpenAPI -->
