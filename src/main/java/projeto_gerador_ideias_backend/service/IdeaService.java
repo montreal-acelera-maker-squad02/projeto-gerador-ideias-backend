@@ -1,13 +1,12 @@
 package projeto_gerador_ideias_backend.service;
 
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.reactive.function.client.WebClient;
 import projeto_gerador_ideias_backend.dto.IdeaRequest;
 import projeto_gerador_ideias_backend.dto.IdeaResponse;
-import projeto_gerador_ideias_backend.dto.OllamaRequest;
-import projeto_gerador_ideias_backend.dto.OllamaResponse;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
@@ -21,7 +20,9 @@ import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @Service
@@ -29,7 +30,8 @@ public class IdeaService {
 
     private final IdeaRepository ideaRepository;
     private final UserRepository userRepository;
-    private final WebClient webClient;
+    private final OllamaCacheableService ollamaService;
+    private final FailureCounterService failureCounterService;
 
     @Value("${ollama.model}")
     private String ollamaModel;
@@ -76,72 +78,84 @@ public class IdeaService {
 
     public IdeaService(IdeaRepository ideaRepository,
                        UserRepository userRepository,
-                       WebClient.Builder webClientBuilder,
-                       @Value("${ollama.base-url}") String ollamaBaseUrl) {
+                       OllamaCacheableService ollamaService, FailureCounterService failureCounterService) {
         this.ideaRepository = ideaRepository;
         this.userRepository = userRepository;
-        this.webClient = webClientBuilder.baseUrl(ollamaBaseUrl).build();
-    }
-
-    private String callOllama(String prompt, String modelName) {
-        OllamaRequest ollamaRequest = new OllamaRequest(modelName, prompt);
-        try {
-            OllamaResponse ollamaResponse = this.webClient.post()
-                    .uri("/api/chat")
-                    .bodyValue(ollamaRequest)
-                    .retrieve()
-                    .bodyToMono(OllamaResponse.class)
-                    .block();
-
-            if (ollamaResponse != null && ollamaResponse.getMessage() != null) {
-                return ollamaResponse.getMessage().getContent().trim();
-            } else {
-                throw new OllamaServiceException("Resposta nula ou inválida do Ollama (/api/chat).");
-            }
-        } catch (OllamaServiceException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new OllamaServiceException("Erro ao se comunicar com a IA (Ollama): " + e.getMessage(), e);
-        }
+        this.ollamaService = ollamaService;
+        this.failureCounterService = failureCounterService;
     }
 
     @Transactional
-    public IdeaResponse generateIdea(IdeaRequest request) {
+    public IdeaResponse generateIdea(IdeaRequest request, boolean skipCache) {
         User currentUser = getCurrentAuthenticatedUser();
-        System.out.println("DEBUG - Usuário autenticado: email=" + currentUser.getEmail() + ", name=" + currentUser.getName() + ", id=" + currentUser.getId());
-        long startTime = System.currentTimeMillis();
-        String userContext = request.getContext();
 
-        String moderationPrompt = String.format(PROMPT_MODERACAO, userContext);
-        String moderationResult = callOllama(moderationPrompt, ollamaModel);
+        if (!skipCache) {
+            Optional<Idea> userSpecificIdea = ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
+                    currentUser, request.getTheme(), request.getContext()
+            );
+
+            if (userSpecificIdea.isPresent()) {
+                return new IdeaResponse(userSpecificIdea.get());
+            }
+        }
+
+        long startTime = System.currentTimeMillis();
+
+        String aiGeneratedContent;
+        try {
+            aiGeneratedContent = getCachedAiResponse(request.getTheme(), request.getContext(), skipCache, currentUser);
+            failureCounterService.resetCounter(currentUser.getEmail());
+        } catch (OllamaServiceException e) {
+            failureCounterService.handleFailure(currentUser.getEmail(), currentUser.getName());
+            throw e;
+        }
+
+        long executionTime = System.currentTimeMillis() - startTime;
+
+        Idea newIdea = new Idea(
+                request.getTheme(),
+                request.getContext(),
+                aiGeneratedContent,
+                ollamaModel,
+                executionTime
+        );
+        newIdea.setUser(currentUser);
+        Idea savedIdea = ideaRepository.save(newIdea);
+
+        return new IdeaResponse(savedIdea);
+    }
+
+    /**
+     * Este método decide se deve usar o cache técnico ou ir direto para a IA.
+     */
+    public String getCachedAiResponse(Theme theme, String context, boolean skipCache, User user) {
+
+        String moderationPrompt = String.format(PROMPT_MODERACAO, context);
+        String moderationResult;
+
+        if (skipCache) {
+            moderationResult = ollamaService.getAiResponseBypassingCache(moderationPrompt);
+        } else {
+            moderationResult = ollamaService.getAiResponse(moderationPrompt);
+        }
 
         if (moderationResult.contains("PERIGOSO")) {
-            long executionTime = System.currentTimeMillis() - startTime;
-            Idea newIdea = new Idea(
-                    request.getTheme(), userContext, REJEICAO_SEGURANCA,
-                    ollamaModel, executionTime
-            );
-            newIdea.setUser(currentUser);
-            return new IdeaResponse(newIdea, currentUser);
-
-        } else if (!moderationResult.contains("SEGURO")) {
-            throw new OllamaServiceException("Falha na moderação: A IA retornou uma resposta inesperada. Tente novamente em alguns segundos.");
+            return REJEICAO_SEGURANCA;
         }
 
         String topicoUsuario = String.format("Tema: %s, Contexto: %s",
-                request.getTheme().getValue(),
-                userContext);
-
+                theme.getValue(),
+                context);
         String generationPrompt = String.format(PROMPT_GERACAO, topicoUsuario);
+        String generatedContent;
 
-        return runGenerationAndSave(
-                currentUser,
-                request.getTheme(),
-                userContext,
-                generationPrompt,
-                startTime,
-                false
-        );
+        if (skipCache) {
+            generatedContent = ollamaService.getAiResponseBypassingCache(generationPrompt);
+        } else {
+            generatedContent = ollamaService.getAiResponse(generationPrompt);
+        }
+
+        return cleanUpAiResponse(generatedContent, context, false);
     }
 
     @Transactional
@@ -151,25 +165,35 @@ public class IdeaService {
 
         Theme randomTheme = Theme.values()[random.nextInt(Theme.values().length)];
         String randomType = SURPRISE_TYPES.get(random.nextInt(SURPRISE_TYPES.size()));
-
         String userContext = String.format("%s sobre %s", randomType, randomTheme.getValue());
 
-        String generationPrompt = String.format(PROMPT_SURPRESA, randomType, randomTheme.getValue());
+        String aiContent;
+        try {
+            String generationPrompt = String.format(PROMPT_SURPRESA, randomType, randomTheme.getValue());
+            aiContent = ollamaService.getAiResponseBypassingCache(generationPrompt);
+            failureCounterService.resetCounter(currentUser.getEmail());
+        } catch (OllamaServiceException e) {
+            failureCounterService.handleFailure(currentUser.getEmail(), currentUser.getName());
+            throw e;
+        }
 
-        return runGenerationAndSave(
-                currentUser,
+        String finalContent = cleanUpAiResponse(aiContent, userContext, true);
+
+        long executionTime = System.currentTimeMillis() - startTime;
+        
+        Idea newIdea = new Idea(
                 randomTheme,
                 userContext,
-                generationPrompt,
-                startTime,
-                true
+                finalContent,
+                ollamaModel,
+                executionTime
         );
+        newIdea.setUser(currentUser);
+        Idea savedIdea = ideaRepository.save(newIdea);
+        return new IdeaResponse(savedIdea);
     }
 
-    private IdeaResponse runGenerationAndSave(User user, Theme theme, String context, String generationPrompt, long startTime, boolean isSurprise) {
-
-        String generatedContent = callOllama(generationPrompt, ollamaModel);
-
+    private String cleanUpAiResponse(String generatedContent, String context, boolean isSurprise) {
         generatedContent = HEADER_CLEANUP_PATTERN.matcher(generatedContent).replaceAll("").trim();
 
         if (generatedContent.startsWith("Embora seja impossível")) {
@@ -191,36 +215,68 @@ public class IdeaService {
         } else {
             finalContent = generatedContent;
         }
-
-        long executionTime = System.currentTimeMillis() - startTime;
-
-        Idea newIdea = new Idea(
-                theme,
-                context,
-                finalContent,
-                ollamaModel,
-                executionTime
-        );
-        newIdea.setUser(user);
-        Idea savedIdea = ideaRepository.save(newIdea);
-        return new IdeaResponse(savedIdea, user);
+        return finalContent;
     }
 
     @Transactional(readOnly = true)
-    public List<IdeaResponse> listarHistoricoIdeiasFiltrado(String theme, LocalDateTime startDate, LocalDateTime endDate) {
+    public List<IdeaResponse> listarHistoricoIdeiasFiltrado(Long userId, String theme, LocalDateTime startDate,
+            LocalDateTime endDate) {
+
         List<Idea> ideias;
 
-        if (theme != null && startDate != null && endDate != null) {
-            ideias = ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()), startDate, endDate);
+        if (userId != null) {
+            Specification<Idea> spec = (root, query, criteriaBuilder) -> {
+                Predicate predicate = criteriaBuilder.conjunction();
+
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("user").get("id"), userId));
+
+                if (theme != null && !theme.isBlank()) {
+                    try {
+                        predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("theme"), Theme.valueOf(theme.toUpperCase())));
+                    } catch (IllegalArgumentException e) {
+                        throw new IllegalArgumentException("O tema '" + theme + "' é inválido.");
+                    }
+                }
+                if (startDate != null) {
+                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), startDate));
+                }
+                if (endDate != null) {
+                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), endDate));
+                }
+                query.orderBy(criteriaBuilder.desc(root.get("createdAt")));
+                return predicate;
+            };
+
+            ideias = ideaRepository.findAll(spec);
+        } else {
+            boolean hasTheme = theme != null && !theme.isBlank();
+            boolean hasStartEnd = startDate != null && endDate != null;
+
+            if (hasTheme && hasStartEnd) {
+                Theme parsedTheme;
+                try {
+                    parsedTheme = Theme.valueOf(theme.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("O tema '" + theme + "' é inválido.");
+                }
+                ideias = ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(parsedTheme, startDate, endDate);
+            } else if (hasTheme) {
+                Theme parsedTheme;
+                try {
+                    parsedTheme = Theme.valueOf(theme.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("O tema '" + theme + "' é inválido.");
+                }
+                ideias = ideaRepository.findByThemeOrderByCreatedAtDesc(parsedTheme);
+            } else if (hasStartEnd) {
+                ideias = ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
+            } else {
+                ideias = ideaRepository.findAllByOrderByCreatedAtDesc();
+            }
         }
-        else if (theme != null) {
-            ideias = ideaRepository.findByThemeOrderByCreatedAtDesc(Theme.valueOf(theme.toUpperCase()));
-        }
-        else if (startDate != null && endDate != null) {
-            ideias = ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
-        }
-        else {
-            ideias = ideaRepository.findAllByOrderByCreatedAtDesc();
+
+        if (ideias.isEmpty()) {
+            throw new ResourceNotFoundException("Nenhuma ideia encontrada no banco de dados para os filtros informados.");
         }
 
         return ideias.stream().map(IdeaResponse::new).toList();
@@ -281,5 +337,25 @@ public class IdeaService {
         user.getFavoriteIdeas().remove(idea);
 
         userRepository.saveAndFlush(user);
+    }
+
+    // BUSCAR IDEIAS FAVORITAS
+    @Transactional(readOnly = true)
+    public List<IdeaResponse> listarIdeiasFavoritadas() {
+        User user = getCurrentAuthenticatedUser();
+
+        if (user == null) {
+            throw new ResourceNotFoundException("Usuário autenticado não encontrado.");
+        }
+
+        Set<Idea> favoritas = user.getFavoriteIdeas();
+
+        if (favoritas == null || favoritas.isEmpty()) {
+            throw new ResourceNotFoundException("Nenhuma ideia favoritada encontrada para este usuário.");
+        }
+
+        return favoritas.stream()
+                .map(IdeaResponse::new)
+                .toList();
     }
 }

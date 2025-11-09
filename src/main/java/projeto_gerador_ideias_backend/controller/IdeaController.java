@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -27,7 +29,6 @@ public class IdeaController {
     private final IdeaService ideaService;
 
 
-    // GERAR NOVA IDEIA
     @Operation(
             summary = "Gerar Nova Ideia",
             description = "Gera uma nova ideia com base em um tema e contexto, utilizando a IA (Ollama). Inclui moderação de segurança."
@@ -39,8 +40,12 @@ public class IdeaController {
     @ApiResponse(responseCode = "500", description = "Erro interno no servidor (ex: falha ao conectar com o Ollama)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     @PostMapping("/generate")
-    public ResponseEntity<IdeaResponse> generateIdea(@Valid @RequestBody IdeaRequest request) {
-        IdeaResponse response = ideaService.generateIdea(request);
+    public ResponseEntity<IdeaResponse> generateIdea(
+            @Valid @RequestBody IdeaRequest request,
+            @Parameter(description = "Se 'true', ignora todos os caches (pessoal e técnico) e força uma nova chamada à IA.")
+            @RequestParam(required = false, defaultValue = "false") boolean skipCache
+    ) {
+        IdeaResponse response = ideaService.generateIdea(request, skipCache);
         return ResponseEntity.ok(response);
     }
 
@@ -59,8 +64,6 @@ public class IdeaController {
         return ResponseEntity.ok(response);
     }
 
-    // LISTAR HISTORICO DE IDEIAS COM FILTROS
-
     @Operation(
             summary = "Listar Histórico de Ideias (com filtro opcional por tema e data)",
             description = "Retorna as ideias salvas no banco de dados, podendo filtrar por tema e intervalo de datas. Ordenadas da mais recente para a mais antiga."
@@ -70,37 +73,21 @@ public class IdeaController {
     @ApiResponse(responseCode = "400", description = "Erro de validação nos parâmetros de filtro")
     @ApiResponse(responseCode = "500", description = "Erro interno no servidor")
     @GetMapping("/history")
-    public ResponseEntity<Object> getAllIdeas(
+    public ResponseEntity<List<IdeaResponse>> getAllIdeas(
+            @RequestParam(required = false) Long userId,
             @RequestParam(required = false) String theme,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
     ) {
-        try {
-            List<IdeaResponse> ideias = ideaService.listarHistoricoIdeiasFiltrado(theme, startDate, endDate);
-
-            if (ideias == null || ideias.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body("Nenhuma ideia encontrada no banco de dados para os filtros informados.");
-            }
-
-            return ResponseEntity.ok(ideias);
-
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body("Erro de validação: " + e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Erro interno ao buscar histórico de ideias: " + e.getMessage());
-        }
+        List<IdeaResponse> ideias = ideaService.listarHistoricoIdeiasFiltrado(userId, theme, startDate, endDate);
+        return ResponseEntity.ok(ideias);
     }
 
-
-    // LISTAR MINHAS IDEIAS (Autenticado)
     @Operation(
-            summary = "Listar Minhas Ideias",
-            description = "Retorna todas as ideias criadas pelo usuário autenticado, ordenadas da mais recente para a mais antiga."
+            summary = "Listar Ideias de um Usuário",
+            description = "Retorna todas as ideias criadas por um usuário específico, ordenadas da mais recente para a mais antiga."
     )
     @ApiResponse(responseCode = "200", description = "Ideias do usuário encontradas com sucesso")
     @ApiResponse(responseCode = "401", description = "Usuário não autenticado")
@@ -119,7 +106,6 @@ public class IdeaController {
         }
     }
 
-    // FAVORITAR IDEIAS
     @Operation(summary = "Favoritar uma ideia")
     @ApiResponse(responseCode = "200", description = "Ideia favoritada com sucesso")
     @ApiResponse(responseCode = "400", description = "Erro de validação (Ideia já favoritada)")
@@ -141,8 +127,6 @@ public class IdeaController {
         }
     }
 
-
-    // DESFAVORITAR IDEIAS
     @Operation(summary = "Remover ideia dos favoritos")
     @ApiResponse(responseCode = "200", description = "Ideia removida dos favoritos com sucesso")
     @ApiResponse(responseCode = "400", description = "Erro de validação (Ideia não favoritada)")
@@ -161,6 +145,25 @@ public class IdeaController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Erro ao remover ideia dos favoritos: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/favorites")
+    @Operation(summary = "Listar ideias favoritadas do usuário autenticado")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lista de ideias favoritadas retornada com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Usuário não encontrado ou sem ideias favoritadas"),
+            @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
+    })
+    public ResponseEntity<List<IdeaResponse>> getFavoriteIdeas() {
+        try {
+            List<IdeaResponse> favoritas = ideaService.listarIdeiasFavoritadas();
+            return ResponseEntity.ok(favoritas);
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .build();
         }
     }
 }
