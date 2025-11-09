@@ -39,8 +39,24 @@ public class IdeaResponse {
         this.modelUsed = savedIdea.getModelUsed();
         this.executionTimeMs = savedIdea.getExecutionTimeMs();
 
-        // Caso não haja usuário
         if (savedIdea.getUser() != null) {
+            this.userName = savedIdea.getUser().getName();
+        } else {
+            this.userName = "Usuário não informado";
+        }
+    }
+
+    public IdeaResponse(Idea savedIdea, projeto_gerador_ideias_backend.model.User user) {
+        this.id = savedIdea.getId();
+        this.theme = savedIdea.getTheme().getValue();
+        this.content = savedIdea.getGeneratedContent();
+        this.createdAt = savedIdea.getCreatedAt();
+        this.modelUsed = savedIdea.getModelUsed();
+        this.executionTimeMs = savedIdea.getExecutionTimeMs();
+
+        if (user != null) {
+            this.userName = user.getName();
+        } else if (savedIdea.getUser() != null) {
             this.userName = savedIdea.getUser().getName();
         } else {
             this.userName = "Usuário não informado";

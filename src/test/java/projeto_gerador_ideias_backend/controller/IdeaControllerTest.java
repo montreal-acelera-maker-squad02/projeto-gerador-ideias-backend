@@ -208,7 +208,7 @@ class IdeaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.context", is("O contexto não pode estar em branco")));
+                .andExpect(jsonPath("$.message", is("O contexto não pode estar em branco")));
 
         int requestCountAfter = mockWebServer.getRequestCount();
         assertEquals(0, requestCountAfter - requestCountBefore, "Não deveria fazer requisições se a validação falhar");
@@ -411,7 +411,7 @@ class IdeaControllerTest {
         Idea idea1 = new Idea(Theme.TECNOLOGIA, "Contexto 1", "Ideia 1", "modelo", 100L);
         idea1.setUser(user);
         idea1.setCreatedAt(now.minusSeconds(1));
-        idea1 = ideaRepository.saveAndFlush(idea1);
+        ideaRepository.saveAndFlush(idea1);
         
         Idea idea2 = new Idea(Theme.ESTUDOS, "Contexto 2", "Ideia 2", "modelo", 150L);
         idea2.setUser(user);

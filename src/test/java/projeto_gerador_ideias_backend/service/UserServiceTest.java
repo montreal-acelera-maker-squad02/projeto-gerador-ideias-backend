@@ -43,6 +43,9 @@ class UserServiceTest {
     @Mock
     private JwtService jwtService;
     
+    @Mock
+    private UserCacheService userCacheService;
+    
     @InjectMocks
     private UserService userService;
     
