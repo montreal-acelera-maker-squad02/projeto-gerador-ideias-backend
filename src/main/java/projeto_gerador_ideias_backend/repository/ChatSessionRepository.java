@@ -1,6 +1,10 @@
 package projeto_gerador_ideias_backend.repository;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import projeto_gerador_ideias_backend.model.ChatSession;
 
@@ -12,5 +16,16 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, Long> 
     Optional<ChatSession> findByUserIdAndType(Long userId, ChatSession.ChatType type);
     Optional<ChatSession> findByUserIdAndIdeaId(Long userId, Long ideaId);
     List<ChatSession> findByUserIdOrderByCreatedAtDesc(Long userId);
+    
+    @Lock(LockModeType.OPTIMISTIC)
+    @Query("SELECT s FROM ChatSession s " +
+           "WHERE s.id = :id")
+    Optional<ChatSession> findByIdWithLock(@Param("id") Long id);
+    
+    @Query("SELECT s FROM ChatSession s " +
+           "LEFT JOIN FETCH s.user " +
+           "LEFT JOIN FETCH s.idea i " +
+           "WHERE s.id = :id")
+    Optional<ChatSession> findByIdWithIdea(@Param("id") Long id);
 }
 

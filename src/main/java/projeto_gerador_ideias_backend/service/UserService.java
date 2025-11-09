@@ -24,6 +24,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final UserCacheService userCacheService;
     
     @Transactional
     public RegisterResponse registerUser(RegisterRequest request) {
@@ -86,6 +87,8 @@ public class UserService {
         }
         
         User updatedUser = userRepository.save(user);
+        
+        userCacheService.invalidateUserCache(updatedUser.getEmail());
         
         RegisterResponse response = new RegisterResponse();
         response.setId(updatedUser.getId());

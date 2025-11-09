@@ -105,10 +105,10 @@ public class IdeaService {
         }
     }
 
-
     @Transactional
     public IdeaResponse generateIdea(IdeaRequest request) {
         User currentUser = getCurrentAuthenticatedUser();
+        System.out.println("DEBUG - Usuário autenticado: email=" + currentUser.getEmail() + ", name=" + currentUser.getName() + ", id=" + currentUser.getId());
         long startTime = System.currentTimeMillis();
         String userContext = request.getContext();
 
@@ -122,7 +122,7 @@ public class IdeaService {
                     ollamaModel, executionTime
             );
             newIdea.setUser(currentUser);
-            return new IdeaResponse(newIdea);
+            return new IdeaResponse(newIdea, currentUser);
 
         } else if (!moderationResult.contains("SEGURO")) {
             throw new OllamaServiceException("Falha na moderação: A IA retornou uma resposta inesperada. Tente novamente em alguns segundos.");
@@ -203,7 +203,7 @@ public class IdeaService {
         );
         newIdea.setUser(user);
         Idea savedIdea = ideaRepository.save(newIdea);
-        return new IdeaResponse(savedIdea);
+        return new IdeaResponse(savedIdea, user);
     }
 
     @Transactional(readOnly = true)
@@ -248,12 +248,15 @@ public class IdeaService {
         }
 
         String userEmail = ((UserDetails) authentication.getPrincipal()).getUsername();
-
-        return userRepository.findByEmail(userEmail)
+        
+        User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário autenticado não encontrado no banco de dados: " + userEmail));
+        
+        System.out.println("DEBUG getCurrentAuthenticatedUser - Email buscado: " + userEmail + ", User encontrado: id=" + user.getId() + ", name=" + user.getName() + ", email=" + user.getEmail());
+        
+        return user;
     }
 
-    // FAVORITAR IDEIA
     @Transactional
     public void favoritarIdeia(Long ideaId) {
         User user = getCurrentAuthenticatedUser();
@@ -266,8 +269,6 @@ public class IdeaService {
         userRepository.saveAndFlush(user);
     }
 
-
-    // DESFAVORITAR IDEIA
     @Transactional
     public void desfavoritarIdeia(Long ideaId) {
         User user = getCurrentAuthenticatedUser();
