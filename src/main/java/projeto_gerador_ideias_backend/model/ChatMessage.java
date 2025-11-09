@@ -56,6 +56,9 @@ public class ChatMessage {
     @Column(nullable = false)
     private Integer tokensUsed;
 
+    @Column(nullable = true)
+    private Integer tokensRemaining;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -70,6 +73,14 @@ public class ChatMessage {
         this.role = role;
         this.content = content;
         this.tokensUsed = tokensUsed;
+    }
+
+    public ChatMessage(ChatSession session, MessageRole role, String content, Integer tokensUsed, Integer tokensRemaining) {
+        this.session = session;
+        this.role = role;
+        this.content = content;
+        this.tokensUsed = tokensUsed;
+        this.tokensRemaining = tokensRemaining;
     }
 }
 
