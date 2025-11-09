@@ -35,6 +35,10 @@ public class OllamaIntegrationService {
     
     private static final Pattern MODERATION_DANGEROUS_PATTERN = 
         Pattern.compile("^\\s*\\[MODERACAO:\\s*PERIGOSO\\]\\s*$", Pattern.CASE_INSENSITIVE);
+    
+    private static final String LOG_KEY_MODEL = "model";
+    private static final String LOG_KEY_DURATION_MS = "durationMs";
+    private static final String LOG_KEY_STATUS_CODE = "statusCode";
 
     @Retryable(
         value = {OllamaServiceException.class},
@@ -58,7 +62,7 @@ public class OllamaIntegrationService {
 
     private String executeOllamaCall(OllamaRequest ollamaRequest) {
         log.info("Sending request to Ollama", Map.of(
-            "model", ollamaModel,
+            LOG_KEY_MODEL, ollamaModel,
             "messagesCount", ollamaRequest.getMessages().size(),
             "systemPromptLength", ollamaRequest.getMessages().stream()
                 .filter(m -> "system".equals(m.getRole()))
@@ -80,8 +84,8 @@ public class OllamaIntegrationService {
             
             long duration = System.currentTimeMillis() - startTime;
             log.info("Ollama request completed", Map.of(
-                "model", ollamaModel,
-                "durationMs", duration,
+                LOG_KEY_MODEL, ollamaModel,
+                LOG_KEY_DURATION_MS, duration,
                 "responseLength", content.length()
             ));
             
@@ -91,9 +95,9 @@ public class OllamaIntegrationService {
         } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
             long duration = System.currentTimeMillis() - startTime;
             log.error("Ollama HTTP error", Map.of(
-                "model", ollamaModel,
-                "statusCode", e.getStatusCode().value(),
-                "durationMs", duration
+                LOG_KEY_MODEL, ollamaModel,
+                LOG_KEY_STATUS_CODE, e.getStatusCode().value(),
+                LOG_KEY_DURATION_MS, duration
             ), e);
             chatMetricsService.recordOllamaError("http_" + e.getStatusCode().value());
             throw handleWebClientException(e);
@@ -102,8 +106,8 @@ public class OllamaIntegrationService {
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - startTime;
             log.error("Ollama request failed", Map.of(
-                "model", ollamaModel,
-                "durationMs", duration
+                LOG_KEY_MODEL, ollamaModel,
+                LOG_KEY_DURATION_MS, duration
             ), e);
             chatMetricsService.recordOllamaError("generic");
             throw handleGenericException(e);
@@ -114,7 +118,7 @@ public class OllamaIntegrationService {
         try {
             log.debug("Executing Ollama request", Map.of(
                 "baseUrl", webClient.toString(),
-                "model", ollamaModel
+                LOG_KEY_MODEL, ollamaModel
             ));
             
             OllamaResponse response = webClient.post()
@@ -137,9 +141,9 @@ public class OllamaIntegrationService {
                                 }
                                 
                                 log.error("Ollama HTTP error", Map.of(
-                                    "statusCode", statusCode,
+                                    LOG_KEY_STATUS_CODE, statusCode,
                                     "body", body,
-                                    "model", ollamaModel
+                                    LOG_KEY_MODEL, ollamaModel
                                 ));
                                 return new OllamaServiceException(errorMsg);
                             }))
@@ -154,22 +158,22 @@ public class OllamaIntegrationService {
             return response;
         } catch (org.springframework.web.reactive.function.client.WebClientRequestException e) {
             log.error("WebClient request error", Map.of(
-                "model", ollamaModel,
+                LOG_KEY_MODEL, ollamaModel,
                 "message", e.getMessage()
             ), e);
             throw handleGenericException(e);
         } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
             log.error("WebClient response error", Map.of(
-                "model", ollamaModel,
-                "statusCode", e.getStatusCode().value()
+                LOG_KEY_MODEL, ollamaModel,
+                LOG_KEY_STATUS_CODE, e.getStatusCode().value()
             ), e);
             throw handleWebClientException(e);
         } catch (org.springframework.web.reactive.function.client.WebClientException e) {
-            log.error("WebClient error during Ollama request", Map.of("model", ollamaModel), e);
+            log.error("WebClient error during Ollama request", Map.of(LOG_KEY_MODEL, ollamaModel), e);
             throw handleGenericException(e);
         } catch (Exception e) {
             log.error("Unexpected error during Ollama request", Map.of(
-                "model", ollamaModel,
+                LOG_KEY_MODEL, ollamaModel,
                 "errorType", e.getClass().getName()
             ), e);
             throw handleGenericException(e);
@@ -224,7 +228,7 @@ public class OllamaIntegrationService {
     private OllamaServiceException handleWebClientException(
             org.springframework.web.reactive.function.client.WebClientResponseException e) {
         String responseBody = e.getResponseBodyAsString();
-        String errorDetail = responseBody != null && !responseBody.isBlank() 
+        String errorDetail = !responseBody.isBlank() 
                 ? responseBody 
                 : e.getMessage();
         String errorMessage = String.format(
@@ -274,7 +278,7 @@ public class OllamaIntegrationService {
     @Recover
     public String recoverOllamaCall(OllamaServiceException e, String systemPrompt, String userPrompt) {
         log.error("All retry attempts failed for Ollama", Map.of(
-            "model", ollamaModel,
+            LOG_KEY_MODEL, ollamaModel,
             "systemPromptLength", systemPrompt.length(),
             "userPromptLength", userPrompt.length()
         ), e);

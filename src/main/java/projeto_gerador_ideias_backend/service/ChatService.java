@@ -1,7 +1,7 @@
 package projeto_gerador_ideias_backend.service;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
@@ -21,16 +21,18 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ChatService {
 
     private static final String ERROR_SESSION_NOT_FOUND = "Sessão não encontrada: ";
+    private static final String LOG_KEY_SESSION_ID = "sessionId";
+    private static final String LOG_KEY_IDEA_ID = "ideaId";
+    private static final String LOG_KEY_PREVIOUS_TOKENS_REMAINING = "previousTokensRemaining";
 
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
@@ -44,6 +46,52 @@ public class ChatService {
     private final ContentModerationService contentModerationService;
     private final UserCacheService userCacheService;
     private final ChatMetricsService chatMetricsService;
+    @Lazy
+    private ChatService self;
+
+    public ChatService(
+            ChatSessionRepository chatSessionRepository,
+            ChatMessageRepository chatMessageRepository,
+            IdeaRepository ideaRepository,
+            UserRepository userRepository,
+            ChatProperties chatProperties,
+            TokenCalculationService tokenCalculationService,
+            PromptBuilderService promptBuilderService,
+            OllamaIntegrationService ollamaIntegrationService,
+            ChatLimitValidator chatLimitValidator,
+            ContentModerationService contentModerationService,
+            UserCacheService userCacheService,
+            ChatMetricsService chatMetricsService) {
+        this.chatSessionRepository = chatSessionRepository;
+        this.chatMessageRepository = chatMessageRepository;
+        this.ideaRepository = ideaRepository;
+        this.userRepository = userRepository;
+        this.chatProperties = chatProperties;
+        this.tokenCalculationService = tokenCalculationService;
+        this.promptBuilderService = promptBuilderService;
+        this.ollamaIntegrationService = ollamaIntegrationService;
+        this.chatLimitValidator = chatLimitValidator;
+        this.contentModerationService = contentModerationService;
+        this.userCacheService = userCacheService;
+        this.chatMetricsService = chatMetricsService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setSelf(@Lazy ChatService self) {
+        this.self = self;
+    }
+
+    private ChatService getTransactionalService() {
+        if (self != null && self != this) {
+            try {
+                if (self.chatSessionRepository != null) {
+                    return self;
+                }
+            } catch (Exception e) {
+            }
+        }
+        return this;
+    }
 
     @Transactional
     public ChatSessionResponse startChat(StartChatRequest request) {
@@ -53,9 +101,9 @@ public class ChatService {
         ChatSession session = findOrCreateSession(currentUser, ideaId, idea);
         
         log.info("Chat session started", Map.of(
-            "sessionId", session.getId(),
+            LOG_KEY_SESSION_ID, session.getId(),
             "chatType", session.getType().name(),
-            "ideaId", ideaId != null ? ideaId : "null"
+            LOG_KEY_IDEA_ID, ideaId != null ? ideaId : "null"
         ));
         
         List<ChatMessage> messages = getInitialMessages(session.getId());
@@ -109,8 +157,8 @@ public class ChatService {
                 session.setCachedIdeaContent(session.getIdea().getGeneratedContent());
                 session.setCachedIdeaContext(session.getIdea().getContext());
                 log.debug("Populated idea context cache in memory", Map.of(
-                    "sessionId", session.getId(),
-                    "ideaId", session.getIdea().getId()
+                    LOG_KEY_SESSION_ID, session.getId(),
+                    LOG_KEY_IDEA_ID, session.getIdea().getId()
                 ));
             }
         }
@@ -124,8 +172,8 @@ public class ChatService {
                 session.setCachedIdeaContext(session.getIdea().getContext());
                 chatSessionRepository.save(session);
                 log.debug("Populated and saved idea context cache", Map.of(
-                    "sessionId", session.getId(),
-                    "ideaId", session.getIdea().getId()
+                    LOG_KEY_SESSION_ID, session.getId(),
+                    LOG_KEY_IDEA_ID, session.getIdea().getId()
                 ));
             }
         }
@@ -160,102 +208,104 @@ public class ChatService {
         String chatType = "UNKNOWN";
         
         try {
-            MessagePreparationResult preparation = prepareMessage(sessionId, request);
+            ChatService transactionalService = getTransactionalService();
+            MessagePreparationResult preparation = transactionalService.prepareMessage(sessionId, request);
             chatType = preparation.isFreeChat() ? "FREE" : "IDEA_BASED";
             
-            String aiResponse;
-            int responseTokens;
-            try {
-                List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> historyMessages = 
-                    preparation.getHistoryMessages();
-                
-                if (historyMessages == null || historyMessages.isEmpty()) {
-                    aiResponse = ollamaIntegrationService.callOllamaWithSystemPrompt(
-                        preparation.getSystemPrompt(), 
-                        preparation.getUserMessage()
-                    );
-                } else {
-                    aiResponse = ollamaIntegrationService.callOllamaWithHistory(
-                        preparation.getSystemPrompt(),
-                        historyMessages,
-                        preparation.getUserMessage()
-                    );
-                }
-                contentModerationService.validateModerationResponse(
-                    aiResponse, 
-                    preparation.isFreeChat()
-                );
-                responseTokens = tokenCalculationService.estimateTokens(aiResponse);
-                
+            OllamaResponseResult ollamaResult = callOllamaAndValidate(sessionId, preparation);
+            ChatMessageResponse response = transactionalService.saveMessageAndResponse(sessionId, preparation, ollamaResult.getResponse(), ollamaResult.getTokens());
+            
+            recordSuccessMetrics(startTime, chatType, preparation.getMessageTokens(), ollamaResult.getTokens());
+            return response;
+        } catch (ValidationException | ResourceNotFoundException | ChatPermissionException | TokenLimitExceededException | OllamaServiceException e) {
+            handleKnownException(e, sessionId, startTime, chatType);
+            throw e;
+        } catch (InvalidDataAccessApiUsageException e) {
+            log.error("Transaction error in sendMessage", Map.of(LOG_KEY_SESSION_ID, sessionId), e);
+            throw new OllamaServiceException("Erro ao processar mensagem. Tente novamente.", e);
+        } catch (DataAccessException e) {
+            log.error("Database access error in sendMessage", Map.of(LOG_KEY_SESSION_ID, sessionId), e);
+            throw new OllamaServiceException("Erro ao acessar o banco de dados. Tente novamente.", e);
+        } catch (Exception e) {
+            handleUnexpectedException(e, sessionId, startTime, chatType);
+            throw new OllamaServiceException("Erro inesperado ao processar mensagem: " + e.getMessage(), e);
+        }
+    }
+
+    private OllamaResponseResult callOllamaAndValidate(Long sessionId, MessagePreparationResult preparation) {
+        try {
+            List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> historyMessages = preparation.getHistoryMessages();
+            String aiResponse = historyMessages == null || historyMessages.isEmpty()
+                ? ollamaIntegrationService.callOllamaWithSystemPrompt(preparation.getSystemPrompt(), preparation.getUserMessage())
+                : ollamaIntegrationService.callOllamaWithHistory(preparation.getSystemPrompt(), historyMessages, preparation.getUserMessage());
+            
+            contentModerationService.validateModerationResponse(aiResponse, preparation.isFreeChat());
+            int responseTokens = tokenCalculationService.estimateTokens(aiResponse);
+            
                 if (responseTokens < 0) {
-                    log.warn("Negative token count calculated, setting to 0", Map.of(
-                        "sessionId", sessionId,
-                        "responseTokens", responseTokens
-                    ));
+                log.warn("Negative token count calculated, setting to 0", Map.of(LOG_KEY_SESSION_ID, sessionId, "responseTokens", responseTokens));
                     responseTokens = 0;
                 }
+            
+            return new OllamaResponseResult(aiResponse, responseTokens);
             } catch (ValidationException e) {
-                log.error("Validation error during message processing", Map.of("sessionId", sessionId), e);
+            log.error("Validation error during message processing", Map.of(LOG_KEY_SESSION_ID, sessionId), e);
                 chatMetricsService.recordValidationError("moderation");
                 throw e;
             } catch (OllamaServiceException e) {
-                log.error("Ollama service error", Map.of("sessionId", sessionId), e);
+            log.error("Ollama service error", Map.of(LOG_KEY_SESSION_ID, sessionId), e);
                 chatMetricsService.recordOllamaError("service_error");
                 throw e;
             } catch (OptimisticLockException e) {
-                log.warn("Optimistic lock conflict during Ollama call", Map.of("sessionId", sessionId), e);
+            log.warn("Optimistic lock conflict during Ollama call", Map.of(LOG_KEY_SESSION_ID, sessionId), e);
                 throw new TokenLimitExceededException("Sessão foi atualizada por outra requisição. Tente novamente.");
             } catch (Exception e) {
-                log.error("Unexpected error during Ollama call", Map.of("sessionId", sessionId, "errorType", e.getClass().getName()), e);
+            log.error("Unexpected error during Ollama call", Map.of(LOG_KEY_SESSION_ID, sessionId, "errorType", e.getClass().getName()), e);
                 throw new OllamaServiceException("Erro ao comunicar com a IA: " + e.getMessage(), e);
+        }
             }
 
-            ChatMessageResponse response = saveMessageAndResponse(sessionId, preparation, aiResponse, responseTokens);
-            
+    private void recordSuccessMetrics(long startTime, String chatType, int userTokens, int assistantTokens) {
             long duration = System.currentTimeMillis() - startTime;
             chatMetricsService.recordMessageSent(chatType);
             chatMetricsService.recordMessageProcessingTime(duration, chatType, true);
-            chatMetricsService.recordTokenUsage(preparation.getMessageTokens(), "USER");
-            chatMetricsService.recordTokenUsage(responseTokens, "ASSISTANT");
+        chatMetricsService.recordTokenUsage(userTokens, "USER");
+        chatMetricsService.recordTokenUsage(assistantTokens, "ASSISTANT");
+    }
             
-            return response;
-        } catch (ValidationException e) {
+    private void handleKnownException(Exception e, Long sessionId, long startTime, String chatType) {
+        if (e instanceof ValidationException) {
             chatMetricsService.recordValidationError("message_limits");
-            throw e;
-        } catch (ResourceNotFoundException e) {
-            throw e;
-        } catch (ChatPermissionException e) {
-            throw e;
-        } catch (TokenLimitExceededException e) {
-            throw e;
-        } catch (InvalidDataAccessApiUsageException e) {
-            log.error("Transaction error in sendMessage", Map.of("sessionId", sessionId), e);
-            throw new OllamaServiceException("Erro ao processar mensagem. Tente novamente.", e);
-        } catch (DataAccessException e) {
-            log.error("Database access error in sendMessage", Map.of("sessionId", sessionId), e);
-            throw new OllamaServiceException("Erro ao acessar o banco de dados. Tente novamente.", e);
-        } catch (OllamaServiceException e) {
-            throw e;
-        } catch (Exception e) {
+        }
+    }
+
+    private void handleUnexpectedException(Exception e, Long sessionId, long startTime, String chatType) {
             long duration = System.currentTimeMillis() - startTime;
             chatMetricsService.recordMessageProcessingTime(duration, chatType, false);
-            log.error("Unexpected error in sendMessage", Map.of("sessionId", sessionId, "errorType", e.getClass().getName()), e);
-            throw new OllamaServiceException("Erro inesperado ao processar mensagem: " + e.getMessage(), e);
+        log.error("Unexpected error in sendMessage", Map.of(LOG_KEY_SESSION_ID, sessionId, "errorType", e.getClass().getName()), e);
+    }
+
+    private static class OllamaResponseResult {
+        private final String response;
+        private final int tokens;
+
+        OllamaResponseResult(String response, int tokens) {
+            this.response = response;
+            this.tokens = tokens;
+        }
+
+        String getResponse() {
+            return response;
+        }
+
+        int getTokens() {
+            return tokens;
         }
     }
 
     @Transactional
     private MessagePreparationResult prepareMessage(Long sessionId, ChatMessageRequest request) {
-        ChatSession session;
-        try {
-            session = chatSessionRepository.findByIdWithLock(sessionId)
-                    .orElseThrow(() -> new ResourceNotFoundException(ERROR_SESSION_NOT_FOUND + sessionId));
-        } catch (OptimisticLockException e) {
-            log.warn("Optimistic lock exception in prepareMessage, retrying without lock", Map.of("sessionId", sessionId), e);
-            session = chatSessionRepository.findByIdWithIdea(sessionId)
-                    .orElseThrow(() -> new ResourceNotFoundException(ERROR_SESSION_NOT_FOUND + sessionId));
-        }
-
+        ChatSession session = findSessionWithRetry(sessionId);
         User currentUser = getCurrentAuthenticatedUser();
         if (!java.util.Objects.equals(session.getUser().getId(), currentUser.getId())) {
             throw new ChatPermissionException("Você não tem permissão para esta sessão.");
@@ -299,7 +349,7 @@ public class ChatService {
 
         if (!historyMessages.isEmpty()) {
             log.debug("Message history for session", Map.of(
-                "sessionId", sessionId,
+                LOG_KEY_SESSION_ID, sessionId,
                 "historySize", historyMessages.size(),
                 "historyRoles", historyMessages.stream()
                     .map(m -> m.getRole())
@@ -308,7 +358,7 @@ public class ChatService {
         }
 
         log.info("Processing message", Map.of(
-            "sessionId", sessionId,
+            LOG_KEY_SESSION_ID, sessionId,
             "messageTokens", messageTokens,
             "chatType", session.getType().name(),
             "historyMessagesCount", historyMessages.size(),
@@ -326,8 +376,19 @@ public class ChatService {
         );
     }
 
+    private ChatSession findSessionWithRetry(Long sessionId) {
+        try {
+            return chatSessionRepository.findByIdWithLock(sessionId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ERROR_SESSION_NOT_FOUND + sessionId));
+        } catch (OptimisticLockException e) {
+            log.warn("Optimistic lock exception in prepareMessage, retrying without lock", Map.of(LOG_KEY_SESSION_ID, sessionId), e);
+            return chatSessionRepository.findByIdWithIdea(sessionId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ERROR_SESSION_NOT_FOUND + sessionId));
+        }
+    }
+
     @Transactional
-    private ChatMessageResponse saveMessageAndResponse(
+    ChatMessageResponse saveMessageAndResponse(
             Long sessionId, 
             MessagePreparationResult preparation, 
             String aiResponse, 
@@ -338,7 +399,7 @@ public class ChatService {
             session = chatSessionRepository.findByIdWithLock(sessionId)
                     .orElseThrow(() -> new ResourceNotFoundException(ERROR_SESSION_NOT_FOUND + sessionId));
         } catch (OptimisticLockException e) {
-            log.warn("Optimistic lock exception in saveMessageAndResponse, retrying without lock", Map.of("sessionId", sessionId), e);
+            log.warn("Optimistic lock exception in saveMessageAndResponse, retrying without lock", Map.of(LOG_KEY_SESSION_ID, sessionId), e);
             session = chatSessionRepository.findByIdWithIdea(sessionId)
                     .orElseThrow(() -> new ResourceNotFoundException(ERROR_SESSION_NOT_FOUND + sessionId));
         }
@@ -347,7 +408,7 @@ public class ChatService {
             int tokensInputThisMessage = preparation.getMessageTokens();
             int tokensOutputThisMessage = responseTokens;
             int totalTokensThisMessage = tokensInputThisMessage + tokensOutputThisMessage;
-            
+
             chatLimitValidator.validateChatNotBlocked(session, tokensInputThisMessage);
             chatLimitValidator.validateChatNotBlockedWithResponse(session, tokensInputThisMessage, tokensOutputThisMessage);
 
@@ -363,7 +424,7 @@ public class ChatService {
             String cleanedResponse = removeModerationTags(aiResponse);
             
             if (cleanedResponse == null || cleanedResponse.isBlank()) {
-                log.warn("Response is empty after cleaning moderation tags", Map.of("sessionId", sessionId));
+                log.warn("Response is empty after cleaning moderation tags", Map.of(LOG_KEY_SESSION_ID, sessionId));
                 throw new OllamaServiceException("Resposta da IA está vazia após processamento.");
             }
             
@@ -384,7 +445,7 @@ public class ChatService {
             }
             
             log.debug("Search for previous assistant message", Map.of(
-                "sessionId", sessionId,
+                LOG_KEY_SESSION_ID, sessionId,
                 "totalAssistantMessages", allAssistantMessages.size(),
                 "foundMessageWithTokens", lastAssistantMessageWithTokens != null
             ));
@@ -392,22 +453,22 @@ public class ChatService {
             if (lastAssistantMessageWithTokens != null) {
                 previousTokensRemaining = lastAssistantMessageWithTokens.getTokensRemaining();
                 log.info("Using previous tokensRemaining", Map.of(
-                    "previousTokensRemaining", previousTokensRemaining,
+                    LOG_KEY_PREVIOUS_TOKENS_REMAINING, previousTokensRemaining,
                     "lastAssistantMessageId", lastAssistantMessageWithTokens.getId(),
                     "lastAssistantMessageCreatedAt", lastAssistantMessageWithTokens.getCreatedAt()
                 ));
                     } else {
                 log.info("No previous assistant messages with tokensRemaining found, using initial value", Map.of(
                     "initialTokensRemaining", previousTokensRemaining,
-                    "sessionId", sessionId
+                    LOG_KEY_SESSION_ID, sessionId
                 ));
             }
             
             int tokensRemaining = Math.max(0, previousTokensRemaining - totalTokensThisMessage);
             
             log.debug("Token calculation", Map.of(
-                "sessionId", sessionId,
-                "previousTokensRemaining", previousTokensRemaining,
+                LOG_KEY_SESSION_ID, sessionId,
+                LOG_KEY_PREVIOUS_TOKENS_REMAINING, previousTokensRemaining,
                 "tokensInputThisMessage", tokensInputThisMessage,
                 "tokensOutputThisMessage", tokensOutputThisMessage,
                 "totalTokensThisMessage", totalTokensThisMessage,
@@ -442,17 +503,17 @@ public class ChatService {
             int totalTokensAccumulated = totalUserTokensAccumulated + totalAssistantTokensAccumulated;
             
             log.debug("Token calculation after save", Map.of(
-                "sessionId", sessionId,
+                LOG_KEY_SESSION_ID, sessionId,
                 "tokensInputThisMessage", tokensInputThisMessage,
                 "tokensOutputThisMessage", tokensOutputThisMessage,
                 "totalTokensThisMessage", totalTokensThisMessage,
                 "totalTokensAccumulated", totalTokensAccumulated,
-                "previousTokensRemaining", previousTokensRemaining,
+                LOG_KEY_PREVIOUS_TOKENS_REMAINING, previousTokensRemaining,
                 "tokensRemaining", tokensRemaining
             ));
 
             log.info("Message processed successfully", Map.of(
-                "sessionId", sessionId,
+            LOG_KEY_SESSION_ID, sessionId,
                 "userMessageTokens", preparation.getMessageTokens(),
                 "assistantMessageTokens", responseTokens,
                 "totalUserTokensAccumulated", totalUserTokensAccumulated,
@@ -472,10 +533,10 @@ public class ChatService {
                 assistantMessage.getCreatedAt().toString()
         );
         } catch (OptimisticLockException e) {
-            log.warn("Optimistic lock conflict", Map.of("sessionId", sessionId), e);
+            log.warn("Optimistic lock conflict", Map.of(LOG_KEY_SESSION_ID, sessionId), e);
             throw new TokenLimitExceededException("Sessão foi atualizada por outra requisição. Tente novamente.");
         } catch (ResourceNotFoundException e) {
-            log.warn("Session not found during save", Map.of("sessionId", sessionId), e);
+            log.warn("Session not found during save", Map.of(LOG_KEY_SESSION_ID, sessionId), e);
             throw e;
         }
     }
@@ -506,22 +567,9 @@ public class ChatService {
     
     @Transactional(readOnly = true)
     public List<ChatMessageResponse> getOlderMessages(Long sessionId, String beforeTimestamp, Integer limit) {
-        ChatSession session = chatSessionRepository.findByIdWithIdea(sessionId)
-                .orElseThrow(() -> new ResourceNotFoundException(ERROR_SESSION_NOT_FOUND + sessionId));
-        
-        User currentUser = getCurrentAuthenticatedUser();
-        if (!java.util.Objects.equals(session.getUser().getId(), currentUser.getId())) {
-            throw new ChatPermissionException("Você não tem permissão para esta sessão.");
-        }
-        
-        LocalDateTime before;
-        try {
-            before = LocalDateTime.parse(beforeTimestamp);
-        } catch (java.time.format.DateTimeParseException e) {
-            throw new ValidationException("Formato de timestamp inválido. Use ISO 8601 (ex: 2025-11-08T13:00:00)");
-        }
-        
-        int messageLimit = (limit != null && limit > 0) ? Math.min(limit, 50) : 20;
+        validateSessionAndPermission(sessionId);
+        LocalDateTime before = parseTimestamp(beforeTimestamp);
+        int messageLimit = calculateMessageLimit(limit);
         
         org.springframework.data.domain.Pageable pageable = 
             org.springframework.data.domain.PageRequest.of(0, messageLimit);
@@ -535,54 +583,129 @@ public class ChatService {
         messages.sort((m1, m2) -> m1.getCreatedAt().compareTo(m2.getCreatedAt()));
         
         return messages.stream()
-            .map(msg -> {
-                int accumulatedUserTokens = 0;
-                int accumulatedAssistantTokens = 0;
-                
-                List<ChatMessage> allMessagesUpToThis = 
-                    chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId)
-                        .stream()
-                        .filter(m -> m.getCreatedAt().isBefore(msg.getCreatedAt()) || 
-                                    m.getCreatedAt().equals(msg.getCreatedAt()))
-                        .collect(Collectors.toList());
-                
-                for (ChatMessage m : allMessagesUpToThis) {
-                    if (m.getRole() == ChatMessage.MessageRole.USER) {
-                        accumulatedUserTokens += m.getTokensUsed();
-                    } else {
-                        accumulatedAssistantTokens += m.getTokensUsed();
-                    }
-                }
-                
-                int totalTokens = accumulatedUserTokens + accumulatedAssistantTokens;
-                
-                int tokensRemainingForMessage = chatProperties.getMaxTokensPerChat();
-                if (msg.getRole() == ChatMessage.MessageRole.ASSISTANT && msg.getTokensRemaining() != null) {
-                    tokensRemainingForMessage = msg.getTokensRemaining();
-                } else if (msg.getRole() == ChatMessage.MessageRole.USER) {
-                    int msgIndex = allMessagesUpToThis.indexOf(msg);
-                    if (msgIndex >= 0 && msgIndex + 1 < allMessagesUpToThis.size()) {
-                        ChatMessage nextMsg = allMessagesUpToThis.get(msgIndex + 1);
-                        if (nextMsg.getRole() == ChatMessage.MessageRole.ASSISTANT && 
-                            nextMsg.getTokensRemaining() != null) {
-                            int tokensUsedBetween = msg.getTokensUsed() + nextMsg.getTokensUsed();
-                            tokensRemainingForMessage = nextMsg.getTokensRemaining() + tokensUsedBetween;
-                        }
-                    }
-                }
-                
-                return new ChatMessageResponse(
-                    msg.getId(),
-                    msg.getRole().name().toLowerCase(),
-                    msg.getContent(),
-                    accumulatedUserTokens,
-                    accumulatedAssistantTokens,
-                    totalTokens,
-                    tokensRemainingForMessage,
-                    msg.getCreatedAt().toString()
-                );
-            })
-            .collect(Collectors.toList());
+            .map(msg -> mapMessageToResponse(sessionId, msg))
+            .toList();
+    }
+
+    private void validateSessionAndPermission(Long sessionId) {
+        ChatSession session = chatSessionRepository.findByIdWithIdea(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException(ERROR_SESSION_NOT_FOUND + sessionId));
+        
+        User currentUser = getCurrentAuthenticatedUser();
+        if (!java.util.Objects.equals(session.getUser().getId(), currentUser.getId())) {
+            throw new ChatPermissionException("Você não tem permissão para esta sessão.");
+        }
+    }
+
+    private LocalDateTime parseTimestamp(String beforeTimestamp) {
+        try {
+            return LocalDateTime.parse(beforeTimestamp);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new ValidationException("Formato de timestamp inválido. Use ISO 8601 (ex: 2025-11-08T13:00:00)");
+        }
+    }
+
+    private int calculateMessageLimit(Integer limit) {
+        return (limit != null && limit > 0) ? Math.min(limit, 50) : 20;
+    }
+
+    private ChatMessageResponse mapMessageToResponse(Long sessionId, ChatMessage msg) {
+        TokenAccumulationResult tokenResult = calculateAccumulatedTokens(sessionId, msg);
+        int tokensRemainingForMessage = calculateTokensRemainingForMessage(msg, tokenResult.getAllMessagesUpToThis());
+        
+        return new ChatMessageResponse(
+            msg.getId(),
+            msg.getRole().name().toLowerCase(),
+            msg.getContent(),
+            tokenResult.getAccumulatedUserTokens(),
+            tokenResult.getAccumulatedAssistantTokens(),
+            tokenResult.getTotalTokens(),
+            tokensRemainingForMessage,
+            msg.getCreatedAt().toString()
+        );
+    }
+
+    private TokenAccumulationResult calculateAccumulatedTokens(Long sessionId, ChatMessage msg) {
+        List<ChatMessage> allMessagesUpToThis = getMessagesUpToTimestamp(sessionId, msg.getCreatedAt());
+        
+        int accumulatedUserTokens = 0;
+        int accumulatedAssistantTokens = 0;
+        
+        for (ChatMessage m : allMessagesUpToThis) {
+            if (m.getRole() == ChatMessage.MessageRole.USER) {
+                accumulatedUserTokens += m.getTokensUsed();
+            } else {
+                accumulatedAssistantTokens += m.getTokensUsed();
+            }
+        }
+        
+        int totalTokens = accumulatedUserTokens + accumulatedAssistantTokens;
+        return new TokenAccumulationResult(accumulatedUserTokens, accumulatedAssistantTokens, totalTokens, allMessagesUpToThis);
+    }
+
+    private List<ChatMessage> getMessagesUpToTimestamp(Long sessionId, LocalDateTime timestamp) {
+        return chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId)
+            .stream()
+            .filter(m -> m.getCreatedAt().isBefore(timestamp) || m.getCreatedAt().equals(timestamp))
+            .toList();
+    }
+
+    private int calculateTokensRemainingForMessage(ChatMessage msg, List<ChatMessage> allMessagesUpToThis) {
+        if (msg.getRole() == ChatMessage.MessageRole.ASSISTANT && msg.getTokensRemaining() != null) {
+            return msg.getTokensRemaining();
+        }
+        
+        if (msg.getRole() == ChatMessage.MessageRole.USER) {
+            return calculateTokensRemainingForUserMessage(msg, allMessagesUpToThis);
+        }
+        
+        return chatProperties.getMaxTokensPerChat();
+    }
+
+    private int calculateTokensRemainingForUserMessage(ChatMessage msg, List<ChatMessage> allMessagesUpToThis) {
+        int msgIndex = allMessagesUpToThis.indexOf(msg);
+        if (msgIndex < 0 || msgIndex + 1 >= allMessagesUpToThis.size()) {
+            return chatProperties.getMaxTokensPerChat();
+        }
+        
+        ChatMessage nextMsg = allMessagesUpToThis.get(msgIndex + 1);
+        if (nextMsg.getRole() == ChatMessage.MessageRole.ASSISTANT && nextMsg.getTokensRemaining() != null) {
+            int tokensUsedBetween = msg.getTokensUsed() + nextMsg.getTokensUsed();
+            return nextMsg.getTokensRemaining() + tokensUsedBetween;
+        }
+        
+        return chatProperties.getMaxTokensPerChat();
+    }
+
+    private static class TokenAccumulationResult {
+        private final int accumulatedUserTokens;
+        private final int accumulatedAssistantTokens;
+        private final int totalTokens;
+        private final List<ChatMessage> allMessagesUpToThis;
+
+        TokenAccumulationResult(int accumulatedUserTokens, int accumulatedAssistantTokens, 
+                               int totalTokens, List<ChatMessage> allMessagesUpToThis) {
+            this.accumulatedUserTokens = accumulatedUserTokens;
+            this.accumulatedAssistantTokens = accumulatedAssistantTokens;
+            this.totalTokens = totalTokens;
+            this.allMessagesUpToThis = allMessagesUpToThis;
+        }
+
+        int getAccumulatedUserTokens() {
+            return accumulatedUserTokens;
+        }
+
+        int getAccumulatedAssistantTokens() {
+            return accumulatedAssistantTokens;
+        }
+
+        int getTotalTokens() {
+            return totalTokens;
+        }
+
+        List<ChatMessage> getAllMessagesUpToThis() {
+            return allMessagesUpToThis;
+        }
     }
 
     @Transactional(readOnly = true)
@@ -676,93 +799,142 @@ public class ChatService {
         List<Interaction> interactions = new ArrayList<>();
         long interactionId = 1;
         
-        for (int i = 0; i < messages.size(); i++) {
+        int i = 0;
+        while (i < messages.size()) {
             ChatMessage message = messages.get(i);
             
-            if (message == null) {
+            if (!isValidUserMessage(message)) {
+                i++;
                 continue;
             }
             
             ChatSession session = message.getSession();
-            if (session == null) {
-                log.warn("Message without session", Map.of("messageId", message.getId()));
-                continue;
-            }
+            ChatMessage assistantMessage = findMatchingAssistantMessage(messages, i, session);
             
-            if (message.getRole() == ChatMessage.MessageRole.USER) {
-                String userMessage = message.getContent();
-                int tokensInput = message.getTokensUsed();
-                String timestamp = message.getCreatedAt().toString();
-                
-                ChatMessage assistantMessage = null;
-                if (i + 1 < messages.size()) {
-                    ChatMessage nextMessage = messages.get(i + 1);
-                    if (nextMessage != null && 
-                        nextMessage.getRole() == ChatMessage.MessageRole.ASSISTANT &&
-                        nextMessage.getSession() != null &&
-                        nextMessage.getSession().getId().equals(session.getId())) {
-                        assistantMessage = nextMessage;
-                    }
-                }
-                
-                if (assistantMessage != null) {
-                    String assistantContent = assistantMessage.getContent();
-                    int tokensOutput = assistantMessage.getTokensUsed();
-                    int totalTokens = tokensInput + tokensOutput;
-                    
-                    Long responseTimeMs = null;
-                    if (assistantMessage.getCreatedAt() != null && message.getCreatedAt() != null) {
-                        responseTimeMs = java.time.Duration.between(
-                                message.getCreatedAt(),
-                                assistantMessage.getCreatedAt()
-                        ).toMillis();
-                    }
-                    
-                    InteractionMetrics metrics = new InteractionMetrics(
-                            tokensInput,
-                            tokensOutput,
-                            totalTokens,
-                            responseTimeMs
-                    );
-                    
-                    Interaction interaction = new Interaction(
-                            interactionId++,
-                            timestamp,
-                            session.getId(),
-                            session.getType().name(),
-                            session.getIdea() != null ? session.getIdea().getId() : null,
-                            userMessage,
-                            assistantContent,
-                            metrics
-                    );
-                    
-                    interactions.add(interaction);
-                    i++;
-                } else {
-                    InteractionMetrics metrics = new InteractionMetrics(
-                            tokensInput,
-                            0,
-                            tokensInput,
-                            null
-                    );
-                    
-                    Interaction interaction = new Interaction(
-                            interactionId++,
-                            timestamp,
-                            session.getId(),
-                            session.getType().name(),
-                            session.getIdea() != null ? session.getIdea().getId() : null,
-                            userMessage,
-                            null,
-                            metrics
-                    );
-                    
-                    interactions.add(interaction);
-                }
+            Interaction interaction = createInteraction(
+                interactionId++,
+                message,
+                session,
+                assistantMessage
+            );
+            
+            interactions.add(interaction);
+            
+            i++;
+            if (assistantMessage != null) {
+                i++;
             }
         }
         
         return interactions;
+    }
+
+    private boolean isValidUserMessage(ChatMessage message) {
+        if (message == null) {
+            return false;
+        }
+        
+        if (message.getSession() == null) {
+                log.warn("Message without session", Map.of("messageId", message.getId()));
+            return false;
+        }
+        
+        return message.getRole() == ChatMessage.MessageRole.USER;
+    }
+
+    private ChatMessage findMatchingAssistantMessage(List<ChatMessage> messages, int currentIndex, ChatSession session) {
+        if (currentIndex + 1 >= messages.size()) {
+            return null;
+        }
+        
+        ChatMessage nextMessage = messages.get(currentIndex + 1);
+        if (nextMessage == null) {
+            return null;
+        }
+        
+        if (nextMessage.getRole() != ChatMessage.MessageRole.ASSISTANT) {
+            return null;
+        }
+        
+        if (nextMessage.getSession() == null) {
+            return null;
+        }
+        
+        if (!nextMessage.getSession().getId().equals(session.getId())) {
+            return null;
+        }
+        
+        return nextMessage;
+    }
+
+    private Interaction createInteraction(long interactionId, ChatMessage userMessage, ChatSession session, ChatMessage assistantMessage) {
+        String userContent = userMessage.getContent();
+        int tokensInput = userMessage.getTokensUsed();
+        String timestamp = userMessage.getCreatedAt().toString();
+        
+        if (assistantMessage != null) {
+            return createInteractionWithAssistant(interactionId, userContent, tokensInput, timestamp, session, userMessage, assistantMessage);
+        } else {
+            return createInteractionWithoutAssistant(interactionId, userContent, tokensInput, timestamp, session);
+        }
+    }
+
+    private Interaction createInteractionWithAssistant(long interactionId, String userMessageContent, int tokensInput, 
+                                                       String timestamp, ChatSession session, ChatMessage userMessage, ChatMessage assistantMessage) {
+        String assistantContent = assistantMessage.getContent();
+        int tokensOutput = assistantMessage.getTokensUsed();
+        int totalTokens = tokensInput + tokensOutput;
+        Long responseTimeMs = calculateResponseTime(userMessage, assistantMessage);
+        
+        InteractionMetrics metrics = new InteractionMetrics(
+            tokensInput,
+            tokensOutput,
+                            totalTokens,
+            responseTimeMs
+        );
+        
+        return new Interaction(
+            interactionId,
+            timestamp,
+                    session.getId(),
+                    session.getType().name(),
+            session.getIdea() != null ? session.getIdea().getId() : null,
+            userMessageContent,
+            assistantContent,
+            metrics
+        );
+    }
+
+    private Interaction createInteractionWithoutAssistant(long interactionId, String userMessage, int tokensInput, 
+                                                          String timestamp, ChatSession session) {
+        InteractionMetrics metrics = new InteractionMetrics(
+            tokensInput,
+            0,
+            tokensInput,
+            null
+        );
+        
+        return new Interaction(
+            interactionId,
+            timestamp,
+            session.getId(),
+            session.getType().name(),
+            session.getIdea() != null ? session.getIdea().getId() : null,
+            userMessage,
+            null,
+            metrics
+        );
+    }
+
+    private Long calculateResponseTime(ChatMessage userMessage, ChatMessage assistantMessage) {
+        if (assistantMessage.getCreatedAt() == null || userMessage.getCreatedAt() == null) {
+            return null;
+        }
+        
+        return java.time.Duration.between(
+            userMessage.getCreatedAt(),
+            assistantMessage.getCreatedAt()
+        ).toMillis();
     }
     
     private LogsSummary calculateSummary(List<Interaction> interactions) {
@@ -804,54 +976,6 @@ public class ChatService {
         );
     }
     
-    private List<ChatLogEntry> processMessagesToLogs(List<ChatMessage> messages) {
-        List<ChatLogEntry> logEntries = new ArrayList<>();
-        ChatMessage previousUserMessage = null;
-        
-        for (ChatMessage message : messages) {
-            if (message == null) {
-                continue;
-            }
-            
-            ChatSession session = message.getSession();
-            if (session == null) {
-                log.warn("Message without session", Map.of("messageId", message.getId()));
-                continue;
-            }
-            
-            Long responseTimeMs = null;
-            
-            if (message.getRole() == ChatMessage.MessageRole.ASSISTANT && previousUserMessage != null) {
-                long diffMillis = java.time.Duration.between(
-                        previousUserMessage.getCreatedAt(),
-                        message.getCreatedAt()
-                ).toMillis();
-                responseTimeMs = diffMillis;
-            }
-            
-            ChatLogEntry logEntry = new ChatLogEntry(
-                    message.getId(),
-                    message.getRole().name().toLowerCase(),
-                    message.getContent(),
-                    message.getTokensUsed(),
-                    message.getCreatedAt().toString(),
-                    responseTimeMs,
-                    session.getId(),
-                    session.getType().name(),
-                    session.getIdea() != null ? session.getIdea().getId() : null
-            );
-            
-            logEntries.add(logEntry);
-            
-            if (message.getRole() == ChatMessage.MessageRole.USER) {
-                previousUserMessage = message;
-            } else {
-                previousUserMessage = null;
-            }
-        }
-        
-        return logEntries;
-    }
 
     private String summarizeIdeaSimple(String content) {
         if (content == null || content.trim().isEmpty()) {
@@ -872,27 +996,35 @@ public class ChatService {
                 O título deve ser uma frase completa e fazer sentido, nunca cortado no meio.
                 """;
             
-            String userPrompt = String.format(
-                "Crie um título curto e completo (máximo 5 palavras) para esta ideia: %s\n\n" +
-                "REGRAS OBRIGATÓRIAS:\n" +
-                "- Título deve ter EXATAMENTE 5 palavras ou menos\n" +
-                "- O título deve ser uma frase COMPLETA que faz sentido\n" +
-                "- NUNCA corte no meio de uma palavra ou frase\n" +
-                "- Seja direto e descritivo\n" +
-                "- Responda APENAS o título, sem explicações, saudações, formatação ou pontuação final\n" +
-                "- Não use aspas, dois pontos ou pontuação desnecessária\n" +
-                "- O título deve fazer sentido completo, não pode terminar com preposições ou artigos soltos",
-                trimmed
-            );
+            String userPrompt = String.format("""
+                Crie um título curto e completo (máximo 5 palavras) para esta ideia: %s
+                
+                REGRAS OBRIGATÓRIAS:
+                - Título deve ter EXATAMENTE 5 palavras ou menos
+                - O título deve ser uma frase COMPLETA que faz sentido
+                - NUNCA corte no meio de uma palavra ou frase
+                - Seja direto e descritivo
+                - Responda APENAS o título, sem explicações, saudações, formatação ou pontuação final
+                - Não use aspas, dois pontos ou pontuação desnecessária
+                - O título deve fazer sentido completo, não pode terminar com preposições ou artigos soltos
+                """, trimmed);
             
             String generatedTitle = ollamaIntegrationService.callOllamaWithSystemPrompt(systemPrompt, userPrompt);
             
-            String cleanedTitle = generatedTitle.trim()
-                .replaceAll("^[\"']+|[\"']+$", "")
-                .replaceAll("^Título[:\\s]+", "")
-                .replaceAll("^Titulo[:\\s]+", "")
-                .replaceAll("[:;,\\.!?]+$", "")
-                .trim();
+            String cleanedTitle = generatedTitle.trim();
+            if (cleanedTitle.startsWith("\"") || cleanedTitle.startsWith("'")) {
+                cleanedTitle = cleanedTitle.substring(1);
+            }
+            if (cleanedTitle.endsWith("\"") || cleanedTitle.endsWith("'")) {
+                cleanedTitle = cleanedTitle.substring(0, cleanedTitle.length() - 1);
+            }
+            if (cleanedTitle.startsWith("Título") || cleanedTitle.startsWith("Titulo")) {
+                int colonIndex = cleanedTitle.indexOf(':');
+                if (colonIndex != -1) {
+                    cleanedTitle = cleanedTitle.substring(colonIndex + 1).trim();
+                }
+            }
+            cleanedTitle = cleanedTitle.replaceAll("([:;,\\.!?])+$", "").trim();
             
             String[] titleWords = cleanedTitle.split("\\s+");
             if (titleWords.length > 5) {
@@ -964,180 +1096,236 @@ public class ChatService {
     private String summarizeIdeaSimpleFallback(String trimmed, String[] words) {
         int maxWords = 5;
         
-        for (int i = 0; i < Math.min(words.length, maxWords); i++) {
-            String word = words[i];
-            if (word.matches(".*[,;]+$")) {
-        StringBuilder summary = new StringBuilder();
-                for (int j = 0; j <= i; j++) {
-                    if (j > 0) {
-                        summary.append(" ");
-                    }
-                    String cleanWord = words[j].replaceAll("[,;]+$", "");
-                    summary.append(cleanWord);
-                }
-                String result = summary.toString().trim();
-                String[] resultWords = result.split("\\s+");
-                if (resultWords.length > maxWords) {
-                    StringBuilder limited = new StringBuilder();
-                    for (int k = 0; k < maxWords; k++) {
-                        if (k > 0) {
-                            limited.append(" ");
-                        }
-                        limited.append(resultWords[k]);
-                    }
-                    result = limited.toString().trim();
-                }
-                return result;
-            }
+        String result = findSummaryByPunctuation(words, maxWords, ",", ";");
+        if (result != null) {
+            return result;
         }
         
-        for (int i = 0; i < Math.min(words.length, maxWords); i++) {
-            String word = words[i];
-            if (word.matches(".*[.!?]+$")) {
-                StringBuilder summary = new StringBuilder();
-                for (int j = 0; j <= i; j++) {
-                    if (j > 0) {
-                        summary.append(" ");
-                    }
-                    summary.append(words[j]);
-                }
-                String result = summary.toString().trim();
-                String[] resultWords = result.split("\\s+");
-                if (resultWords.length > maxWords) {
-                    StringBuilder limited = new StringBuilder();
-                    for (int k = 0; k < maxWords; k++) {
-                        if (k > 0) {
-                            limited.append(" ");
-                        }
-                        limited.append(resultWords[k]);
-                    }
-                    result = limited.toString().trim();
-                }
-                return result;
-            }
+        result = findSummaryByPunctuation(words, maxWords, ".", "!", "?");
+        if (result != null) {
+            return result;
         }
         
-        int targetWords = Math.min(maxWords, words.length);
+        result = buildDefaultSummary(words, maxWords);
+        result = removeTrailingPunctuation(result);
+        String[] resultWords = result.split("\\s+");
+        resultWords = removeIncompleteWords(resultWords, maxWords);
+        resultWords = limitWords(resultWords, maxWords);
+        
+        if (resultWords.length > 0) {
+            return joinWords(resultWords);
+        }
+        
+        return buildFallbackSummary(words, maxWords, trimmed);
+    }
+
+    private String findSummaryByPunctuation(String[] words, int maxWords, String... punctuation) {
+        int searchLimit = Math.min(words.length, maxWords);
+        for (int i = 0; i < searchLimit; i++) {
+            if (endsWithAnyPunctuation(words[i], punctuation)) {
+                return buildSummaryUpToIndex(words, i, maxWords, punctuation.length > 0 && punctuation[0].equals(","));
+            }
+        }
+        return null;
+    }
+
+    private boolean endsWithAnyPunctuation(String word, String... punctuation) {
+        if (word == null || word.length() == 0) {
+            return false;
+        }
+        for (String p : punctuation) {
+            if (word.endsWith(p)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String buildSummaryUpToIndex(String[] words, int endIndex, int maxWords, boolean cleanCommas) {
         StringBuilder summary = new StringBuilder();
-        for (int i = 0; i < targetWords; i++) {
-            if (i > 0) {
+        for (int j = 0; j <= endIndex; j++) {
+            if (j > 0) {
                 summary.append(" ");
             }
-            summary.append(words[i]);
+            String word = cleanCommas ? words[j].replaceAll("[,;]+$", "") : words[j];
+            summary.append(word);
         }
-        
         String result = summary.toString().trim();
-        result = result.replaceAll("\\s*[:;,\\-—–]+\\s*$", "");
-        
+        return limitResultWords(result, maxWords);
+    }
+
+    private String limitResultWords(String result, int maxWords) {
         String[] resultWords = result.split("\\s+");
+        if (resultWords.length > maxWords) {
+            return joinWords(Arrays.copyOf(resultWords, maxWords));
+        }
+        return result;
+    }
+
+    private String buildDefaultSummary(String[] words, int maxWords) {
+        int targetWords = Math.min(maxWords, words.length);
+        return joinWords(Arrays.copyOf(words, targetWords));
+    }
+
+    private String removeTrailingPunctuation(String text) {
+        String[] trailingPunctuation = {":", ";", ",", "-", "—", "–"};
+        String result = text.trim();
+        while (result.length() > 0 && endsWithAnyPunctuation(result, trailingPunctuation)) {
+            result = result.substring(0, result.length() - 1).trim();
+        }
+        return result;
+    }
+
+    private String[] removeIncompleteWords(String[] words, int maxWords) {
         String[] incompleteWords = {"mais", "menos", "maior", "menor", "melhor", "pior",
                                     "com", "de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas",
                                     "a", "o", "os", "as", "ao", "à", "aos", "às", "para", "por", "que"};
         
-        while (resultWords.length > 1 && resultWords.length <= maxWords) {
-            String lastWord = resultWords[resultWords.length - 1].toLowerCase().replaceAll("[,;.!?]+$", "");
-            boolean found = false;
-            for (String incomplete : incompleteWords) {
-                if (lastWord.equals(incomplete)) {
-                    String[] newWords = new String[resultWords.length - 1];
-                    System.arraycopy(resultWords, 0, newWords, 0, resultWords.length - 1);
-                    resultWords = newWords;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
+        String[] result = words;
+        while (result.length > 1 && result.length <= maxWords) {
+            String lastWord = result[result.length - 1].toLowerCase().replaceAll("[,;.!?]+$", "");
+            if (!isIncompleteWord(lastWord, incompleteWords)) {
                 break;
             }
+            result = Arrays.copyOf(result, result.length - 1);
         }
-        
-        if (resultWords.length > maxWords) {
-            String[] limited = new String[maxWords];
-            System.arraycopy(resultWords, 0, limited, 0, maxWords);
-            resultWords = limited;
-        }
-        
-        if (resultWords.length > 0) {
-            StringBuilder finalResult = new StringBuilder();
-            for (int i = 0; i < resultWords.length; i++) {
-                if (i > 0) {
-                    finalResult.append(" ");
-                }
-                finalResult.append(resultWords[i]);
+        return result;
+    }
+
+    private boolean isIncompleteWord(String word, String[] incompleteWords) {
+        for (String incomplete : incompleteWords) {
+            if (word.equals(incomplete)) {
+                return true;
             }
-            return finalResult.toString().trim();
         }
-        
-            if (words.length >= 3) {
+        return false;
+    }
+
+    private String[] limitWords(String[] words, int maxWords) {
+        if (words.length > maxWords) {
+            return Arrays.copyOf(words, maxWords);
+        }
+        return words;
+    }
+
+    private String joinWords(String[] words) {
+        if (words.length == 0) {
+            return "";
+        }
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < words.length; i++) {
+            if (i > 0) {
+                result.append(" ");
+            }
+            result.append(words[i]);
+        }
+        return result.toString().trim();
+    }
+
+    private String buildFallbackSummary(String[] words, int maxWords, String trimmed) {
+        if (words.length >= 3) {
             int wordsToTake = Math.min(3, maxWords);
-            StringBuilder finalResult = new StringBuilder();
-            for (int i = 0; i < wordsToTake; i++) {
-                if (i > 0) {
-                    finalResult.append(" ");
-                }
-                finalResult.append(words[i]);
-            }
-            return finalResult.toString().trim();
+            return joinWords(Arrays.copyOf(words, wordsToTake));
         }
-        
         return trimmed;
     }
 
     private ChatSessionResponse buildSessionResponse(ChatSession session, List<ChatMessage> messages) {
-        String ideaSummary = null;
-        if (session.getIdea() != null) {
-            ideaSummary = summarizeIdeaSimple(session.getIdea().getGeneratedContent());
-        }
+        String ideaSummary = getIdeaSummary(session);
+        List<ChatMessageResponse> messageResponses = buildMessageResponses(messages);
+        TokenSummary tokenSummary = calculateTokenSummary(session);
+        int tokensRemaining = calculateTokensRemaining(session, tokenSummary.getTotalTokens());
+        
+        return new ChatSessionResponse(
+                session.getId(),
+                session.getType().name(),
+                session.getIdea() != null ? session.getIdea().getId() : null,
+                ideaSummary,
+                tokenSummary.getTotalUserTokens(),
+                tokenSummary.getTotalAssistantTokens(),
+                tokenSummary.getTotalTokens(),
+                tokensRemaining,
+                session.getLastResetAt().toString(),
+                messageResponses
+        );
+    }
 
-        List<ChatMessageResponse> messageResponses = new java.util.ArrayList<>();
+    private String getIdeaSummary(ChatSession session) {
+        if (session.getIdea() == null) {
+            return null;
+        }
+        return summarizeIdeaSimple(session.getIdea().getGeneratedContent());
+    }
+
+    private List<ChatMessageResponse> buildMessageResponses(List<ChatMessage> messages) {
+        List<ChatMessageResponse> messageResponses = new ArrayList<>();
         
         for (int i = 0; i < messages.size(); i++) {
             ChatMessage msg = messages.get(i);
-
-            int tokensInputThisMsg = 0;
-            int tokensOutputThisMsg = 0;
-            int tokensRemainingForMessage = chatProperties.getMaxTokensPerChat();
-
-            if (msg.getRole() == ChatMessage.MessageRole.USER) {
-                tokensInputThisMsg = msg.getTokensUsed();
-
-                if (i + 1 < messages.size()) {
-                    ChatMessage nextMsg = messages.get(i + 1);
-                    if (nextMsg.getRole() == ChatMessage.MessageRole.ASSISTANT) {
-                        tokensOutputThisMsg = nextMsg.getTokensUsed();
-                        if (nextMsg.getTokensRemaining() != null) {
-                            tokensRemainingForMessage = nextMsg.getTokensRemaining() + tokensInputThisMsg + tokensOutputThisMsg;
-                        }
-                    }
-                }
-            } else {
-                if (i > 0) {
-                    ChatMessage prevMsg = messages.get(i - 1);
-                    if (prevMsg.getRole() == ChatMessage.MessageRole.USER) {
-                        tokensInputThisMsg = prevMsg.getTokensUsed();
-                    }
-                }
-                tokensOutputThisMsg = msg.getTokensUsed();
-
-                if (msg.getTokensRemaining() != null) {
-                    tokensRemainingForMessage = msg.getTokensRemaining();
-                }
-            }
-
-            int totalTokensThisMsg = tokensInputThisMsg + tokensOutputThisMsg;
+            MessageTokenInfo tokenInfo = calculateMessageTokenInfo(messages, i, msg);
             
             messageResponses.add(new ChatMessageResponse(
                     msg.getId(),
                     msg.getRole().name().toLowerCase(),
                     msg.getContent(),
-                    tokensInputThisMsg,
-                    tokensOutputThisMsg,
-                    totalTokensThisMsg,
-                    tokensRemainingForMessage,
+                    tokenInfo.getTokensInput(),
+                    tokenInfo.getTokensOutput(),
+                    tokenInfo.getTotalTokens(),
+                    tokenInfo.getTokensRemaining(),
                     msg.getCreatedAt().toString()
             ));
         }
 
+        return messageResponses;
+    }
+
+    private MessageTokenInfo calculateMessageTokenInfo(List<ChatMessage> messages, int index, ChatMessage msg) {
+        if (msg.getRole() == ChatMessage.MessageRole.USER) {
+            return calculateUserMessageTokenInfo(messages, index, msg);
+        } else {
+            return calculateAssistantMessageTokenInfo(messages, index, msg);
+        }
+    }
+
+    private MessageTokenInfo calculateUserMessageTokenInfo(List<ChatMessage> messages, int index, ChatMessage msg) {
+        int tokensInput = msg.getTokensUsed();
+        int tokensOutput = 0;
+        int tokensRemaining = chatProperties.getMaxTokensPerChat();
+        
+        if (index + 1 < messages.size() && 
+            messages.get(index + 1).getRole() == ChatMessage.MessageRole.ASSISTANT) {
+            ChatMessage nextMsg = messages.get(index + 1);
+            tokensOutput = nextMsg.getTokensUsed();
+            if (nextMsg.getTokensRemaining() != null) {
+                tokensRemaining = nextMsg.getTokensRemaining() + tokensInput + tokensOutput;
+            } else {
+                tokensRemaining = chatProperties.getMaxTokensPerChat();
+            }
+        }
+        
+        return new MessageTokenInfo(tokensInput, tokensOutput, tokensRemaining);
+    }
+
+    private MessageTokenInfo calculateAssistantMessageTokenInfo(List<ChatMessage> messages, int index, ChatMessage msg) {
+        int tokensInput = 0;
+        int tokensOutput = msg.getTokensUsed();
+        int tokensRemaining = chatProperties.getMaxTokensPerChat();
+        
+        if (index > 0) {
+            ChatMessage prevMsg = messages.get(index - 1);
+            if (prevMsg.getRole() == ChatMessage.MessageRole.USER) {
+                tokensInput = prevMsg.getTokensUsed();
+            }
+        }
+        
+        if (msg.getTokensRemaining() != null) {
+            tokensRemaining = msg.getTokensRemaining();
+        }
+        
+        return new MessageTokenInfo(tokensInput, tokensOutput, tokensRemaining);
+    }
+
+    private TokenSummary calculateTokenSummary(ChatSession session) {
         int totalUserTokens = chatMessageRepository.getTotalUserTokensBySessionId(
             session.getId(), 
             ChatMessage.MessageRole.USER
@@ -1148,31 +1336,77 @@ public class ChatService {
         );
         int totalTokens = totalUserTokens + totalAssistantTokens;
         
-        int tokensRemaining = chatProperties.getMaxTokensPerChat();
+        return new TokenSummary(totalUserTokens, totalAssistantTokens, totalTokens);
+    }
+
+    private int calculateTokensRemaining(ChatSession session, int totalTokens) {
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 1);
         org.springframework.data.domain.Page<ChatMessage> lastAssistantMessagesPage = chatMessageRepository.findLastMessagesBySessionIdAndRole(
-            session.getId(), 
+                session.getId(),
             ChatMessage.MessageRole.ASSISTANT,
             pageable
         );
-        if (!lastAssistantMessagesPage.isEmpty() && lastAssistantMessagesPage.getContent().get(0).getTokensRemaining() != null) {
-            tokensRemaining = lastAssistantMessagesPage.getContent().get(0).getTokensRemaining();
-        } else {
-            tokensRemaining = Math.max(0, chatProperties.getMaxTokensPerChat() - totalTokens);
+        
+        if (!lastAssistantMessagesPage.isEmpty()) {
+            ChatMessage lastAssistantMsg = lastAssistantMessagesPage.getContent().get(0);
+            if (lastAssistantMsg.getTokensRemaining() != null) {
+                return lastAssistantMsg.getTokensRemaining();
+            }
         }
         
-        return new ChatSessionResponse(
-                session.getId(),
-                session.getType().name(),
-                session.getIdea() != null ? session.getIdea().getId() : null,
-                ideaSummary,
-                totalUserTokens,
-                totalAssistantTokens,
-                totalTokens,
-                tokensRemaining,
-                session.getLastResetAt().toString(),
-                messageResponses
-        );
+        return Math.max(0, chatProperties.getMaxTokensPerChat() - totalTokens);
+    }
+
+    private static class MessageTokenInfo {
+        private final int tokensInput;
+        private final int tokensOutput;
+        private final int tokensRemaining;
+
+        MessageTokenInfo(int tokensInput, int tokensOutput, int tokensRemaining) {
+            this.tokensInput = tokensInput;
+            this.tokensOutput = tokensOutput;
+            this.tokensRemaining = tokensRemaining;
+        }
+
+        int getTokensInput() {
+            return tokensInput;
+        }
+
+        int getTokensOutput() {
+            return tokensOutput;
+        }
+
+        int getTotalTokens() {
+            return tokensInput + tokensOutput;
+        }
+
+        int getTokensRemaining() {
+            return tokensRemaining;
+        }
+    }
+
+    private static class TokenSummary {
+        private final int totalUserTokens;
+        private final int totalAssistantTokens;
+        private final int totalTokens;
+
+        TokenSummary(int totalUserTokens, int totalAssistantTokens, int totalTokens) {
+            this.totalUserTokens = totalUserTokens;
+            this.totalAssistantTokens = totalAssistantTokens;
+            this.totalTokens = totalTokens;
+        }
+
+        int getTotalUserTokens() {
+            return totalUserTokens;
+        }
+
+        int getTotalAssistantTokens() {
+            return totalAssistantTokens;
+        }
+
+        int getTotalTokens() {
+            return totalTokens;
+        }
     }
 
     private User getCurrentAuthenticatedUser() {
@@ -1185,16 +1419,17 @@ public class ChatService {
         }
         
         String cleaned = content
-            .replaceAll("(?i)\\[MODERACAO\\s*:\\s*SEGURA\\s*\\]", "")
-            .replaceAll("(?i)\\[MODERACAO\\s*:\\s*PERIGOSO\\s*\\]", "")
-            .replaceAll("(?i)\\[\\s*MODERACAO\\s*:\\s*SEGURA\\s*\\]\\s*", "")
-            .replaceAll("(?i)\\[\\s*MODERACAO\\s*:\\s*PERIGOSO\\s*\\]\\s*", "")
+            .replaceAll("(?i)\\[MODERACAO[\\s]*:[\\s]*SEGURA[\\s]*\\]", "")
+            .replaceAll("(?i)\\[MODERACAO[\\s]*:[\\s]*PERIGOSO[\\s]*\\]", "")
             .trim();
         
-        if (cleaned.matches("(?i)^\\s*\\[MODERACAO\\s*:\\s*(SEGURA|PERIGOSO)\\s*\\].*")) {
+        if (cleaned.length() > 0 && cleaned.charAt(0) == '[') {
             int endIndex = cleaned.indexOf("]");
             if (endIndex != -1) {
+                String prefix = cleaned.substring(0, Math.min(endIndex + 1, cleaned.length())).toUpperCase();
+                if (prefix.contains("[MODERACAO") && (prefix.contains("SEGURA") || prefix.contains("PERIGOSO"))) {
                 cleaned = cleaned.substring(endIndex + 1).trim();
+                }
             }
         }
         

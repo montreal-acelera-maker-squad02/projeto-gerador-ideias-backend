@@ -57,7 +57,10 @@ public class ChatSession {
     private ChatType type;
 
     @Column(nullable = false)
-    @Deprecated
+    /**
+     * @deprecated Este campo está deprecated. Use o cálculo de tokens baseado em ChatMessage ao invés.
+     */
+    @Deprecated(since = "1.0", forRemoval = true)
     private Integer tokensUsed = 0;
 
     @Column(nullable = false)
@@ -117,7 +120,7 @@ public class ChatSession {
         this.lastResetAt = LocalDateTime.now();
         this.version = 0L;
         
-        if (type == ChatType.IDEA_BASED && idea != null) {
+        if (type == ChatType.IDEA_BASED) {
             this.cachedIdeaContent = idea.getGeneratedContent();
             this.cachedIdeaContext = idea.getContext();
         }

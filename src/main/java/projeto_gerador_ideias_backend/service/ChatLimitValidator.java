@@ -15,6 +15,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ChatLimitValidator {
 
+    private static final String TOKEN_LIMIT_EXCEEDED_MESSAGE = "Este chat atingiu o limite de %d tokens. Por favor, inicie um novo chat.";
+
     private final ChatProperties chatProperties;
     private final TokenCalculationService tokenCalculationService;
 
@@ -60,8 +62,7 @@ public class ChatLimitValidator {
         int currentChatTokens = tokenCalculationService.getTotalUserTokensInChat(session.getId());
         if (currentChatTokens + additionalTokens >= chatProperties.getMaxTokensPerChat()) {
             throw new TokenLimitExceededException(
-                String.format("Este chat atingiu o limite de %d tokens. Por favor, inicie um novo chat.", 
-                    chatProperties.getMaxTokensPerChat())
+                String.format(TOKEN_LIMIT_EXCEEDED_MESSAGE, chatProperties.getMaxTokensPerChat())
             );
         }
     }
@@ -71,8 +72,7 @@ public class ChatLimitValidator {
         int totalNewTokens = inputTokens + outputTokens;
         if (currentChatTokens + totalNewTokens > chatProperties.getMaxTokensPerChat()) {
             throw new TokenLimitExceededException(
-                String.format("Este chat atingiu o limite de %d tokens. Por favor, inicie um novo chat.", 
-                    chatProperties.getMaxTokensPerChat())
+                String.format(TOKEN_LIMIT_EXCEEDED_MESSAGE, chatProperties.getMaxTokensPerChat())
             );
         }
     }
@@ -85,8 +85,7 @@ public class ChatLimitValidator {
     public void validateSessionNotBlocked(ChatSession session) {
         if (isChatBlocked(session)) {
             throw new TokenLimitExceededException(
-                String.format("Este chat atingiu o limite de %d tokens. Por favor, inicie um novo chat.", 
-                    chatProperties.getMaxTokensPerChat())
+                String.format(TOKEN_LIMIT_EXCEEDED_MESSAGE, chatProperties.getMaxTokensPerChat())
             );
         }
     }

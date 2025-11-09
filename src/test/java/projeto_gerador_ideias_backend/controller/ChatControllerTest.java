@@ -163,7 +163,7 @@ class ChatControllerTest {
         idea.setGeneratedContent("Ideia de teste");
         idea.setModelUsed("mistral");
         idea.setExecutionTimeMs(1000L);
-        idea = ideaRepository.save(idea);
+        ideaRepository.save(idea);
 
         StartChatRequest request = new StartChatRequest();
         request.setIdeaId(idea.getId());
@@ -204,7 +204,7 @@ class ChatControllerTest {
         idea.setGeneratedContent("Ideia de teste para resumo");
         idea.setModelUsed("mistral");
         idea.setExecutionTimeMs(1000L);
-        idea = ideaRepository.save(idea);
+        ideaRepository.save(idea);
         ideaRepository.flush();
 
         mockMvc.perform(get("/api/chat/ideas/summary"))
@@ -274,7 +274,7 @@ class ChatControllerTest {
         idea.setGeneratedContent("Ideia");
         idea.setModelUsed("mistral");
         idea.setExecutionTimeMs(1000L);
-        idea = ideaRepository.save(idea);
+        ideaRepository.save(idea);
 
         StartChatRequest request = new StartChatRequest();
         request.setIdeaId(idea.getId());

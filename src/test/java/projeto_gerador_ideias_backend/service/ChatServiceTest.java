@@ -83,21 +83,18 @@ class ChatServiceTest {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
 
-        // Criar testUser antes de configurar mocks
         testUser = new User();
         testUser.setId(1L);
         testUser.setEmail(testUserEmail);
         testUser.setName("Chat Service User");
 
         lenient().when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
-        // Configurar mocks básicos (lenient para evitar UnnecessaryStubbing)
         lenient().when(userCacheService.getCurrentAuthenticatedUser()).thenReturn(testUser);
         lenient().when(chatProperties.getMaxHistoryMessages()).thenReturn(3);
         lenient().when(chatProperties.getMaxTokensPerMessage()).thenReturn(1000);
         lenient().when(chatProperties.getMaxCharsPerMessage()).thenReturn(1000);
         lenient().when(chatProperties.getMaxTokensPerChat()).thenReturn(10000);
         
-        // Configurar mocks padrão dos serviços
         lenient().when(tokenCalculationService.getTotalUserTokensInChat(any())).thenReturn(0);
         lenient().when(tokenCalculationService.getTotalTokensUsedByUser(any())).thenReturn(0);
         lenient().when(tokenCalculationService.estimateTokens(anyString())).thenAnswer(inv -> {
@@ -131,6 +128,14 @@ class ChatServiceTest {
                 userCacheService,
                 chatMetricsService
         );
+
+        try {
+            java.lang.reflect.Field selfField = ChatService.class.getDeclaredField("self");
+            selfField.setAccessible(true);
+            selfField.set(chatService, chatService);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to set self field", e);
+        }
 
         UserDetails userDetails = org.springframework.security.core.userdetails.User.builder()
                 .username(testUserEmail)
@@ -316,7 +321,6 @@ class ChatServiceTest {
             msg.setCreatedAt(LocalDateTime.now());
             return msg;
         });
-        // contentModerationService.validateModerationResponse lança ValidationException
         doThrow(new ValidationException("Desculpe, não posso processar essa mensagem devido ao conteúdo."))
                 .when(contentModerationService).validateModerationResponse("[MODERACAO: PERIGOSO]", true);
 
@@ -381,8 +385,7 @@ class ChatServiceTest {
         when(chatSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(session));
         when(chatMessageRepository.countBySessionId(1L)).thenReturn(0L);
         when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt())).thenReturn(Collections.emptyList());
-        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10000); // Limite atingido
-        // validateChatNotBlocked lança exceção quando limite é atingido
+        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10000);
         doThrow(new TokenLimitExceededException("Este chat atingiu o limite"))
                 .when(chatLimitValidator).validateChatNotBlocked(eq(session), anyInt());
 
@@ -429,10 +432,6 @@ class ChatServiceTest {
         verify(chatSessionRepository, never()).save(any(ChatSession.class));
     }
 
-    // Teste removido: reset de tokens após 24h foi removido da funcionalidade
-    // @Test
-    // void shouldResetTokensWhen24HoursPassed() { ... }
-
     @Test
     void shouldThrowExceptionWhenFreeChatReachesTokenLimit() {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
@@ -443,22 +442,20 @@ class ChatServiceTest {
         StartChatRequest request = new StartChatRequest();
         request.setIdeaId(null);
 
-        // Para chat livre bloqueado, retorna null (não lança exceção, permite criar nova sessão)
         when(chatSessionRepository.findByUserIdAndType(any(), any())).thenReturn(Optional.of(session));
-        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10000); // Limite atingido
+        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10000);
         when(chatLimitValidator.isChatBlocked(session)).thenReturn(true);
-        // Chat livre bloqueado não lança exceção, apenas cria nova sessão
         when(chatSessionRepository.save(any(ChatSession.class))).thenAnswer(invocation -> {
             ChatSession newSession = invocation.getArgument(0);
             newSession.setId(2L);
             return newSession;
         });
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(any())).thenReturn(Collections.emptyList());
-        when(tokenCalculationService.getTotalUserTokensInChat(any())).thenReturn(0); // Nova sessão tem 0 tokens
+        when(tokenCalculationService.getTotalUserTokensInChat(any())).thenReturn(0);
 
         ChatSessionResponse response = chatService.startChat(request);
         assertNotNull(response);
-        assertEquals(2L, response.getSessionId()); // Nova sessão criada
+        assertEquals(2L, response.getSessionId());
     }
 
     @Test
@@ -480,9 +477,8 @@ class ChatServiceTest {
 
         when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
         when(chatSessionRepository.findByUserIdAndIdeaId(any(), any())).thenReturn(Optional.of(existingSession));
-        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10000); // Limite atingido
+        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10000);
         when(chatLimitValidator.isChatBlocked(existingSession)).thenReturn(true);
-        // validateSessionNotBlocked lança exceção quando isChatBlocked retorna true
         doThrow(new TokenLimitExceededException("Este chat atingiu o limite")).when(chatLimitValidator).validateSessionNotBlocked(existingSession);
 
         assertThrows(TokenLimitExceededException.class, () -> chatService.startChat(request));
@@ -507,9 +503,8 @@ class ChatServiceTest {
 
         when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
         when(chatSessionRepository.findByUserIdAndIdeaId(any(), any())).thenReturn(Optional.of(blockedSession));
-        when(tokenCalculationService.getTotalUserTokensInChat(2L)).thenReturn(10000); // Limite atingido
+        when(tokenCalculationService.getTotalUserTokensInChat(2L)).thenReturn(10000);
         when(chatLimitValidator.isChatBlocked(blockedSession)).thenReturn(true);
-        // validateSessionNotBlocked lança exceção quando isChatBlocked retorna true
         doThrow(new TokenLimitExceededException("Este chat atingiu o limite")).when(chatLimitValidator).validateSessionNotBlocked(blockedSession);
 
         assertThrows(TokenLimitExceededException.class, () -> chatService.startChat(request));
@@ -632,10 +627,6 @@ class ChatServiceTest {
         verify(ollamaIntegrationService, times(1)).callOllamaWithSystemPrompt(anyString(), anyString());
     }
 
-    // Teste removido: reset de tokens após 24h foi removido da funcionalidade
-    // @Test
-    // void shouldResetTokensWhen24HoursPassedInSendMessage() { ... }
-
     @Test
     void shouldThrowExceptionWhenTokensInsufficientBeforeSending() throws JsonProcessingException {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
@@ -665,8 +656,7 @@ class ChatServiceTest {
         when(chatSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(session));
         when(chatMessageRepository.countBySessionId(1L)).thenReturn(0L);
         when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt())).thenReturn(Collections.emptyList());
-        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10000); // Limite atingido
-        // validateChatNotBlocked lança exceção quando limite é atingido
+        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10000);
         doThrow(new TokenLimitExceededException("Este chat atingiu o limite"))
                 .when(chatLimitValidator).validateChatNotBlocked(eq(session), anyInt());
 
@@ -680,8 +670,6 @@ class ChatServiceTest {
             disconnectedServer.start();
             disconnectedServer.shutdown();
 
-            // Configurar mocks básicos para o serviço desconectado (já configurados no setUpEach)
-            
             ChatService disconnectedService = new ChatService(
                     chatSessionRepository,
                     chatMessageRepository,
@@ -696,6 +684,14 @@ class ChatServiceTest {
                     userCacheService,
                     chatMetricsService
             );
+
+            try {
+                java.lang.reflect.Field selfField = ChatService.class.getDeclaredField("self");
+                selfField.setAccessible(true);
+                selfField.set(disconnectedService, disconnectedService);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to set self field", e);
+            }
 
             ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
             session.setId(1L);

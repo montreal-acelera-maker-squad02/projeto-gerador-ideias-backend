@@ -39,9 +39,9 @@ public class WebConfig implements WebMvcConfigurer {
 
         HttpClient httpClient = HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
-                .responseTimeout(Duration.ofSeconds(ollamaTimeoutSeconds + 10))
+                .responseTimeout(Duration.ofSeconds((long) ollamaTimeoutSeconds + 10))
                 .doOnConnected(conn -> 
-                    conn.addHandlerLast(new ReadTimeoutHandler(ollamaTimeoutSeconds + 10, TimeUnit.SECONDS))
+                    conn.addHandlerLast(new ReadTimeoutHandler((long) ollamaTimeoutSeconds + 10, TimeUnit.SECONDS))
                         .addHandlerLast(new WriteTimeoutHandler(10, TimeUnit.SECONDS))
                 );
         

@@ -79,7 +79,7 @@ public class PromptBuilderService {
                 .filter(msg -> msg != null && 
                              msg.getContent() != null && 
                              !msg.getContent().trim().isEmpty())
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
         
         if (validMessages.isEmpty()) {
             return List.of();
