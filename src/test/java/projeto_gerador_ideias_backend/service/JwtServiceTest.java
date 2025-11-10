@@ -24,7 +24,8 @@ class JwtServiceTest {
     void setUp() {
         jwtService = new JwtService();
         ReflectionTestUtils.setField(jwtService, "secret", TEST_SECRET);
-        ReflectionTestUtils.setField(jwtService, "expiration", TEST_EXPIRATION);
+        ReflectionTestUtils.setField(jwtService, "accessTokenExpiration", TEST_EXPIRATION);
+        ReflectionTestUtils.setField(jwtService, "refreshTokenExpiration", 604800L);
     }
     
     @Test
@@ -87,7 +88,8 @@ class JwtServiceTest {
         
         JwtService differentService = new JwtService();
         ReflectionTestUtils.setField(differentService, "secret", "different-secret-key-minimum-32-characters");
-        ReflectionTestUtils.setField(differentService, "expiration", TEST_EXPIRATION);
+        ReflectionTestUtils.setField(differentService, "accessTokenExpiration", TEST_EXPIRATION);
+        ReflectionTestUtils.setField(differentService, "refreshTokenExpiration", 604800L);
         
         boolean isValid = differentService.validateToken(token);
         

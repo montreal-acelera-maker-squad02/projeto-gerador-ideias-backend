@@ -22,7 +22,9 @@ import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
 import projeto_gerador_ideias_backend.exceptions.ValidationException;
 import projeto_gerador_ideias_backend.exceptions.WrongPasswordException;
 import projeto_gerador_ideias_backend.model.User;
+import projeto_gerador_ideias_backend.model.RefreshToken;
 import projeto_gerador_ideias_backend.repository.UserRepository;
+import projeto_gerador_ideias_backend.service.TokenBlacklistService;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -45,6 +47,12 @@ class UserServiceTest {
     
     @Mock
     private UserCacheService userCacheService;
+    
+    @Mock
+    private projeto_gerador_ideias_backend.repository.RefreshTokenRepository refreshTokenRepository;
+    
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
     
     @InjectMocks
     private UserService userService;
@@ -72,6 +80,9 @@ class UserServiceTest {
         savedUser.setPassword("encodedPassword");
         
         when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        when(jwtService.generateAccessToken(anyString(), anyLong())).thenReturn("access-token");
+        when(jwtService.generateRefreshToken(anyString(), anyLong())).thenReturn("refresh-token");
+        when(refreshTokenRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         
         RegisterResponse response = userService.registerUser(validRequest);
         
@@ -79,10 +90,15 @@ class UserServiceTest {
         assertEquals(1L, response.getId());
         assertEquals(validRequest.getName(), response.getName());
         assertEquals(validRequest.getEmail(), response.getEmail());
+        assertEquals("access-token", response.getAccessToken());
+        assertEquals("refresh-token", response.getRefreshToken());
         
         verify(userRepository, times(1)).existsByEmail(validRequest.getEmail());
         verify(passwordEncoder, times(1)).encode(validRequest.getPassword());
         verify(userRepository, times(1)).save(any(User.class));
+        verify(jwtService, times(1)).generateAccessToken(anyString(), anyLong());
+        verify(jwtService, times(1)).generateRefreshToken(anyString(), anyLong());
+        verify(refreshTokenRepository, times(1)).save(any());
     }
     
     @Test
@@ -311,9 +327,12 @@ class UserServiceTest {
         user.setEmail("joao@example.com");
         user.setPassword("encodedPassword");
         
+        user.setEnabled(true);
         when(userRepository.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(user));
         when(passwordEncoder.matches(request.getPassword(), user.getPassword())).thenReturn(true);
-        when(jwtService.generateToken(user.getEmail(), user.getId())).thenReturn("jwt-token-123");
+        when(jwtService.generateAccessToken(user.getEmail(), user.getId())).thenReturn("access-token");
+        when(jwtService.generateRefreshToken(user.getEmail(), user.getId())).thenReturn("refresh-token");
+        when(refreshTokenRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         
         LoginResponse response = userService.login(request);
         
@@ -321,11 +340,14 @@ class UserServiceTest {
         assertEquals(user.getUuid(), response.getUuid());
         assertEquals(user.getName(), response.getName());
         assertEquals(user.getEmail(), response.getEmail());
-        assertEquals("jwt-token-123", response.getToken());
+        assertEquals("access-token", response.getAccessToken());
+        assertEquals("refresh-token", response.getRefreshToken());
         
         verify(userRepository, times(1)).findByEmail(request.getEmail());
         verify(passwordEncoder, times(1)).matches(request.getPassword(), user.getPassword());
-        verify(jwtService, times(1)).generateToken(user.getEmail(), user.getId());
+        verify(jwtService, times(1)).generateAccessToken(user.getEmail(), user.getId());
+        verify(jwtService, times(1)).generateRefreshToken(user.getEmail(), user.getId());
+        verify(refreshTokenRepository, times(1)).save(any());
     }
     
     @Test
@@ -345,7 +367,8 @@ class UserServiceTest {
         
         verify(userRepository, times(1)).findByEmail(request.getEmail());
         verify(passwordEncoder, never()).matches(anyString(), anyString());
-        verify(jwtService, never()).generateToken(anyString(), anyLong());
+        verify(jwtService, never()).generateAccessToken(anyString(), anyLong());
+        verify(jwtService, never()).generateRefreshToken(anyString(), anyLong());
     }
     
     @Test
@@ -371,7 +394,8 @@ class UserServiceTest {
         
         verify(userRepository, times(1)).findByEmail(request.getEmail());
         verify(passwordEncoder, times(1)).matches(request.getPassword(), user.getPassword());
-        verify(jwtService, never()).generateToken(anyString(), anyLong());
+        verify(jwtService, never()).generateAccessToken(anyString(), anyLong());
+        verify(jwtService, never()).generateRefreshToken(anyString(), anyLong());
     }
 }
 

@@ -12,7 +12,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import projeto_gerador_ideias_backend.dto.*;
+import projeto_gerador_ideias_backend.dto.request.*;
+import projeto_gerador_ideias_backend.dto.response.*;
 import projeto_gerador_ideias_backend.exceptions.ChatPermissionException;
 import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
