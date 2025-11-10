@@ -518,4 +518,71 @@ class IdeaControllerTest {
                 .andExpect(jsonPath("$[0].theme", is("tecnologia")));
     }
 
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldGenerateIdeaWithSkipCacheTrue() throws Exception {
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(Theme.ESTUDOS);
+        request.setContext("Como aprender Spring Boot");
+
+        when(ideaService.generateIdea(any(IdeaRequest.class), eq(true)))
+                .thenReturn(mockIdeaResponse);
+
+        mockMvc.perform(post("/api/ideas/generate")
+                        .param("skipCache", "true")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", is("Crie pequenos projetos todos os dias.")));
+
+        verify(ideaService, times(1)).generateIdea(any(IdeaRequest.class), eq(true));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturn500WhenExceptionInGetMyIdeas() throws Exception {
+        reset(ideaService);
+        when(ideaService.listarMinhasIdeias())
+                .thenThrow(new RuntimeException("Erro inesperado"));
+
+        mockMvc.perform(get("/api/ideas/my-ideas"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().string(containsString("Erro ao buscar ideias do usuário")));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldGetFavoriteIdeasSuccessfully() throws Exception {
+        reset(ideaService);
+        List<IdeaResponse> favoritas = List.of(mockIdeaResponse);
+        when(ideaService.listarIdeiasFavoritadas()).thenReturn(favoritas);
+
+        mockMvc.perform(get("/api/ideas/favorites"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].content", is("Crie pequenos projetos todos os dias.")));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturn404WhenResourceNotFoundExceptionInGetFavoriteIdeas() throws Exception {
+        reset(ideaService);
+        when(ideaService.listarIdeiasFavoritadas())
+                .thenThrow(new ResourceNotFoundException("Nenhuma ideia favoritada encontrada"));
+
+        mockMvc.perform(get("/api/ideas/favorites"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturn500WhenExceptionInGetFavoriteIdeas() throws Exception {
+        reset(ideaService);
+        when(ideaService.listarIdeiasFavoritadas())
+                .thenThrow(new RuntimeException("Erro inesperado"));
+
+        mockMvc.perform(get("/api/ideas/favorites"))
+                .andExpect(status().isInternalServerError());
+    }
+
 }
