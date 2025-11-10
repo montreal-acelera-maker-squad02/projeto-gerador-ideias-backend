@@ -725,7 +725,7 @@ public class ChatService {
             return new IdeaSummaryResponse(
                     idea.getId(),
                     summary,
-                    idea.getTheme().getValue(),
+                    idea.getTheme().getName(),
                     idea.getCreatedAt().toString()
             );
         }).toList();
