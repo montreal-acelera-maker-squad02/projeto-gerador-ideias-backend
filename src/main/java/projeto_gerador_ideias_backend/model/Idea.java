@@ -41,10 +41,6 @@ public class Idea {
     @EqualsAndHashCode.Include
     private Long id;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Theme theme;
-
     @Column(nullable = false)
     private String context;
 
@@ -66,6 +62,10 @@ public class Idea {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "theme_id", nullable = false)
+    private Theme theme;
 
     public Idea(Theme theme, String context, String generatedContent, String modelUsed, Long executionTimeMs) {
         this.theme = theme;

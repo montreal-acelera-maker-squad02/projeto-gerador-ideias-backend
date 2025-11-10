@@ -75,7 +75,7 @@ public class IdeaController {
     @GetMapping("/history")
     public ResponseEntity<List<IdeaResponse>> getAllIdeas(
             @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) String theme,
+            @RequestParam(required = false) Long theme,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false)
