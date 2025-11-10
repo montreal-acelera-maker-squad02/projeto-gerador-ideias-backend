@@ -27,7 +27,7 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "ideas", indexes = {
-        @Index(name = "idx_idea_user_lookup", columnList = "user_id, theme, context")
+        @Index(name = "idx_idea_user_lookup", columnList = "user_id, theme_id, context")
 })
 @Getter
 @Setter
