@@ -18,6 +18,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.test.util.ReflectionTestUtils;
 import projeto_gerador_ideias_backend.dto.IdeaRequest;
 import projeto_gerador_ideias_backend.dto.IdeaResponse;
+import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
@@ -36,6 +37,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class IdeaServiceTest {
 
     @Mock
@@ -72,13 +74,11 @@ class IdeaServiceTest {
 
         ReflectionTestUtils.setField(ideaService, "ollamaModel", "mistral");
 
-        // Limpa o contexto antes de cada teste
         SecurityContextHolder.clearContext();
     }
 
     @AfterEach
     void tearDown() {
-        // Garante que o contexto seja limpo após cada teste
         SecurityContextHolder.clearContext();
     }
 
@@ -96,8 +96,6 @@ class IdeaServiceTest {
 
         when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
     }
-
-    // --- Testes de Geração de Ideia ---
 
     @Test
     void generateIdea_ShouldReturnFromPersonalCache_WhenCacheExistsAndSkipCacheIsFalse() {
@@ -196,8 +194,6 @@ class IdeaServiceTest {
         verify(ideaRepository, times(1)).save(any(Idea.class));
     }
 
-    // --- Testes de Listar Histórico ---
-
     @Test
     void listarHistoricoIdeiasFiltrado_NoFilters() {
         List<Idea> allIdeas = List.of(testIdea);
@@ -246,8 +242,6 @@ class IdeaServiceTest {
         verify(ideaRepository, times(1)).findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.TECNOLOGIA, start, end);
     }
 
-    // --- Testes de Listar Minhas Ideias ---
-
     @Test
     void listarMinhasIdeias_ShouldReturnUserIdeas() {
         setupSecurityContext();
@@ -273,8 +267,6 @@ class IdeaServiceTest {
         assertEquals("Nenhuma ideia encontrada para o usuário: " + testUser.getEmail(), exception.getMessage());
     }
 
-    // --- Teste de Ideia Surpresa ---
-
     @Test
     void generateSurpriseIdea_ShouldGenerateAndSaveSurprise() {
         setupSecurityContext();
@@ -296,8 +288,6 @@ class IdeaServiceTest {
         verify(ollamaService, times(1)).getAiResponseBypassingCache(anyString());
         verify(ideaRepository, times(1)).save(any(Idea.class));
     }
-
-    // --- Testes de Favoritar/Desfavoritar ---
 
     @Test
     void favoritarIdeia_ShouldAddFavorite() {
@@ -366,8 +356,6 @@ class IdeaServiceTest {
         assertEquals("Ideia não está favoritada.", exception.getMessage());
     }
 
-    // --- Testes de Métodos Internos/Helpers ---
-
     @Test
     void getCurrentAuthenticatedUser_ShouldThrowException_WhenNotAuthenticated() {
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
@@ -404,7 +392,6 @@ class IdeaServiceTest {
         assertEquals(expectedOutput, cleaned);
     }
 
-    // Método "provider" que fornece os dados para o teste acima
     private static Stream<Arguments> provideCleanUpAiResponseCases() {
         return Stream.of(
                 Arguments.of("### Resposta:\nConteúdo limpo", "Conteúdo limpo"),
@@ -473,5 +460,319 @@ class IdeaServiceTest {
                 () -> ideaService.listarIdeiasFavoritadas());
 
         assertEquals("Usuário autenticado não encontrado no banco de dados: " + testUserEmail, ex.getMessage());
+    }
+
+    @Test
+    void generateIdea_ShouldHandleOllamaServiceException() {
+        setupSecurityContext();
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(Theme.TECNOLOGIA);
+        request.setContext("Contexto");
+
+        when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(testUser, request.getTheme(), request.getContext()))
+                .thenReturn(Optional.empty());
+        when(ollamaService.getAiResponse(anyString())).thenThrow(new OllamaServiceException("Erro na IA"));
+
+        OllamaServiceException exception = assertThrows(OllamaServiceException.class, () -> {
+            ideaService.generateIdea(request, false);
+        });
+
+        assertNotNull(exception);
+        verify(failureCounterService).handleFailure(testUser.getEmail(), testUser.getName());
+        verify(failureCounterService, never()).resetCounter(anyString());
+    }
+
+    @Test
+    void generateIdea_ShouldResetFailureCounterOnSuccess() {
+        setupSecurityContext();
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(Theme.TECNOLOGIA);
+        request.setContext("Novo Contexto");
+
+        String aiResponse = "Nova ideia gerada pela IA";
+
+        when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(testUser, request.getTheme(), request.getContext()))
+                .thenReturn(Optional.empty());
+        when(ollamaService.getAiResponse(contains("Analise o 'Tópico'"))).thenReturn("SEGURO");
+        when(ollamaService.getAiResponse(contains("Gere uma ideia concisa"))).thenReturn(aiResponse);
+        when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> {
+            Idea savedIdea = invocation.getArgument(0);
+            savedIdea.setId(2L);
+            savedIdea.setCreatedAt(LocalDateTime.now());
+            return savedIdea;
+        });
+
+        ideaService.generateIdea(request, false);
+
+        verify(failureCounterService).resetCounter(testUser.getEmail());
+    }
+
+    @Test
+    void generateSurpriseIdea_ShouldHandleOllamaServiceException() {
+        setupSecurityContext();
+        when(ollamaService.getAiResponseBypassingCache(anyString())).thenThrow(new OllamaServiceException("Erro na IA"));
+
+        OllamaServiceException exception = assertThrows(OllamaServiceException.class, () -> {
+            ideaService.generateSurpriseIdea();
+        });
+
+        assertNotNull(exception);
+        verify(failureCounterService).handleFailure(testUser.getEmail(), testUser.getName());
+        verify(failureCounterService, never()).resetCounter(anyString());
+    }
+
+    @Test
+    void generateSurpriseIdea_ShouldResetFailureCounterOnSuccess() {
+        setupSecurityContext();
+        String aiResponse = "Slogan incrível";
+
+        when(ollamaService.getAiResponseBypassingCache(anyString())).thenReturn(aiResponse);
+        when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> {
+            Idea savedIdea = invocation.getArgument(0);
+            savedIdea.setId(4L);
+            savedIdea.setCreatedAt(LocalDateTime.now());
+            return savedIdea;
+        });
+
+        ideaService.generateSurpriseIdea();
+
+        verify(failureCounterService).resetCounter(testUser.getEmail());
+    }
+
+    @Test
+    void cleanUpAiResponse_ShouldRemoveEmboraSejaImpossivel() {
+        String input = "Embora seja impossível\nConteúdo válido";
+        String cleaned = (String) ReflectionTestUtils.invokeMethod(
+                ideaService,
+                "cleanUpAiResponse",
+                input,
+                "contexto",
+                false
+        );
+
+        assertEquals("Conteúdo válido", cleaned);
+    }
+
+    @Test
+    void cleanUpAiResponse_ShouldHandleSorryICant() {
+        String input = "Sorry, I can't fulfill this request.";
+        String cleaned = (String) ReflectionTestUtils.invokeMethod(
+                ideaService,
+                "cleanUpAiResponse",
+                input,
+                "contexto",
+                false
+        );
+
+        assertEquals("Desculpe, não posso gerar ideias sobre esse tema.", cleaned);
+    }
+
+    @Test
+    void cleanUpAiResponse_ShouldHandleMultipleHeaders() {
+        String input = "#### Header\n### Subheader\nConteúdo real";
+        String cleaned = (String) ReflectionTestUtils.invokeMethod(
+                ideaService,
+                "cleanUpAiResponse",
+                input,
+                "contexto",
+                false
+        );
+
+        assertEquals("Conteúdo real", cleaned);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listarHistoricoIdeiasFiltrado_ShouldUseSpecification_WhenUserIdProvided() {
+        LocalDateTime start = LocalDateTime.now().minusDays(1);
+        LocalDateTime end = LocalDateTime.now().plusDays(1);
+
+        when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
+                .thenReturn(List.of(testIdea));
+
+        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), "tecnologia", start, end);
+
+        assertEquals(1, response.size());
+        verify(ideaRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class));
+    }
+
+    @Test
+    void listarHistoricoIdeiasFiltrado_ShouldThrowException_WhenInvalidTheme() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            ideaService.listarHistoricoIdeiasFiltrado(null, "tema_invalido", null, null);
+        });
+
+        assertTrue(exception.getMessage().contains("tema 'tema_invalido' é inválido"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listarHistoricoIdeiasFiltrado_ShouldThrowException_WhenInvalidThemeWithUserId() {
+        when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
+                .thenAnswer(invocation -> {
+                    org.springframework.data.jpa.domain.Specification<Idea> spec = invocation.getArgument(0);
+                    jakarta.persistence.criteria.Root<Idea> root = mock(jakarta.persistence.criteria.Root.class);
+                    jakarta.persistence.criteria.CriteriaQuery<?> query = mock(jakarta.persistence.criteria.CriteriaQuery.class);
+                    jakarta.persistence.criteria.CriteriaBuilder cb = mock(jakarta.persistence.criteria.CriteriaBuilder.class);
+                    jakarta.persistence.criteria.Path<Object> userPath = mock(jakarta.persistence.criteria.Path.class);
+                    jakarta.persistence.criteria.Path<Object> idPath = mock(jakarta.persistence.criteria.Path.class);
+                    jakarta.persistence.criteria.Path<Object> themePath = mock(jakarta.persistence.criteria.Path.class);
+                    jakarta.persistence.criteria.Path<Object> createdAtPath = mock(jakarta.persistence.criteria.Path.class);
+                    jakarta.persistence.criteria.Predicate predicate = mock(jakarta.persistence.criteria.Predicate.class);
+                    jakarta.persistence.criteria.Order order = mock(jakarta.persistence.criteria.Order.class);
+                    
+                    when(root.get("user")).thenReturn(userPath);
+                    when(userPath.get("id")).thenReturn(idPath);
+                    when(root.get("theme")).thenReturn(themePath);
+                    when(root.get("createdAt")).thenReturn(createdAtPath);
+                    when(cb.conjunction()).thenReturn(predicate);
+                    when(cb.equal(any(), any())).thenReturn(predicate);
+                    when(cb.greaterThanOrEqualTo(any(jakarta.persistence.criteria.Expression.class), any(LocalDateTime.class))).thenReturn(predicate);
+                    when(cb.lessThanOrEqualTo(any(jakarta.persistence.criteria.Expression.class), any(LocalDateTime.class))).thenReturn(predicate);
+                    when(cb.and(any(), any())).thenReturn(predicate);
+                    when(cb.desc(any())).thenReturn(order);
+                    when(query.getOrderList()).thenReturn(Collections.emptyList());
+                    
+                    spec.toPredicate(root, query, cb);
+                    return Collections.emptyList();
+                });
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), "tema_invalido", null, null);
+        });
+
+        assertTrue(exception.getMessage().contains("tema 'tema_invalido' é inválido"));
+    }
+
+    @Test
+    void listarHistoricoIdeiasFiltrado_ShouldThrowException_WhenEmptyList() {
+        when(ideaRepository.findAllByOrderByCreatedAtDesc()).thenReturn(Collections.emptyList());
+
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+            ideaService.listarHistoricoIdeiasFiltrado(null, null, null, null);
+        });
+
+        assertEquals("Nenhuma ideia encontrada no banco de dados para os filtros informados.", exception.getMessage());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listarHistoricoIdeiasFiltrado_ShouldFilterByUserIdAndTheme() {
+        when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
+                .thenReturn(List.of(testIdea));
+
+        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), "tecnologia", null, null);
+
+        assertEquals(1, response.size());
+        verify(ideaRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listarHistoricoIdeiasFiltrado_ShouldFilterByUserIdAndDates() {
+        LocalDateTime start = LocalDateTime.now().minusDays(1);
+        LocalDateTime end = LocalDateTime.now().plusDays(1);
+
+        when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
+                .thenReturn(List.of(testIdea));
+
+        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), null, start, end);
+
+        assertEquals(1, response.size());
+        verify(ideaRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class));
+    }
+
+    @Test
+    void getCurrentAuthenticatedUser_ShouldThrowException_WhenPrincipalNotUserDetails() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "notUserDetails",
+                null,
+                Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"))
+        );
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+            ideaService.listarMinhasIdeias();
+        });
+
+        assertEquals("Usuário não autenticado. Não é possível gerar ideias.", exception.getMessage());
+    }
+
+    @Test
+    void getCurrentAuthenticatedUser_ShouldThrowException_WhenAuthenticationIsNull() {
+        SecurityContextHolder.clearContext();
+
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+            ideaService.listarMinhasIdeias();
+        });
+
+        assertEquals("Usuário não autenticado. Não é possível gerar ideias.", exception.getMessage());
+    }
+
+    @Test
+    void cleanUpAiResponse_ShouldHandleQuotesCorrectly() {
+        String input = "\"Conteúdo entre aspas\"";
+        String cleaned = (String) ReflectionTestUtils.invokeMethod(
+                ideaService,
+                "cleanUpAiResponse",
+                input,
+                "contexto",
+                false
+        );
+
+        assertEquals("Conteúdo entre aspas", cleaned);
+    }
+
+    @Test
+    void cleanUpAiResponse_ShouldNotRemoveQuotes_WhenLengthIsTwo() {
+        String input = "\"\"";
+        String cleaned = (String) ReflectionTestUtils.invokeMethod(
+                ideaService,
+                "cleanUpAiResponse",
+                input,
+                "contexto",
+                false
+        );
+
+        assertEquals("\"\"", cleaned);
+    }
+
+    @Test
+    void cleanUpAiResponse_ShouldFormatSurprise_WithContext() {
+        String input = "Ideia surpresa";
+        String context = "um nome de startup sobre tecnologia";
+        String cleaned = (String) ReflectionTestUtils.invokeMethod(
+                ideaService,
+                "cleanUpAiResponse",
+                input,
+                context,
+                true
+        );
+
+        assertEquals("um nome de startup sobre tecnologia: Ideia surpresa", cleaned);
+    }
+
+    @Test
+    void listarIdeiasFavoritadas_ShouldThrowException_WhenFavoritesIsNull() {
+        setupSecurityContext();
+        testUser.setFavoriteIdeas(null);
+
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+            ideaService.listarIdeiasFavoritadas();
+        });
+
+        assertEquals("Nenhuma ideia favoritada encontrada para este usuário.", exception.getMessage());
+    }
+
+    @Test
+    void desfavoritarIdeia_ShouldThrowException_WhenIdeaNotFound() {
+        setupSecurityContext();
+        when(ideaRepository.findById(99L)).thenReturn(Optional.empty());
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            ideaService.desfavoritarIdeia(99L);
+        });
+
+        assertEquals("Ideia não encontrada.", exception.getMessage());
     }
 }
