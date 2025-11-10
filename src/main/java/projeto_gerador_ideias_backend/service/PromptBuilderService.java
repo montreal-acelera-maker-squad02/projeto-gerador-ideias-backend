@@ -70,7 +70,7 @@ public class PromptBuilderService {
         }
     }
 
-    public List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> buildMessageHistory(List<ChatMessage> previousMessages) {
+    public List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> buildMessageHistory(List<ChatMessage> previousMessages) {
         if (previousMessages == null || previousMessages.isEmpty()) {
             return List.of();
         }
@@ -97,7 +97,7 @@ public class PromptBuilderService {
                 .map(msg -> {
                     String role = msg.getRole() == ChatMessage.MessageRole.USER ? "user" : "assistant";
                     String sanitizedContent = promptSanitizer.sanitizeForPrompt(msg.getContent());
-                    return new projeto_gerador_ideias_backend.dto.OllamaRequest.Message(role, sanitizedContent);
+                    return new projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message(role, sanitizedContent);
                 })
                 .toList();
     }

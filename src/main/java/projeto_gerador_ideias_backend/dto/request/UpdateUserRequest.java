@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -23,3 +23,4 @@ public class UpdateUserRequest {
     @Schema(description = "Confirmação da nova senha", example = "NovaSenha@456")
     private String confirmPassword;
 }
+

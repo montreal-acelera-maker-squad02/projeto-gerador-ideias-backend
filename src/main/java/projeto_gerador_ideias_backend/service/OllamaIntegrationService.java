@@ -9,8 +9,8 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import projeto_gerador_ideias_backend.config.ChatProperties;
-import projeto_gerador_ideias_backend.dto.OllamaRequest;
-import projeto_gerador_ideias_backend.dto.OllamaResponse;
+import projeto_gerador_ideias_backend.dto.request.OllamaRequest;
+import projeto_gerador_ideias_backend.dto.response.OllamaResponse;
 import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 
 import java.time.Duration;
@@ -285,4 +285,5 @@ public class OllamaIntegrationService {
         throw new OllamaServiceException("Serviço de IA temporariamente indisponível. Tente novamente em alguns instantes.", e);
     }
 }
+
 

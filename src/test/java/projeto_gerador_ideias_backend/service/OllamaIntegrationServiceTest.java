@@ -11,8 +11,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import projeto_gerador_ideias_backend.config.ChatProperties;
-import projeto_gerador_ideias_backend.dto.OllamaRequest;
-import projeto_gerador_ideias_backend.dto.OllamaResponse;
+import projeto_gerador_ideias_backend.dto.request.OllamaRequest;
+import projeto_gerador_ideias_backend.dto.response.OllamaResponse;
 import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import reactor.core.publisher.Mono;
 
@@ -528,4 +528,5 @@ class OllamaIntegrationServiceTest {
         return response;
     }
 }
+
 

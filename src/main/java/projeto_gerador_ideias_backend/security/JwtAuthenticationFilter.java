@@ -14,6 +14,7 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import projeto_gerador_ideias_backend.service.JwtService;
+import projeto_gerador_ideias_backend.service.TokenBlacklistService;
 
 import java.io.IOException;
 
@@ -23,6 +24,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Override
     protected void doFilterInternal(
@@ -40,6 +42,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         
         final String jwt = authHeader.substring(7);
         
+        if (tokenBlacklistService.isTokenBlacklisted(jwt)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
+        if (!jwtService.validateToken(jwt)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
         String userEmail;
         try {
             userEmail = jwtService.extractUsername(jwt);
@@ -51,6 +63,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);
+                
+                if (!userDetails.isEnabled()) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
                 
                 if (userDetails.getUsername().equals(userEmail)) {
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(

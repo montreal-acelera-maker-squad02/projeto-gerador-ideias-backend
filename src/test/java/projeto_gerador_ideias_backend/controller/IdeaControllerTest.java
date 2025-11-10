@@ -13,8 +13,8 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
-import projeto_gerador_ideias_backend.dto.IdeaRequest;
-import projeto_gerador_ideias_backend.dto.IdeaResponse;
+import projeto_gerador_ideias_backend.dto.request.IdeaRequest;
+import projeto_gerador_ideias_backend.dto.response.IdeaResponse;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
@@ -586,3 +586,4 @@ class IdeaControllerTest {
     }
 
 }
+

@@ -12,11 +12,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import projeto_gerador_ideias_backend.dto.LoginRequest;
-import projeto_gerador_ideias_backend.dto.LoginResponse;
-import projeto_gerador_ideias_backend.dto.RegisterRequest;
-import projeto_gerador_ideias_backend.dto.RegisterResponse;
-import projeto_gerador_ideias_backend.dto.UpdateUserRequest;
+import projeto_gerador_ideias_backend.dto.request.LoginRequest;
+import projeto_gerador_ideias_backend.dto.response.LoginResponse;
+import projeto_gerador_ideias_backend.dto.request.RegisterRequest;
+import projeto_gerador_ideias_backend.dto.response.RegisterResponse;
+import projeto_gerador_ideias_backend.dto.request.UpdateUserRequest;
 import projeto_gerador_ideias_backend.exceptions.EmailAlreadyExistsException;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
 import projeto_gerador_ideias_backend.exceptions.ValidationException;
@@ -374,4 +374,5 @@ class UserServiceTest {
         verify(jwtService, never()).generateToken(anyString(), anyLong());
     }
 }
+
 

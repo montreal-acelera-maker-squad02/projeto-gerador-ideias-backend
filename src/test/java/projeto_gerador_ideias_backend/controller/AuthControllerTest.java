@@ -8,10 +8,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import projeto_gerador_ideias_backend.dto.LoginRequest;
-import projeto_gerador_ideias_backend.dto.LoginResponse;
-import projeto_gerador_ideias_backend.dto.RegisterRequest;
-import projeto_gerador_ideias_backend.dto.RegisterResponse;
+import projeto_gerador_ideias_backend.dto.request.LoginRequest;
+import projeto_gerador_ideias_backend.dto.response.LoginResponse;
+import projeto_gerador_ideias_backend.dto.request.RegisterRequest;
+import projeto_gerador_ideias_backend.dto.response.RegisterResponse;
 import projeto_gerador_ideias_backend.exceptions.ValidationException;
 import projeto_gerador_ideias_backend.security.JwtAuthenticationFilter;
 import projeto_gerador_ideias_backend.service.JwtService;
@@ -266,4 +266,5 @@ class AuthControllerTest {
         verify(userService, never()).login(any(LoginRequest.class));
     }
 }
+
 

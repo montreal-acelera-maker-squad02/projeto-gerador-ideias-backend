@@ -1394,8 +1394,8 @@ class ChatServiceTest {
                 .thenReturn(Arrays.asList(previousUser, previousAssistant));
         when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(5);
         when(promptBuilderService.buildMessageHistory(anyList())).thenReturn(Arrays.asList(
-                new projeto_gerador_ideias_backend.dto.OllamaRequest.Message("user", "Olá"),
-                new projeto_gerador_ideias_backend.dto.OllamaRequest.Message("assistant", "Olá! Como posso ajudar?")
+                new projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message("user", "Olá"),
+                new projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message("assistant", "Olá! Como posso ajudar?")
         ));
         when(ollamaIntegrationService.callOllamaWithHistory(anyString(), anyList(), anyString()))
                 .thenReturn("Estou bem, obrigado!");
@@ -1799,4 +1799,5 @@ class ChatServiceTest {
         }
     }
 }
+
 

@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -21,4 +21,5 @@ public class PaginationInfo {
     @Schema(description = "Indica se há página anterior", example = "false")
     private Boolean hasPrevious;
 }
+
 

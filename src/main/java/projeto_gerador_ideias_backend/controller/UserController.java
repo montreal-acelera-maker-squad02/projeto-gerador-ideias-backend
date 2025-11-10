@@ -7,8 +7,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import projeto_gerador_ideias_backend.dto.RegisterResponse;
-import projeto_gerador_ideias_backend.dto.UpdateUserRequest;
+import projeto_gerador_ideias_backend.dto.response.RegisterResponse;
+import projeto_gerador_ideias_backend.dto.request.UpdateUserRequest;
 import projeto_gerador_ideias_backend.service.UserService;
 
 @RestController
@@ -48,3 +48,4 @@ public class UserController {
         return ResponseEntity.ok(response);
     }
 }
+

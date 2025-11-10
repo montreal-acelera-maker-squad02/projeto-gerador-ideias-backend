@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
@@ -18,5 +18,6 @@ public class LoginRequest {
     @Schema(description = "Senha do usuário", example = "SenhaSegura@123")
     private String password;
 }
+
 
 

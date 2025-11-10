@@ -8,11 +8,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import projeto_gerador_ideias_backend.dto.LoginRequest;
-import projeto_gerador_ideias_backend.dto.LoginResponse;
-import projeto_gerador_ideias_backend.dto.RegisterRequest;
-import projeto_gerador_ideias_backend.dto.RegisterResponse;
+import projeto_gerador_ideias_backend.dto.request.LoginRequest;
+import projeto_gerador_ideias_backend.dto.response.LoginResponse;
+import projeto_gerador_ideias_backend.dto.request.RegisterRequest;
+import projeto_gerador_ideias_backend.dto.response.RegisterResponse;
+import projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest;
+import projeto_gerador_ideias_backend.dto.request.LogoutRequest;
+import projeto_gerador_ideias_backend.dto.response.RefreshTokenResponse;
 import projeto_gerador_ideias_backend.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -69,5 +73,53 @@ public class AuthController {
         RegisterResponse response = userService.registerUser(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
+    
+    @Operation(
+        summary = "Renovar access token",
+        description = "Renova o access token usando um refresh token válido. Retorna novos access e refresh tokens."
+    )
+    @ApiResponse(
+        responseCode = "200",
+        description = "Tokens renovados com sucesso"
+    )
+    @ApiResponse(
+        responseCode = "400",
+        description = "Refresh token inválido ou expirado"
+    )
+    @PostMapping("/refresh")
+    public ResponseEntity<RefreshTokenResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
+        RefreshTokenResponse response = userService.refreshToken(request);
+        return ResponseEntity.ok(response);
+    }
+    
+    @Operation(
+        summary = "Realizar logout",
+        description = "Invalida o access token atual e o refresh token (se fornecido). O access token é adicionado à blacklist."
+    )
+    @ApiResponse(
+        responseCode = "200",
+        description = "Logout realizado com sucesso"
+    )
+    @ApiResponse(
+        responseCode = "401",
+        description = "Usuário não autenticado"
+    )
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @RequestBody(required = false) LogoutRequest request,
+            HttpServletRequest httpRequest) {
+        
+        String accessToken = null;
+        String authHeader = httpRequest.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            accessToken = authHeader.substring(7);
+        }
+        
+        String refreshToken = request != null ? request.getRefreshToken() : null;
+        userService.logout(accessToken, refreshToken);
+        
+        return ResponseEntity.ok().build();
+    }
 }
+
 

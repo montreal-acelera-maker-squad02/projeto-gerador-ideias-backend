@@ -20,6 +20,15 @@ public class CacheConfig {
                 .recordStats()
                 .build();
     }
+    
+    @Bean
+    public Cache<String, Boolean> tokenBlacklistCache() {
+        return Caffeine.newBuilder()
+                .maximumSize(10000)
+                .expireAfterWrite(7, TimeUnit.DAYS)
+                .recordStats()
+                .build();
+    }
 }
 
 

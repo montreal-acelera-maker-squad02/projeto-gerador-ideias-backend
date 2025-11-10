@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Positive;
@@ -15,4 +15,5 @@ public class StartChatRequest {
     @Schema(description = "ID da ideia para iniciar chat baseado em ideia. Se null, inicia chat livre", example = "10", required = false)
     private Long ideaId;
 }
+
 

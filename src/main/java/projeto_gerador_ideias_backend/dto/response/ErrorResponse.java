@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -17,3 +17,4 @@ public class ErrorResponse {
     @Schema(description = "A mensagem detalhada do erro", example = "O contexto não pode estar em branco")
     private String message;
 }
+

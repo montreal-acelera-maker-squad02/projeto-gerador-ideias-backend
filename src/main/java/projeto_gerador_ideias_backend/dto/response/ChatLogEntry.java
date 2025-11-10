@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -18,5 +18,6 @@ public class ChatLogEntry {
     private String chatType; 
     private Long ideaId;
 }
+
 
 

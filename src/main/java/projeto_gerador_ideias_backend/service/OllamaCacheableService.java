@@ -4,8 +4,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import projeto_gerador_ideias_backend.dto.OllamaRequest;
-import projeto_gerador_ideias_backend.dto.OllamaResponse;
+import projeto_gerador_ideias_backend.dto.request.OllamaRequest;
+import projeto_gerador_ideias_backend.dto.response.OllamaResponse;
 import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 
 @Service

@@ -10,7 +10,13 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import projeto_gerador_ideias_backend.dto.*;
+import projeto_gerador_ideias_backend.dto.request.ChatMessageRequest;
+import projeto_gerador_ideias_backend.dto.request.StartChatRequest;
+import projeto_gerador_ideias_backend.dto.response.ChatLogsResponse;
+import projeto_gerador_ideias_backend.dto.response.ChatMessageResponse;
+import projeto_gerador_ideias_backend.dto.response.ChatSessionResponse;
+import projeto_gerador_ideias_backend.dto.response.ErrorResponse;
+import projeto_gerador_ideias_backend.dto.response.IdeaSummaryResponse;
 import projeto_gerador_ideias_backend.exceptions.ValidationException;
 import projeto_gerador_ideias_backend.service.ChatService;
 
