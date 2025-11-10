@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.request;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;

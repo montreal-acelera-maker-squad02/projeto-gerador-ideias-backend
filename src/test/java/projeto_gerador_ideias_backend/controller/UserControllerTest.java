@@ -8,8 +8,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import projeto_gerador_ideias_backend.dto.RegisterResponse;
-import projeto_gerador_ideias_backend.dto.UpdateUserRequest;
+import projeto_gerador_ideias_backend.dto.response.RegisterResponse;
+import projeto_gerador_ideias_backend.dto.request.UpdateUserRequest;
 import projeto_gerador_ideias_backend.security.JwtAuthenticationFilter;
 import projeto_gerador_ideias_backend.service.JwtService;
 import projeto_gerador_ideias_backend.service.UserService;
@@ -87,4 +87,5 @@ class UserControllerTest {
         verify(userService, times(1)).updateUser(anyString(), any(UpdateUserRequest.class));
     }
 }
+
 

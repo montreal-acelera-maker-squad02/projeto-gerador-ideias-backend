@@ -12,9 +12,9 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import projeto_gerador_ideias_backend.dto.ErrorResponse;
-import projeto_gerador_ideias_backend.dto.IdeaRequest;
-import projeto_gerador_ideias_backend.dto.IdeaResponse;
+import projeto_gerador_ideias_backend.dto.response.ErrorResponse;
+import projeto_gerador_ideias_backend.dto.request.IdeaRequest;
+import projeto_gerador_ideias_backend.dto.response.IdeaResponse;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
 import projeto_gerador_ideias_backend.service.IdeaService;
 

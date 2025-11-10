@@ -123,7 +123,7 @@ class PromptBuilderServiceTest {
 
     @Test
     void shouldBuildMessageHistoryWithNullList() {
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(null);
 
         assertNotNull(messages);
@@ -132,7 +132,7 @@ class PromptBuilderServiceTest {
 
     @Test
     void shouldBuildMessageHistoryWithEmptyList() {
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(List.of());
 
         assertNotNull(messages);
@@ -147,7 +147,7 @@ class PromptBuilderServiceTest {
         when(promptSanitizer.sanitizeForPrompt("Hello")).thenReturn("Hello");
         when(promptSanitizer.sanitizeForPrompt("Hi there")).thenReturn("Hi there");
 
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(List.of(msg1, msg2));
 
         assertNotNull(messages);
@@ -172,7 +172,7 @@ class PromptBuilderServiceTest {
         messageList.add(nullMsg);
         messageList.add(msg2);
 
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(messageList);
 
         assertNotNull(messages);
@@ -188,7 +188,7 @@ class PromptBuilderServiceTest {
         when(promptSanitizer.sanitizeForPrompt("Hello")).thenReturn("Hello");
         when(promptSanitizer.sanitizeForPrompt("Hi")).thenReturn("Hi");
 
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(List.of(msg1, msg2, msg3));
 
         assertNotNull(messages);
@@ -204,7 +204,7 @@ class PromptBuilderServiceTest {
         when(promptSanitizer.sanitizeForPrompt("Hello")).thenReturn("Hello");
         when(promptSanitizer.sanitizeForPrompt("Hi")).thenReturn("Hi");
 
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(List.of(msg1, msg2, msg3));
 
         assertNotNull(messages);
@@ -221,7 +221,7 @@ class PromptBuilderServiceTest {
 
         when(promptSanitizer.sanitizeForPrompt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(List.of(msg1, msg2, msg3, msg4, msg5));
 
         assertNotNull(messages);
@@ -239,7 +239,7 @@ class PromptBuilderServiceTest {
 
         when(promptSanitizer.sanitizeForPrompt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(List.of(msg1, msg2, msg3));
 
         assertNotNull(messages);
@@ -253,7 +253,7 @@ class PromptBuilderServiceTest {
 
         when(promptSanitizer.sanitizeForPrompt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(List.of(msg1, msg2));
 
         assertNotNull(messages);
@@ -269,7 +269,7 @@ class PromptBuilderServiceTest {
 
         when(promptSanitizer.sanitizeForPrompt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(List.of(msg1, msg2, msg3));
 
         assertNotNull(messages);
@@ -286,7 +286,7 @@ class PromptBuilderServiceTest {
 
         when(promptSanitizer.sanitizeForPrompt(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(List.of(userMsg, assistantMsg));
 
         assertNotNull(messages);
@@ -300,7 +300,7 @@ class PromptBuilderServiceTest {
         ChatMessage msg = createChatMessage("Original content", ChatMessage.MessageRole.USER, LocalDateTime.now());
         when(promptSanitizer.sanitizeForPrompt("Original content")).thenReturn("Sanitized content");
 
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(List.of(msg));
 
         assertNotNull(messages);
@@ -314,7 +314,7 @@ class PromptBuilderServiceTest {
         ChatMessage msg1 = createChatMessage(null, ChatMessage.MessageRole.USER, LocalDateTime.now().minusMinutes(2));
         ChatMessage msg2 = createChatMessage("   ", ChatMessage.MessageRole.ASSISTANT, LocalDateTime.now().minusMinutes(1));
 
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> messages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> messages = 
                 promptBuilderService.buildMessageHistory(List.of(msg1, msg2));
 
         assertNotNull(messages);
@@ -349,4 +349,5 @@ class PromptBuilderServiceTest {
         return msg;
     }
 }
+
 

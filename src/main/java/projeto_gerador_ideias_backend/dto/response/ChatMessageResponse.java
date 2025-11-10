@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -27,4 +27,5 @@ public class ChatMessageResponse {
     @Schema(description = "Data e hora de criação da mensagem", example = "2025-11-08T13:00:00")
     private String createdAt;
 }
+
 

@@ -7,7 +7,17 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.transaction.annotation.Transactional;
 import projeto_gerador_ideias_backend.config.ChatProperties;
-import projeto_gerador_ideias_backend.dto.*;
+import projeto_gerador_ideias_backend.dto.MessagePreparationResult;
+import projeto_gerador_ideias_backend.dto.request.ChatMessageRequest;
+import projeto_gerador_ideias_backend.dto.response.InteractionMetrics;
+import projeto_gerador_ideias_backend.dto.request.StartChatRequest;
+import projeto_gerador_ideias_backend.dto.response.ChatLogsResponse;
+import projeto_gerador_ideias_backend.dto.response.ChatMessageResponse;
+import projeto_gerador_ideias_backend.dto.response.ChatSessionResponse;
+import projeto_gerador_ideias_backend.dto.response.IdeaSummaryResponse;
+import projeto_gerador_ideias_backend.dto.response.Interaction;
+import projeto_gerador_ideias_backend.dto.response.LogsSummary;
+import projeto_gerador_ideias_backend.dto.response.PaginationInfo;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
 import projeto_gerador_ideias_backend.exceptions.TokenLimitExceededException;
 import projeto_gerador_ideias_backend.exceptions.ChatPermissionException;
@@ -231,7 +241,7 @@ public class ChatService {
 
     private OllamaResponseResult callOllamaAndValidate(Long sessionId, MessagePreparationResult preparation) {
         try {
-            List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> historyMessages = preparation.getHistoryMessages();
+            List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> historyMessages = preparation.getHistoryMessages();
             String aiResponse = historyMessages == null || historyMessages.isEmpty()
                 ? ollamaIntegrationService.callOllamaWithSystemPrompt(preparation.getSystemPrompt(), preparation.getUserMessage())
                 : ollamaIntegrationService.callOllamaWithHistory(preparation.getSystemPrompt(), historyMessages, preparation.getUserMessage());
@@ -341,7 +351,7 @@ public class ChatService {
             systemPrompt = promptBuilderService.buildSystemPromptForIdeaChat(session);
         }
         
-        List<projeto_gerador_ideias_backend.dto.OllamaRequest.Message> historyMessages = 
+        List<projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message> historyMessages = 
             promptBuilderService.buildMessageHistory(previousMessages);
 
         if (!historyMessages.isEmpty()) {

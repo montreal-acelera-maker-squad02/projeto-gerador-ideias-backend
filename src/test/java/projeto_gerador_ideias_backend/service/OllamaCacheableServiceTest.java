@@ -10,8 +10,8 @@ import org.springframework.web.reactive.function.client.WebClient.RequestBodySpe
 import org.springframework.web.reactive.function.client.WebClient.RequestBodyUriSpec;
 import org.springframework.web.reactive.function.client.WebClient.RequestHeadersSpec;
 import org.springframework.web.reactive.function.client.WebClient.ResponseSpec;
-import projeto_gerador_ideias_backend.dto.OllamaRequest;
-import projeto_gerador_ideias_backend.dto.OllamaResponse;
+import projeto_gerador_ideias_backend.dto.request.OllamaRequest;
+import projeto_gerador_ideias_backend.dto.response.OllamaResponse;
 import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import reactor.core.publisher.Mono;
 
@@ -233,4 +233,5 @@ class OllamaCacheableServiceTest {
         return response;
     }
 }
+
 

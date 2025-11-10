@@ -20,9 +20,9 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import projeto_gerador_ideias_backend.dto.ChatMessageRequest;
-import projeto_gerador_ideias_backend.dto.OllamaResponse;
-import projeto_gerador_ideias_backend.dto.StartChatRequest;
+import projeto_gerador_ideias_backend.dto.request.ChatMessageRequest;
+import projeto_gerador_ideias_backend.dto.response.OllamaResponse;
+import projeto_gerador_ideias_backend.dto.request.StartChatRequest;
 import projeto_gerador_ideias_backend.model.ChatSession;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
@@ -715,4 +715,5 @@ class ChatControllerTest {
                 .andExpect(jsonPath("$.messages.length()").value(2));
     }
 }
+
 

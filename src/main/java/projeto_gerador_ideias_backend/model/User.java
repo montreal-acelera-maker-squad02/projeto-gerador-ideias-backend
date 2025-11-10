@@ -56,6 +56,9 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    @Column(nullable = false)
+    private Boolean enabled = true;
+
     @Column(name = "generated_ideas_count", nullable = false)
     private Long generatedIdeasCount = 0L;
 

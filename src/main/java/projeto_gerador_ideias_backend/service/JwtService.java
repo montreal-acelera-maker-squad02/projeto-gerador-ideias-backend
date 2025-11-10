@@ -1,6 +1,7 @@
 package projeto_gerador_ideias_backend.service;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,8 +20,11 @@ public class JwtService {
     @Value("${jwt.secret:}")
     private String secret;
     
-    @Value("${jwt.expiration:86400}")
-    private Long expiration;
+    @Value("${jwt.access-token-expiration:600}")
+    private Long accessTokenExpiration;
+    
+    @Value("${jwt.refresh-token-expiration:604800}")
+    private Long refreshTokenExpiration;
     
     @PostConstruct
     public void validateSecret() {
@@ -46,17 +50,37 @@ public class JwtService {
                 .getPayload();
     }
     
-    public String generateToken(String email, Long userId) {
+    public String generateAccessToken(String email, Long userId) {
         Date now = new Date();
-        Date expiryDate = Date.from(Instant.now().plus(expiration, ChronoUnit.SECONDS));
+        Date expiryDate = Date.from(Instant.now().plus(accessTokenExpiration, ChronoUnit.SECONDS));
         
         return Jwts.builder()
                 .subject(email)
                 .claim("userId", userId)
+                .claim("type", "access")
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(getSigningKey())
                 .compact();
+    }
+    
+    public String generateRefreshToken(String email, Long userId) {
+        Date now = new Date();
+        Date expiryDate = Date.from(Instant.now().plus(refreshTokenExpiration, ChronoUnit.SECONDS));
+        
+        return Jwts.builder()
+                .subject(email)
+                .claim("userId", userId)
+                .claim("type", "refresh")
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .signWith(getSigningKey())
+                .compact();
+    }
+    
+    @Deprecated
+    public String generateToken(String email, Long userId) {
+        return generateAccessToken(email, userId);
     }
     
     public String extractUsername(String token) {
@@ -74,8 +98,32 @@ public class JwtService {
             return false;
         }
         try {
-            extractAllClaims(token);
-            return true;
+            Claims claims = extractAllClaims(token);
+            String type = claims.get("type", String.class);
+            if (type == null || !"access".equals(type)) {
+                return false;
+            }
+            return claims.getExpiration().after(new Date());
+        } catch (ExpiredJwtException e) {
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+    public boolean validateRefreshToken(String token) {
+        if (token == null || token.isBlank()) {
+            return false;
+        }
+        try {
+            Claims claims = extractAllClaims(token);
+            String type = claims.get("type", String.class);
+            if (type == null || !"refresh".equals(type)) {
+                return false;
+            }
+            return claims.getExpiration().after(new Date());
+        } catch (ExpiredJwtException e) {
+            return false;
         } catch (Exception e) {
             return false;
         }

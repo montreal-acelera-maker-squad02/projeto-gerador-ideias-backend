@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -15,4 +15,5 @@ public class ChatMessageRequest {
     @Schema(description = "Mensagem do usuário", example = "Qual é a melhor forma de aprender programação?", required = true)
     private String message;
 }
+
 

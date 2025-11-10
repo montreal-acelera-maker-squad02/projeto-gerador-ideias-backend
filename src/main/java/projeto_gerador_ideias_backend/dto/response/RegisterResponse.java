@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -17,4 +17,7 @@ public class RegisterResponse {
     private String name;
     private String email;
     private LocalDateTime createdAt;
+    private String accessToken;
+    private String refreshToken;
 }
+

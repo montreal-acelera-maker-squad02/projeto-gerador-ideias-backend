@@ -15,6 +15,7 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import projeto_gerador_ideias_backend.service.JwtService;
+import projeto_gerador_ideias_backend.service.TokenBlacklistService;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -31,6 +32,9 @@ class JwtAuthenticationFilterTest {
     
     @Mock
     private UserDetailsService userDetailsService;
+    
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
     
     @Mock
     private HttpServletRequest request;
@@ -83,12 +87,14 @@ class JwtAuthenticationFilterTest {
     @Test
     void shouldContinueWhenTokenIsInvalid() throws ServletException, IOException {
         when(request.getHeader("Authorization")).thenReturn("Bearer invalid-token");
-        when(jwtService.extractUsername("invalid-token")).thenThrow(new RuntimeException("Invalid token"));
+        when(tokenBlacklistService.isTokenBlacklisted("invalid-token")).thenReturn(false);
+        when(jwtService.validateToken("invalid-token")).thenReturn(false);
         
         jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
         
         verify(filterChain, times(1)).doFilter(request, response);
-        verify(jwtService, times(1)).extractUsername("invalid-token");
+        verify(jwtService, times(1)).validateToken("invalid-token");
+        verify(jwtService, never()).extractUsername(anyString());
         verify(userDetailsService, never()).loadUserByUsername(anyString());
         assertNull(SecurityContextHolder.getContext().getAuthentication());
     }
@@ -99,6 +105,8 @@ class JwtAuthenticationFilterTest {
         String email = "joao@example.com";
         
         when(request.getHeader("Authorization")).thenReturn("Bearer " + validToken);
+        when(tokenBlacklistService.isTokenBlacklisted(validToken)).thenReturn(false);
+        when(jwtService.validateToken(validToken)).thenReturn(true);
         when(jwtService.extractUsername(validToken)).thenReturn(email);
         when(userDetailsService.loadUserByUsername(email)).thenReturn(testUserDetails);
         
@@ -118,6 +126,8 @@ class JwtAuthenticationFilterTest {
         String email = "naoexiste@example.com";
         
         when(request.getHeader("Authorization")).thenReturn("Bearer " + validToken);
+        when(tokenBlacklistService.isTokenBlacklisted(validToken)).thenReturn(false);
+        when(jwtService.validateToken(validToken)).thenReturn(true);
         when(jwtService.extractUsername(validToken)).thenReturn(email);
         when(userDetailsService.loadUserByUsername(email))
                 .thenThrow(new org.springframework.security.core.userdetails.UsernameNotFoundException("User not found"));
@@ -144,6 +154,8 @@ class JwtAuthenticationFilterTest {
                 .build();
         
         when(request.getHeader("Authorization")).thenReturn("Bearer " + validToken);
+        when(tokenBlacklistService.isTokenBlacklisted(validToken)).thenReturn(false);
+        when(jwtService.validateToken(validToken)).thenReturn(true);
         when(jwtService.extractUsername(validToken)).thenReturn(emailFromToken);
         when(userDetailsService.loadUserByUsername(emailFromToken)).thenReturn(differentUser);
         
@@ -165,6 +177,8 @@ class JwtAuthenticationFilterTest {
         SecurityContextHolder.getContext().setAuthentication(existingAuth);
         
         when(request.getHeader("Authorization")).thenReturn("Bearer " + validToken);
+        when(tokenBlacklistService.isTokenBlacklisted(validToken)).thenReturn(false);
+        when(jwtService.validateToken(validToken)).thenReturn(true);
         when(jwtService.extractUsername(validToken)).thenReturn(email);
         
         jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);

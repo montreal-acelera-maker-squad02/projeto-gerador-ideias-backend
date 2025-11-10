@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -15,5 +15,6 @@ public class ChatLogsByDate {
     private Integer totalTokens;
     private List<ChatLogEntry> messages;
 }
+
 
 

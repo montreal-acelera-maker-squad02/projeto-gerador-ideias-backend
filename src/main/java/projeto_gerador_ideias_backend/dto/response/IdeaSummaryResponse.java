@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -19,4 +19,5 @@ public class IdeaSummaryResponse {
     @Schema(description = "Data de criação", example = "2025-11-08T10:00:00")
     private String createdAt;
 }
+
 

@@ -12,7 +12,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import projeto_gerador_ideias_backend.dto.*;
+import projeto_gerador_ideias_backend.dto.request.*;
+import projeto_gerador_ideias_backend.dto.response.*;
 import projeto_gerador_ideias_backend.exceptions.ChatPermissionException;
 import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
@@ -1394,8 +1395,8 @@ class ChatServiceTest {
                 .thenReturn(Arrays.asList(previousUser, previousAssistant));
         when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(5);
         when(promptBuilderService.buildMessageHistory(anyList())).thenReturn(Arrays.asList(
-                new projeto_gerador_ideias_backend.dto.OllamaRequest.Message("user", "Olá"),
-                new projeto_gerador_ideias_backend.dto.OllamaRequest.Message("assistant", "Olá! Como posso ajudar?")
+                new projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message("user", "Olá"),
+                new projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message("assistant", "Olá! Como posso ajudar?")
         ));
         when(ollamaIntegrationService.callOllamaWithHistory(anyString(), anyList(), anyString()))
                 .thenReturn("Estou bem, obrigado!");
@@ -1799,4 +1800,5 @@ class ChatServiceTest {
         }
     }
 }
+
 

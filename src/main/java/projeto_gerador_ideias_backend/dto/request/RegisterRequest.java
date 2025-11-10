@@ -1,4 +1,4 @@
-package projeto_gerador_ideias_backend.dto;
+package projeto_gerador_ideias_backend.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
@@ -29,3 +29,4 @@ public class RegisterRequest {
     @Schema(description = "Confirmação da senha (deve ser igual à senha)", example = "SenhaSegura@123")
     private String confirmPassword;
 }
+
