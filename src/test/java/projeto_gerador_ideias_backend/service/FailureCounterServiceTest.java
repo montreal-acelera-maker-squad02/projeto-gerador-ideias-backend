@@ -216,4 +216,41 @@ class FailureCounterServiceTest {
         assertNotNull(after);
         assertEquals(1, after.get());
     }
+
+    @Test
+    void deveIncrementarContadorCorretamenteQuandoValueWrapperExiste() {
+        cache.put(USER_EMAIL, 2);
+        
+        failureCounterService.handleFailure(USER_EMAIL, USER_NAME);
+        
+        Cache.ValueWrapper valueWrapper = cache.get(USER_EMAIL);
+        assertNotNull(valueWrapper);
+        assertEquals(3, valueWrapper.get());
+        verify(emailService, never()).sendSystemErrorNotification(anyString(), anyString(), anyInt());
+    }
+
+    @Test
+    void naoDeveEnviarEmailQuandoContadorNaoAtingeThreshold() {
+        failureCounterService.handleFailure(USER_EMAIL, USER_NAME);
+        failureCounterService.handleFailure(USER_EMAIL, USER_NAME);
+        
+        verify(emailService, never()).sendSystemErrorNotification(anyString(), anyString(), anyInt());
+    }
+
+    @Test
+    void deveResetarContadorApenasQuandoThresholdEAtingido() {
+        failureCounterService.handleFailure(USER_EMAIL, USER_NAME);
+        failureCounterService.handleFailure(USER_EMAIL, USER_NAME);
+        failureCounterService.handleFailure(USER_EMAIL, USER_NAME);
+        
+        Cache.ValueWrapper before = cache.get(USER_EMAIL);
+        assertNotNull(before);
+        assertEquals(3, before.get());
+        
+        failureCounterService.handleFailure(USER_EMAIL, USER_NAME);
+        
+        Cache.ValueWrapper after = cache.get(USER_EMAIL);
+        assertNull(after);
+        verify(emailService, times(1)).sendSystemErrorNotification(USER_EMAIL, USER_NAME, 4);
+    }
 }
