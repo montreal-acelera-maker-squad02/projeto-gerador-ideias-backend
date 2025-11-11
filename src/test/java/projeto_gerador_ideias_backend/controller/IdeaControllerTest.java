@@ -20,6 +20,7 @@ import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.model.User;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
+import projeto_gerador_ideias_backend.repository.ThemeRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 import projeto_gerador_ideias_backend.service.IdeaService;
 
@@ -38,6 +39,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class IdeaControllerTest {
+
+    @Autowired
+    private ThemeRepository themeRepository;
 
     @Autowired
     private MockMvc mockMvc;
@@ -61,12 +65,16 @@ class IdeaControllerTest {
     private User testUser;
     private IdeaResponse mockIdeaResponse;
     private Idea mockIdea;
+    private Theme tecnologiaTheme;
+    private Theme estudosTheme;
+    private Theme trabalhoTheme;
 
     @BeforeEach
     @Transactional
     void setUpDatabase() {
         ideaRepository.deleteAll();
         userRepository.deleteAll();
+        themeRepository.deleteAll();
 
         if (userRepository.findByEmail(testUserEmail).isEmpty()) {
             testUser = new User();
@@ -79,7 +87,11 @@ class IdeaControllerTest {
             testUser = userRepository.findByEmail(testUserEmail).orElseThrow();
         }
 
-        mockIdea = new Idea(Theme.TECNOLOGIA, "Contexto", "Ideia de Teste", "mistral", 100L);
+        tecnologiaTheme = themeRepository.save(new Theme("TECNOLOGIA"));
+        estudosTheme = themeRepository.save(new Theme("ESTUDOS"));
+        trabalhoTheme = themeRepository.save(new Theme("TRABALHO"));
+
+        mockIdea = new Idea(tecnologiaTheme, "Contexto", "Ideia de Teste", "mistral", 100L);
         mockIdea.setId(1L);
         mockIdea.setUser(testUser);
         mockIdea.setCreatedAt(LocalDateTime.now());
@@ -98,7 +110,7 @@ class IdeaControllerTest {
     @WithMockUser(username = testUserEmail)
     void shouldGenerateIdeaSuccessfully() throws Exception {
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.ESTUDOS);
+        request.setTheme(estudosTheme.getId());
         request.setContext("Como aprender Spring Boot");
 
         when(ideaService.generateIdea(any(IdeaRequest.class), eq(false)))
@@ -118,7 +130,7 @@ class IdeaControllerTest {
     @WithMockUser(username = testUserEmail)
     void shouldReturnRejectionFromModerationWhenDangerous() throws Exception {
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.TRABALHO);
+        request.setTheme(trabalhoTheme.getId());
         request.setContext("Tópico perigoso");
 
         IdeaResponse rejectionResponse = new IdeaResponse();
@@ -141,7 +153,7 @@ class IdeaControllerTest {
     @WithMockUser(username = testUserEmail)
     void shouldReturnBadRequestForInvalidInput() throws Exception {
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.TECNOLOGIA);
+        request.setTheme(tecnologiaTheme.getId());
         request.setContext(null);
 
         mockMvc.perform(post("/api/ideas/generate")
@@ -181,15 +193,17 @@ class IdeaControllerTest {
     @WithMockUser
     void shouldListIdeasWithThemeFilter() throws Exception {
         List<IdeaResponse> mockList = List.of(mockIdeaResponse);
-        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), eq("ESTUDOS"), isNull(), isNull()))
+        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), eq(3L), isNull(), isNull()))
                 .thenReturn(mockList);
 
         mockMvc.perform(get("/api/ideas/history")
-                        .param("theme", "ESTUDOS"))
+                        .param("theme", "3")
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].theme", is("estudos")));
     }
+
 
     @Test
     @WithMockUser
@@ -198,7 +212,8 @@ class IdeaControllerTest {
                 .thenThrow(new ResourceNotFoundException("Nenhuma ideia encontrada"));
 
         mockMvc.perform(get("/api/ideas/history")
-                        .param("theme", "TECNOLOGIA"))
+                        .param("theme", "1")
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error", is("Recurso não encontrado")))
                 .andExpect(jsonPath("$.message", is("Nenhuma ideia encontrada")));
@@ -323,12 +338,12 @@ class IdeaControllerTest {
         
         LocalDateTime now = LocalDateTime.now();
         
-        Idea idea1 = new Idea(Theme.TECNOLOGIA, "Contexto 1", "Ideia 1", "modelo", 100L);
+        Idea idea1 = new Idea(tecnologiaTheme, "Contexto 1", "Ideia 1", "modelo", 100L);
         idea1.setUser(user);
         idea1.setCreatedAt(now.minusSeconds(1));
         ideaRepository.saveAndFlush(idea1);
         
-        Idea idea2 = new Idea(Theme.ESTUDOS, "Contexto 2", "Ideia 2", "modelo", 150L);
+        Idea idea2 = new Idea(estudosTheme, "Contexto 2", "Ideia 2", "modelo", 150L);
         idea2.setUser(user);
         idea2.setCreatedAt(now);
         ideaRepository.saveAndFlush(idea2);
@@ -434,7 +449,7 @@ class IdeaControllerTest {
     @WithMockUser(username = testUserEmail)
     void shouldReturn500WhenIdeaGenerationFails() throws Exception {
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.TECNOLOGIA);
+        request.setTheme(tecnologiaTheme.getId());
         request.setContext("Contexto válido");
         
         when(ideaService.generateIdea(any(IdeaRequest.class), anyBoolean()))
@@ -450,15 +465,17 @@ class IdeaControllerTest {
     @WithMockUser
     void shouldReturnBadRequestWhenIllegalArgumentExceptionInGetAllIdeas() throws Exception {
         reset(ideaService);
-        when(ideaService.listarHistoricoIdeiasFiltrado(any(), eq("INVALID_THEME"), any(), any()))
-                .thenThrow(new IllegalArgumentException("O tema 'INVALID_THEME' é inválido."));
-        
+        when(ideaService.listarHistoricoIdeiasFiltrado(any(), eq(99L), any(), any()))
+                .thenThrow(new IllegalArgumentException("O tema com ID '99' é inválido."));
+
         mockMvc.perform(get("/api/ideas/history")
-                        .param("theme", "INVALID_THEME"))
+                        .param("theme", "99")
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error", is("Argumento Inválido")))
-                .andExpect(jsonPath("$.message", containsString("O tema 'INVALID_THEME' é inválido")));
+                .andExpect(jsonPath("$.message", containsString("O tema com ID '99' é inválido.")));
     }
+
 
     @Test
     @WithMockUser
@@ -471,7 +488,7 @@ class IdeaControllerTest {
         user.setFavoriteIdeas(new HashSet<>());
         user = userRepository.save(user);
 
-        Idea idea = new Idea(Theme.ESTUDOS, "Contexto", "Ideia", "modelo", 100L);
+        Idea idea = new Idea(estudosTheme, "Contexto", "Ideia", "modelo", 100L);
         idea.setUser(user);
         idea = ideaRepository.save(idea);
         
@@ -492,6 +509,7 @@ class IdeaControllerTest {
     @WithMockUser
     void shouldListIdeasWithThemeAndDateFilters() throws Exception {
         reset(ideaService);
+
         User user = new User();
         user.setName("user4");
         user.setEmail("user4@test.com");
@@ -499,30 +517,35 @@ class IdeaControllerTest {
         user.setFavoriteIdeas(new HashSet<>());
         user = userRepository.save(user);
 
-        Idea idea = new Idea(Theme.TECNOLOGIA, "Contexto", "Ideia", "modelo", 100L);
+        Idea idea = new Idea(tecnologiaTheme, "Contexto", "Ideia", "modelo", 100L);
         idea.setUser(user);
+        idea.setCreatedAt(LocalDateTime.now());
         idea = ideaRepository.save(idea);
-        
-        when(ideaService.listarHistoricoIdeiasFiltrado(any(), eq("TECNOLOGIA"), any(), any()))
+
+        when(ideaService.listarHistoricoIdeiasFiltrado(
+                any(), eq(tecnologiaTheme.getId()), any(), any()))
                 .thenReturn(List.of(new IdeaResponse(idea)));
 
         LocalDateTime startDate = LocalDateTime.now().minusDays(1);
         LocalDateTime endDate = LocalDateTime.now().plusDays(1);
 
         mockMvc.perform(get("/api/ideas/history")
-                        .param("theme", "TECNOLOGIA")
+                        .param("theme", String.valueOf(tecnologiaTheme.getId()))
                         .param("startDate", startDate.toString())
-                        .param("endDate", endDate.toString()))
+                        .param("endDate", endDate.toString())
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].theme", is("tecnologia")));
+                .andExpect(jsonPath("$[0].theme", is("TECNOLOGIA")))
+                .andExpect(jsonPath("$[0].content", is("Ideia")))
+                .andExpect(jsonPath("$[0].userName", is("user4")));
     }
 
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldGenerateIdeaWithSkipCacheTrue() throws Exception {
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.ESTUDOS);
+        request.setTheme(estudosTheme.getId());
         request.setContext("Como aprender Spring Boot");
 
         when(ideaService.generateIdea(any(IdeaRequest.class), eq(true)))

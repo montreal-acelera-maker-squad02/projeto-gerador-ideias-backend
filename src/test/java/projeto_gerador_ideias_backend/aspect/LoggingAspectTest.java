@@ -22,6 +22,7 @@ import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.User;
 import projeto_gerador_ideias_backend.repository.ChatSessionRepository;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
+import projeto_gerador_ideias_backend.repository.ThemeRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 import projeto_gerador_ideias_backend.service.IdeaService;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -60,8 +61,11 @@ class LoggingAspectTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    private final String testUserEmail = "aspect-user@example.com";
+    @Autowired
+    private ThemeRepository themeRepository;
 
+    private final String testUserEmail = "aspect-user@example.com";
+    private Theme defaultTheme;
     @BeforeAll
     static void setUp() throws IOException {
         mockWebServer = new MockWebServer();
@@ -73,12 +77,17 @@ class LoggingAspectTest {
         chatSessionRepository.deleteAll();
         ideaRepository.deleteAll();
         userRepository.deleteAll();
+        themeRepository.deleteAll();
 
         User testUser = new User();
         testUser.setEmail(testUserEmail);
         testUser.setName("Aspect User");
         testUser.setPassword(passwordEncoder.encode("password"));
         userRepository.save(testUser);
+
+        defaultTheme = new Theme();
+        defaultTheme.setName("Estudos");
+        defaultTheme = themeRepository.save(defaultTheme);
     }
 
     @AfterAll
@@ -104,7 +113,7 @@ class LoggingAspectTest {
     @WithMockUser(username = testUserEmail)
     void shouldLogAroundGenerateIdea(CapturedOutput output) throws Exception {
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.ESTUDOS);
+        request.setTheme(defaultTheme.getId());
         request.setContext("Como aprender AOP");
 
         mockWebServer.enqueue(new MockResponse()
@@ -142,7 +151,7 @@ class LoggingAspectTest {
     void shouldLogStartButNotEndWhenExceptionIsThrown(CapturedOutput output) throws Exception {
 
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.ESTUDOS);
+        request.setTheme(defaultTheme.getId());
         request.setContext("Contexto que causa erro");
 
         mockWebServer.enqueue(new MockResponse().setResponseCode(500));
@@ -160,7 +169,7 @@ class LoggingAspectTest {
     @WithMockUser(username = testUserEmail)
     void shouldLogCorrectlyWhenModerationRejects(CapturedOutput output) throws Exception {
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.TRABALHO);
+        request.setTheme(defaultTheme.getId());
         request.setContext("Um contexto perigoso");
 
         mockWebServer.enqueue(new MockResponse()
@@ -181,7 +190,7 @@ class LoggingAspectTest {
     @WithMockUser(username = testUserEmail)
     void shouldNotLogMethodsThatDoNotMatchPointcut(CapturedOutput output) {
         User user = userRepository.findByEmail(testUserEmail).get();
-        Idea idea = new Idea(Theme.TRABALHO, "contexto", "conteudo", "modelo", 100L);
+        Idea idea = new Idea(defaultTheme, "contexto", "conteudo", "modelo", 100L);
         idea.setUser(user);
         ideaRepository.save(idea);
 
@@ -194,7 +203,7 @@ class LoggingAspectTest {
     @WithMockUser(username = testUserEmail)
     void shouldIncrementCounterAndRecordTimeOnSuccessfulIdeaGeneration() throws Exception {
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.ESTUDOS);
+        request.setTheme(defaultTheme.getId());
         request.setContext("Teste de métricas");
 
         mockWebServer.enqueue(new MockResponse()
@@ -217,7 +226,7 @@ class LoggingAspectTest {
     @WithMockUser(username = testUserEmail)
     void shouldNotIncrementCounterButRecordTimeOnModerationRejection() throws Exception {
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.TRABALHO);
+        request.setTheme(defaultTheme.getId());
         request.setContext("Contexto perigoso para métricas");
 
         mockWebServer.enqueue(new MockResponse()
@@ -256,7 +265,7 @@ class LoggingAspectTest {
     @WithMockUser(username = testUserEmail)
     void shouldRecordTimeAsFailureWhenExceptionIsThrown() throws Exception {
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.ESTUDOS);
+        request.setTheme(defaultTheme.getId());
         request.setContext("Contexto que causa erro para métricas");
 
         mockWebServer.enqueue(new MockResponse().setResponseCode(500));

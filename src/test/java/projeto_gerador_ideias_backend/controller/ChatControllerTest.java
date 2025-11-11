@@ -27,10 +27,7 @@ import projeto_gerador_ideias_backend.model.ChatSession;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.model.User;
-import projeto_gerador_ideias_backend.repository.ChatMessageRepository;
-import projeto_gerador_ideias_backend.repository.ChatSessionRepository;
-import projeto_gerador_ideias_backend.repository.IdeaRepository;
-import projeto_gerador_ideias_backend.repository.UserRepository;
+import projeto_gerador_ideias_backend.repository.*;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -71,8 +68,12 @@ class ChatControllerTest {
     @Autowired
     private projeto_gerador_ideias_backend.service.UserCacheService userCacheService;
 
+    @Autowired
+    private ThemeRepository themeRepository;
+
     private final String testUserEmail = "chat-controller@example.com";
     private User testUser;
+    private Theme tecnologiaTheme;
 
     @DynamicPropertySource
     static void setProperties(DynamicPropertyRegistry registry) {
@@ -106,6 +107,7 @@ class ChatControllerTest {
         chatSessionRepository.deleteAll();
         ideaRepository.deleteAll();
         userRepository.deleteAll();
+        themeRepository.deleteAll();
 
         testUser = new User();
         testUser.setEmail(testUserEmail);
@@ -113,6 +115,10 @@ class ChatControllerTest {
         testUser.setPassword(passwordEncoder.encode("password"));
         testUser = userRepository.save(testUser);
         userRepository.flush();
+
+        tecnologiaTheme = new Theme();
+        tecnologiaTheme.setName("TECNOLOGIA");
+        tecnologiaTheme = themeRepository.save(tecnologiaTheme);
     }
 
     @AfterEach
@@ -161,7 +167,7 @@ class ChatControllerTest {
     void shouldStartIdeaBasedChatSuccessfully() throws Exception {
         Idea idea = new Idea();
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto de teste");
         idea.setGeneratedContent("Ideia de teste");
         idea.setModelUsed("mistral");
@@ -202,7 +208,7 @@ class ChatControllerTest {
     void shouldGetUserIdeasSummarySuccessfully() throws Exception {
         Idea idea = new Idea();
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia de teste para resumo");
         idea.setModelUsed("mistral");
@@ -272,7 +278,7 @@ class ChatControllerTest {
 
         Idea idea = new Idea();
         idea.setUser(otherUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia");
         idea.setModelUsed("mistral");
@@ -666,7 +672,7 @@ class ChatControllerTest {
     void shouldCompleteFlowIdeaBasedChatEndToEnd() throws Exception {
         Idea idea = new Idea();
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto de teste para chat");
         idea.setGeneratedContent("Ideia de teste para chat baseado em ideia");
         idea.setModelUsed("mistral");
