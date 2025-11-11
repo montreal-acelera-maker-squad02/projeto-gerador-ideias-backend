@@ -226,8 +226,6 @@ public class IdeaService {
         String finalContent;
         if (generatedContent.startsWith("I cannot") || generatedContent.startsWith("Sorry, I can't") || generatedContent.isEmpty()) {
             finalContent = REJEICAO_SEGURANCA;
-        } else if (isSurprise) {
-            finalContent = String.format("%s: %s", context, generatedContent);
         } else {
             finalContent = generatedContent;
         }
