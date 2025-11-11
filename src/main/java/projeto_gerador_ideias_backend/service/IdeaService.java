@@ -10,6 +10,7 @@ import projeto_gerador_ideias_backend.dto.response.IdeaResponse;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
+import projeto_gerador_ideias_backend.repository.ThemeRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -34,7 +35,7 @@ public class IdeaService {
     private final UserRepository userRepository;
     private final OllamaCacheableService ollamaService;
     private final FailureCounterService failureCounterService;
-
+    private final ThemeRepository themeRepository;
     @Value("${ollama.model}")
     private String ollamaModel;
 
@@ -80,20 +81,25 @@ public class IdeaService {
 
     public IdeaService(IdeaRepository ideaRepository,
                        UserRepository userRepository,
-                       OllamaCacheableService ollamaService, FailureCounterService failureCounterService) {
+                       OllamaCacheableService ollamaService, FailureCounterService failureCounterService, ThemeRepository themeRepository) {
         this.ideaRepository = ideaRepository;
         this.userRepository = userRepository;
         this.ollamaService = ollamaService;
         this.failureCounterService = failureCounterService;
+        this.themeRepository = themeRepository;
     }
 
     @Transactional
     public IdeaResponse generateIdea(IdeaRequest request, boolean skipCache) {
         User currentUser = getCurrentAuthenticatedUser();
 
+        // Busca o tema pelo ID informado no request
+        Theme theme = themeRepository.findById(request.getTheme())
+                .orElseThrow(() -> new IllegalArgumentException("Tema inválido: " + request.getTheme()));
+
         if (!skipCache) {
             Optional<Idea> userSpecificIdea = ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
-                    currentUser, request.getTheme(), request.getContext()
+                    currentUser, theme, request.getContext()
             );
 
             if (userSpecificIdea.isPresent()) {
@@ -105,7 +111,7 @@ public class IdeaService {
 
         String aiGeneratedContent;
         try {
-            aiGeneratedContent = getCachedAiResponse(request.getTheme(), request.getContext(), skipCache, currentUser);
+            aiGeneratedContent = getCachedAiResponse(theme, request.getContext(), skipCache, currentUser);
             failureCounterService.resetCounter(currentUser.getEmail());
         } catch (OllamaServiceException e) {
             failureCounterService.handleFailure(currentUser.getEmail(), currentUser.getName());
@@ -115,7 +121,7 @@ public class IdeaService {
         long executionTime = System.currentTimeMillis() - startTime;
 
         Idea newIdea = new Idea(
-                request.getTheme(),
+                theme,
                 request.getContext(),
                 aiGeneratedContent,
                 ollamaModel,
@@ -126,6 +132,7 @@ public class IdeaService {
 
         return new IdeaResponse(savedIdea);
     }
+
 
     /**
      * Este método decide se deve usar o cache técnico ou ir direto para a IA.
@@ -146,8 +153,9 @@ public class IdeaService {
         }
 
         String topicoUsuario = String.format("Tema: %s, Contexto: %s",
-                theme.getValue(),
+                theme != null ? theme.getName() : "Tema desconhecido",
                 context);
+
         String generationPrompt = String.format(PROMPT_GERACAO, topicoUsuario);
         String generatedContent;
 
@@ -165,13 +173,19 @@ public class IdeaService {
         User currentUser = getCurrentAuthenticatedUser();
         long startTime = System.currentTimeMillis();
 
-        Theme randomTheme = Theme.values()[random.nextInt(Theme.values().length)];
+        List<Theme> allThemes = themeRepository.findAll();
+        if (allThemes.isEmpty()) {
+            throw new IllegalStateException("Nenhum tema disponível para gerar ideia surpresa.");
+        }
+
+        Theme randomTheme = allThemes.get(random.nextInt(allThemes.size()));
         String randomType = SURPRISE_TYPES.get(random.nextInt(SURPRISE_TYPES.size()));
-        String userContext = String.format("%s sobre %s", randomType, randomTheme.getValue());
+
+        String userContext = String.format("%s sobre %s", randomType, randomTheme.getName());
 
         String aiContent;
         try {
-            String generationPrompt = String.format(PROMPT_SURPRESA, randomType, randomTheme.getValue());
+            String generationPrompt = String.format(PROMPT_SURPRESA, randomType, randomTheme.getName());
             aiContent = ollamaService.getAiResponseBypassingCache(generationPrompt);
             failureCounterService.resetCounter(currentUser.getEmail());
         } catch (OllamaServiceException e) {
@@ -180,9 +194,8 @@ public class IdeaService {
         }
 
         String finalContent = cleanUpAiResponse(aiContent, userContext, true);
-
         long executionTime = System.currentTimeMillis() - startTime;
-        
+
         Idea newIdea = new Idea(
                 randomTheme,
                 userContext,
@@ -191,6 +204,7 @@ public class IdeaService {
                 executionTime
         );
         newIdea.setUser(currentUser);
+
         Idea savedIdea = ideaRepository.save(newIdea);
         return new IdeaResponse(savedIdea);
     }
@@ -221,55 +235,59 @@ public class IdeaService {
     }
 
     @Transactional(readOnly = true)
-    public List<IdeaResponse> listarHistoricoIdeiasFiltrado(Long userId, String theme, LocalDateTime startDate,
+    public List<IdeaResponse> listarHistoricoIdeiasFiltrado(
+            Long userId,
+            Long themeId,
+            LocalDateTime startDate,
             LocalDateTime endDate) {
 
         List<Idea> ideias;
 
+        Theme themeEntity = null;
+        if (themeId != null) {
+            themeEntity = themeRepository.findById(themeId)
+                    .orElseThrow(() -> new IllegalArgumentException("O tema com ID '" + themeId + "' é inválido."));
+        }
+
         if (userId != null) {
+            final Theme finalThemeEntity = themeEntity;
+
             Specification<Idea> spec = (root, query, criteriaBuilder) -> {
                 Predicate predicate = criteriaBuilder.conjunction();
 
+                // filtro por usuário
                 predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("user").get("id"), userId));
 
-                if (theme != null && !theme.isBlank()) {
-                    try {
-                        predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("theme"), Theme.valueOf(theme.toUpperCase())));
-                    } catch (IllegalArgumentException e) {
-                        throw new IllegalArgumentException("O tema '" + theme + "' é inválido.");
-                    }
+                // filtro por tema (caso informado)
+                if (finalThemeEntity != null) {
+                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("theme"), finalThemeEntity));
                 }
+
+                // filtro por data inicial
                 if (startDate != null) {
                     predicate = criteriaBuilder.and(predicate, criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), startDate));
                 }
+
+                // filtro por data final
                 if (endDate != null) {
                     predicate = criteriaBuilder.and(predicate, criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), endDate));
                 }
+
                 query.orderBy(criteriaBuilder.desc(root.get("createdAt")));
                 return predicate;
             };
 
             ideias = ideaRepository.findAll(spec);
-        } else {
-            boolean hasTheme = theme != null && !theme.isBlank();
+        }
+
+        else {
+            boolean hasTheme = themeEntity != null;
             boolean hasStartEnd = startDate != null && endDate != null;
 
             if (hasTheme && hasStartEnd) {
-                Theme parsedTheme;
-                try {
-                    parsedTheme = Theme.valueOf(theme.toUpperCase());
-                } catch (IllegalArgumentException e) {
-                    throw new IllegalArgumentException("O tema '" + theme + "' é inválido.");
-                }
-                ideias = ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(parsedTheme, startDate, endDate);
+                ideias = ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(themeEntity, startDate, endDate);
             } else if (hasTheme) {
-                Theme parsedTheme;
-                try {
-                    parsedTheme = Theme.valueOf(theme.toUpperCase());
-                } catch (IllegalArgumentException e) {
-                    throw new IllegalArgumentException("O tema '" + theme + "' é inválido.");
-                }
-                ideias = ideaRepository.findByThemeOrderByCreatedAtDesc(parsedTheme);
+                ideias = ideaRepository.findByThemeOrderByCreatedAtDesc(themeEntity);
             } else if (hasStartEnd) {
                 ideias = ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
             } else {

@@ -24,6 +24,7 @@ import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.model.User;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
+import projeto_gerador_ideias_backend.repository.ThemeRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 
 import java.time.LocalDateTime;
@@ -52,12 +53,21 @@ class IdeaServiceTest {
     @Mock
     private FailureCounterService failureCounterService;
 
+    @Mock
+    private ThemeRepository themeRepository;
+
+    @Mock
+    private ThemeService themeService;
+
     @InjectMocks
     private IdeaService ideaService;
 
     private User testUser;
     private Idea testIdea;
     private final String testUserEmail = "test@example.com";
+    private Theme tecnologiaTheme;
+    private Theme trabalhoTheme;
+    private Theme estudosTheme;
 
     @BeforeEach
     void setUp() {
@@ -67,7 +77,16 @@ class IdeaServiceTest {
         testUser.setName("Test User");
         testUser.setFavoriteIdeas(new HashSet<>());
 
-        testIdea = new Idea(Theme.TECNOLOGIA, "Contexto", "Conteudo Gerado", "mistral", 100L);
+        tecnologiaTheme = new Theme("TECNOLOGIA");
+        tecnologiaTheme.setId(1L);
+
+        trabalhoTheme = new Theme("TRABALHO");
+        trabalhoTheme.setId(2L);
+
+        estudosTheme = new Theme("ESTUDOS");
+        estudosTheme.setId(3L);
+
+        testIdea = new Idea(tecnologiaTheme, "Contexto", "Conteudo Gerado", "mistral", 100L);
         testIdea.setId(1L);
         testIdea.setUser(testUser);
         testIdea.setCreatedAt(LocalDateTime.now());
@@ -75,6 +94,17 @@ class IdeaServiceTest {
         ReflectionTestUtils.setField(ideaService, "ollamaModel", "mistral");
 
         SecurityContextHolder.clearContext();
+
+        when(themeService.findByID(1L)).thenReturn(tecnologiaTheme);
+        when(themeService.findByID(2L)).thenReturn(trabalhoTheme);
+        when(themeService.findByID(3L)).thenReturn(estudosTheme);
+
+        when(themeRepository.findById(1L)).thenReturn(Optional.of(tecnologiaTheme));
+        when(themeRepository.findById(2L)).thenReturn(Optional.of(trabalhoTheme));
+        when(themeRepository.findById(3L)).thenReturn(Optional.of(estudosTheme));
+
+        when(themeRepository.findAll()).thenReturn(List.of(tecnologiaTheme, trabalhoTheme, estudosTheme));
+        when(themeService.getAll()).thenReturn(List.of(tecnologiaTheme, trabalhoTheme, estudosTheme));
     }
 
     @AfterEach
@@ -100,11 +130,19 @@ class IdeaServiceTest {
     @Test
     void generateIdea_ShouldReturnFromPersonalCache_WhenCacheExistsAndSkipCacheIsFalse() {
         setupSecurityContext();
+
+        Theme tecnologiaTheme = new Theme();
+        tecnologiaTheme.setId(1L);
+        tecnologiaTheme.setName("Tecnologia");
+
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.TECNOLOGIA);
+        request.setTheme(tecnologiaTheme.getId());
         request.setContext("Contexto");
 
-        when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(testUser, request.getTheme(), request.getContext()))
+        when(themeService.findByID(tecnologiaTheme.getId())).thenReturn(tecnologiaTheme);
+
+        when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
+                testUser, tecnologiaTheme, request.getContext()))
                 .thenReturn(Optional.of(testIdea));
 
         IdeaResponse response = ideaService.generateIdea(request, false);
@@ -112,6 +150,7 @@ class IdeaServiceTest {
         assertNotNull(response);
         assertEquals(testIdea.getGeneratedContent(), response.getContent());
         assertEquals(testUser.getName(), response.getUserName());
+
         verify(ollamaService, never()).getAiResponse(anyString());
         verify(ideaRepository, never()).save(any(Idea.class));
     }
@@ -119,16 +158,22 @@ class IdeaServiceTest {
     @Test
     void generateIdea_ShouldGenerateNew_WhenPersonalCacheMisses() {
         setupSecurityContext();
+
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.TECNOLOGIA);
+        request.setTheme(tecnologiaTheme.getId());
         request.setContext("Novo Contexto");
 
         String aiResponse = "Nova ideia gerada pela IA";
 
-        when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(testUser, request.getTheme(), request.getContext()))
+        when(themeService.findByID(tecnologiaTheme.getId())).thenReturn(tecnologiaTheme);
+
+        when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
+                testUser, tecnologiaTheme, request.getContext()))
                 .thenReturn(Optional.empty());
+
         when(ollamaService.getAiResponse(contains("Analise o 'Tópico'"))).thenReturn("SEGURO");
         when(ollamaService.getAiResponse(contains("Gere uma ideia concisa"))).thenReturn(aiResponse);
+
         when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> {
             Idea savedIdea = invocation.getArgument(0);
             savedIdea.setId(2L);
@@ -149,7 +194,7 @@ class IdeaServiceTest {
     void generateIdea_ShouldGenerateNew_WhenSkipCacheIsTrue() {
         setupSecurityContext();
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.TECNOLOGIA);
+        request.setTheme(tecnologiaTheme.getId());
         request.setContext("Contexto");
 
         String aiResponse = "Nova ideia (cache ignorado)";
@@ -176,13 +221,19 @@ class IdeaServiceTest {
     @Test
     void generateIdea_ShouldReturnRejection_WhenModerationFails() {
         setupSecurityContext();
+
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.TECNOLOGIA);
+        request.setTheme(tecnologiaTheme.getId());
         request.setContext("Contexto Perigoso");
 
-        when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(testUser, request.getTheme(), request.getContext()))
+        when(themeService.findByID(tecnologiaTheme.getId())).thenReturn(tecnologiaTheme);
+
+        when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
+                testUser, tecnologiaTheme, request.getContext()))
                 .thenReturn(Optional.empty());
+
         when(ollamaService.getAiResponse(contains("Analise o 'Tópico'"))).thenReturn("PERIGOSO");
+
         when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         IdeaResponse response = ideaService.generateIdea(request, false);
@@ -208,12 +259,12 @@ class IdeaServiceTest {
     @Test
     void deveListarHistorico_ApenasComTema() {
         List<Idea> filteredIdeas = List.of(testIdea);
-        when(ideaRepository.findByThemeOrderByCreatedAtDesc(Theme.TECNOLOGIA)).thenReturn(filteredIdeas);
+        when(ideaRepository.findByThemeOrderByCreatedAtDesc(tecnologiaTheme)).thenReturn(filteredIdeas);
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, "tecnologia", null, null);
+        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, 1L, null, null);
 
         assertEquals(1, response.size());
-        verify(ideaRepository, times(1)).findByThemeOrderByCreatedAtDesc(Theme.TECNOLOGIA);
+        verify(ideaRepository, times(1)).findByThemeOrderByCreatedAtDesc(tecnologiaTheme);
     }
 
     @Test
@@ -234,12 +285,12 @@ class IdeaServiceTest {
         List<Idea> filteredIdeas = List.of(testIdea);
         LocalDateTime start = LocalDateTime.now().minusDays(1);
         LocalDateTime end = LocalDateTime.now().plusDays(1);
-        when(ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.TECNOLOGIA, start, end)).thenReturn(filteredIdeas);
+        when(ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(tecnologiaTheme, start, end)).thenReturn(filteredIdeas);
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, "tecnologia", start, end);
+        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, 1L, start, end);
 
         assertEquals(1, response.size());
-        verify(ideaRepository, times(1)).findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme.TECNOLOGIA, start, end);
+        verify(ideaRepository, times(1)).findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(tecnologiaTheme, start, end);
     }
 
     @Test
@@ -415,14 +466,14 @@ class IdeaServiceTest {
 
         Idea idea1 = new Idea();
         idea1.setId(1L);
-        idea1.setTheme(Theme.TECNOLOGIA);
+        idea1.setTheme(tecnologiaTheme);
         idea1.setGeneratedContent("Ideia 1");
         idea1.setExecutionTimeMs(1000L);
         idea1.setUser(testUser);
 
         Idea idea2 = new Idea();
         idea2.setId(2L);
-        idea2.setTheme(Theme.TRABALHO);
+        idea2.setTheme(trabalhoTheme);
         idea2.setGeneratedContent("Ideia 2");
         idea2.setExecutionTimeMs(1000L);
         idea2.setUser(testUser);
@@ -465,13 +516,19 @@ class IdeaServiceTest {
     @Test
     void generateIdea_ShouldHandleOllamaServiceException() {
         setupSecurityContext();
+
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.TECNOLOGIA);
+        request.setTheme(tecnologiaTheme.getId());
         request.setContext("Contexto");
 
-        when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(testUser, request.getTheme(), request.getContext()))
+        when(themeService.findByID(tecnologiaTheme.getId())).thenReturn(tecnologiaTheme);
+
+        when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
+                testUser, tecnologiaTheme, request.getContext()))
                 .thenReturn(Optional.empty());
-        when(ollamaService.getAiResponse(anyString())).thenThrow(new OllamaServiceException("Erro na IA"));
+
+        when(ollamaService.getAiResponse(anyString()))
+                .thenThrow(new OllamaServiceException("Erro na IA"));
 
         OllamaServiceException exception = assertThrows(OllamaServiceException.class, () -> {
             ideaService.generateIdea(request, false);
@@ -485,16 +542,22 @@ class IdeaServiceTest {
     @Test
     void generateIdea_ShouldResetFailureCounterOnSuccess() {
         setupSecurityContext();
+
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(Theme.TECNOLOGIA);
+        request.setTheme(tecnologiaTheme.getId());
         request.setContext("Novo Contexto");
 
         String aiResponse = "Nova ideia gerada pela IA";
 
-        when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(testUser, request.getTheme(), request.getContext()))
+        when(themeService.findByID(tecnologiaTheme.getId())).thenReturn(tecnologiaTheme);
+
+        when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
+                testUser, tecnologiaTheme, request.getContext()))
                 .thenReturn(Optional.empty());
+
         when(ollamaService.getAiResponse(contains("Analise o 'Tópico'"))).thenReturn("SEGURO");
         when(ollamaService.getAiResponse(contains("Gere uma ideia concisa"))).thenReturn(aiResponse);
+
         when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> {
             Idea savedIdea = invocation.getArgument(0);
             savedIdea.setId(2L);
@@ -506,6 +569,7 @@ class IdeaServiceTest {
 
         verify(failureCounterService).resetCounter(testUser.getEmail());
     }
+
 
     @Test
     void generateSurpriseIdea_ShouldHandleOllamaServiceException() {
@@ -590,7 +654,7 @@ class IdeaServiceTest {
         when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
                 .thenReturn(List.of(testIdea));
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), "tecnologia", start, end);
+        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), 1L, start, end);
 
         assertEquals(1, response.size());
         verify(ideaRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class));
@@ -598,11 +662,13 @@ class IdeaServiceTest {
 
     @Test
     void listarHistoricoIdeiasFiltrado_ShouldThrowException_WhenInvalidTheme() {
+        when(themeRepository.findById(99L)).thenReturn(Optional.empty());
+
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            ideaService.listarHistoricoIdeiasFiltrado(null, "tema_invalido", null, null);
+            ideaService.listarHistoricoIdeiasFiltrado(null, 99L, null, null);
         });
 
-        assertTrue(exception.getMessage().contains("tema 'tema_invalido' é inválido"));
+        assertTrue(exception.getMessage().contains("O tema com ID '99' é inválido."));
     }
 
     @Test
@@ -638,10 +704,10 @@ class IdeaServiceTest {
                 });
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), "tema_invalido", null, null);
+            ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), 99L, null, null);
         });
 
-        assertTrue(exception.getMessage().contains("tema 'tema_invalido' é inválido"));
+        assertTrue(exception.getMessage().contains("O tema com ID '99' é inválido."));
     }
 
     @Test
@@ -661,7 +727,7 @@ class IdeaServiceTest {
         when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
                 .thenReturn(List.of(testIdea));
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), "tecnologia", null, null);
+        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), 1L, null, null);
 
         assertEquals(1, response.size());
         verify(ideaRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class));

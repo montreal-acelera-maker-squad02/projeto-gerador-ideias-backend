@@ -13,7 +13,7 @@ import java.util.Optional;
 
 @Repository
 public interface IdeaRepository extends JpaRepository<Idea, Long>, JpaSpecificationExecutor<Idea> {
-    Optional<Idea> findByTheme(String theme);
+
     List<Idea> findAllByOrderByCreatedAtDesc();
 
     List<Idea> findByThemeOrderByCreatedAtDesc(Theme theme);

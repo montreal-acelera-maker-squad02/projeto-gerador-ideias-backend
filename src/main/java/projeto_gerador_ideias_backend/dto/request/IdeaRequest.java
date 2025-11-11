@@ -13,7 +13,7 @@ public class IdeaRequest {
 
     @NotNull(message = "O tema não pode ser nulo")
     @Schema(description = "O tema principal da ideia", example = "tecnologia")
-    private Theme theme;
+    private Long theme;
 
     @NotBlank(message = "O contexto não pode estar em branco")
     @Size(max = 50, message = "O contexto não pode exceder 50 caracteres")

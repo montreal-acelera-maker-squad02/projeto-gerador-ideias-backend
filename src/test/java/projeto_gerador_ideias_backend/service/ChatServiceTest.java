@@ -78,6 +78,8 @@ class ChatServiceTest {
 
     private User testUser;
     private final String testUserEmail = "chat-service@example.com";
+    private Theme tecnologiaTheme;
+    private Theme trabalhoTheme;
 
     @BeforeEach
     void setUpEach() throws IOException {
@@ -88,6 +90,9 @@ class ChatServiceTest {
         testUser.setId(1L);
         testUser.setEmail(testUserEmail);
         testUser.setName("Chat Service User");
+
+        tecnologiaTheme = new Theme("TECNOLOGIA");
+        trabalhoTheme = new Theme("TRABALHO");
 
         lenient().when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
         lenient().when(userCacheService.getCurrentAuthenticatedUser()).thenReturn(testUser);
@@ -189,7 +194,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto de teste");
         idea.setGeneratedContent("Ideia de teste");
 
@@ -233,7 +238,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(otherUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia");
 
@@ -332,7 +337,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia de teste para resumo completo");
         idea.setCreatedAt(LocalDateTime.now());
@@ -463,7 +468,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia");
 
@@ -489,7 +494,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia");
 
@@ -515,7 +520,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia");
 
@@ -547,7 +552,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia completa");
 
@@ -637,7 +642,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia");
 
@@ -753,7 +758,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia completa para resumo");
 
@@ -793,7 +798,7 @@ class ChatServiceTest {
         Idea idea1 = new Idea();
         idea1.setId(1L);
         idea1.setUser(testUser);
-        idea1.setTheme(Theme.TECNOLOGIA);
+        idea1.setTheme(tecnologiaTheme);
         idea1.setContext("Contexto 1");
         idea1.setGeneratedContent("Ideia completa com várias palavras para resumo");
         idea1.setCreatedAt(LocalDateTime.now());
@@ -801,7 +806,7 @@ class ChatServiceTest {
         Idea idea2 = new Idea();
         idea2.setId(2L);
         idea2.setUser(testUser);
-        idea2.setTheme(Theme.TRABALHO);
+        idea2.setTheme(trabalhoTheme);
         idea2.setContext("Contexto 2");
         idea2.setGeneratedContent("Outra ideia");
         idea2.setCreatedAt(LocalDateTime.now());
@@ -1033,7 +1038,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
 
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.IDEA_BASED, idea);
         session.setId(1L);
@@ -1222,7 +1227,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto da ideia");
         idea.setGeneratedContent("Conteúdo gerado da ideia");
 
@@ -1252,7 +1257,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto da ideia");
         idea.setGeneratedContent("Conteúdo gerado da ideia");
 
@@ -1497,7 +1502,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia curta");
         idea.setCreatedAt(LocalDateTime.now());
@@ -1516,7 +1521,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Esta é uma ideia muito longa que contém várias palavras e precisa ser resumida para exibição na lista de ideias do usuário. " +
                 "O resumo deve capturar a essência da ideia de forma concisa.");
@@ -1538,7 +1543,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("");
         idea.setCreatedAt(LocalDateTime.now());
@@ -1628,7 +1633,7 @@ class ChatServiceTest {
         Idea idea = new Idea();
         idea.setId(1L);
         idea.setUser(testUser);
-        idea.setTheme(Theme.TECNOLOGIA);
+        idea.setTheme(tecnologiaTheme);
         idea.setContext("Contexto");
         idea.setGeneratedContent("Ideia completa para resumo");
 

@@ -36,7 +36,7 @@ public class IdeaResponse implements Serializable {
 
     public IdeaResponse(Idea savedIdea) {
         this.id = savedIdea.getId();
-        this.theme = savedIdea.getTheme().getValue();
+        this.theme = savedIdea.getTheme().getName();
         this.content = savedIdea.getGeneratedContent();
         this.createdAt = savedIdea.getCreatedAt();
         this.modelUsed = savedIdea.getModelUsed();
@@ -51,7 +51,7 @@ public class IdeaResponse implements Serializable {
 
     public IdeaResponse(Idea savedIdea, projeto_gerador_ideias_backend.model.User user) {
         this.id = savedIdea.getId();
-        this.theme = savedIdea.getTheme().getValue();
+        this.theme = savedIdea.getTheme().getName();
         this.content = savedIdea.getGeneratedContent();
         this.createdAt = savedIdea.getCreatedAt();
         this.modelUsed = savedIdea.getModelUsed();
