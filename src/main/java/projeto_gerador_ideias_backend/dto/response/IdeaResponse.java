@@ -21,6 +21,9 @@ public class IdeaResponse implements Serializable {
     @Schema(description = "O tema principal da ideia", example = "tecnologia")
     private String theme;
 
+    @Schema(description = "O contexto fornecido pelo usuário", example = "Ideia de slogan")
+    private String context;
+
     @Schema(description = "O texto da ideia gerado pela IA", example = "Inovação em todos os dias - Vive a revolução tecnológica")
     private String content;
 
@@ -37,6 +40,7 @@ public class IdeaResponse implements Serializable {
     public IdeaResponse(Idea savedIdea) {
         this.id = savedIdea.getId();
         this.theme = savedIdea.getTheme().getName();
+        this.context = savedIdea.getContext();
         this.content = savedIdea.getGeneratedContent();
         this.createdAt = savedIdea.getCreatedAt();
         this.modelUsed = savedIdea.getModelUsed();
@@ -52,6 +56,7 @@ public class IdeaResponse implements Serializable {
     public IdeaResponse(Idea savedIdea, projeto_gerador_ideias_backend.model.User user) {
         this.id = savedIdea.getId();
         this.theme = savedIdea.getTheme().getName();
+        this.context = savedIdea.getContext();
         this.content = savedIdea.getGeneratedContent();
         this.createdAt = savedIdea.getCreatedAt();
         this.modelUsed = savedIdea.getModelUsed();

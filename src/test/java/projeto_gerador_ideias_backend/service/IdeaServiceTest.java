@@ -334,8 +334,8 @@ class IdeaServiceTest {
         IdeaResponse response = ideaService.generateSurpriseIdea();
 
         assertNotNull(response);
-        assertTrue(response.getContent().contains(aiResponse));
-        assertTrue(response.getContent().contains(": "));
+        assertEquals(aiResponse, response.getContent());
+        assertNotNull(response.getContext());
         verify(ollamaService, times(1)).getAiResponseBypassingCache(anyString());
         verify(ideaRepository, times(1)).save(any(Idea.class));
     }
@@ -457,7 +457,7 @@ class IdeaServiceTest {
         String input = "Ideia surpresa gerada";
         String context = "Tipo: Tema";
         String cleaned = (String) ReflectionTestUtils.invokeMethod(ideaService, "cleanUpAiResponse", input, context, true);
-        assertEquals("Tipo: Tema: Ideia surpresa gerada", cleaned);
+        assertEquals("Ideia surpresa gerada", cleaned);
     }
 
     @Test
@@ -686,7 +686,7 @@ class IdeaServiceTest {
                     jakarta.persistence.criteria.Path<Object> createdAtPath = mock(jakarta.persistence.criteria.Path.class);
                     jakarta.persistence.criteria.Predicate predicate = mock(jakarta.persistence.criteria.Predicate.class);
                     jakarta.persistence.criteria.Order order = mock(jakarta.persistence.criteria.Order.class);
-                    
+
                     when(root.get("user")).thenReturn(userPath);
                     when(userPath.get("id")).thenReturn(idPath);
                     when(root.get("theme")).thenReturn(themePath);
@@ -698,7 +698,7 @@ class IdeaServiceTest {
                     when(cb.and(any(), any())).thenReturn(predicate);
                     when(cb.desc(any())).thenReturn(order);
                     when(query.getOrderList()).thenReturn(Collections.emptyList());
-                    
+
                     spec.toPredicate(root, query, cb);
                     return Collections.emptyList();
                 });
@@ -815,7 +815,7 @@ class IdeaServiceTest {
                 true
         );
 
-        assertEquals("um nome de startup sobre tecnologia: Ideia surpresa", cleaned);
+        assertEquals("Ideia surpresa", cleaned);
     }
 
     @Test
