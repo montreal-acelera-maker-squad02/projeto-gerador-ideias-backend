@@ -67,6 +67,9 @@ public class Idea {
     @JoinColumn(name = "theme_id", nullable = false)
     private Theme theme;
 
+    @Column(length = 200)
+    private String summary;
+
     public Idea(Theme theme, String context, String generatedContent, String modelUsed, Long executionTimeMs) {
         this.theme = theme;
         this.context = context;
