@@ -59,6 +59,9 @@ public class ChatMessage {
     @Column(nullable = true)
     private Integer tokensRemaining;
 
+    @Column(name = "ip_address", length = 45)
+    private String ipAddress;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

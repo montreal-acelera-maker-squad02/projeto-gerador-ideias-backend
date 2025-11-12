@@ -16,6 +16,8 @@ import projeto_gerador_ideias_backend.dto.response.ChatMessageResponse;
 import projeto_gerador_ideias_backend.dto.response.ChatSessionResponse;
 import projeto_gerador_ideias_backend.dto.response.IdeaSummaryResponse;
 import projeto_gerador_ideias_backend.dto.response.Interaction;
+import projeto_gerador_ideias_backend.dto.response.AdminInteraction;
+import projeto_gerador_ideias_backend.dto.response.AdminChatLogsResponse;
 import projeto_gerador_ideias_backend.dto.response.LogsSummary;
 import projeto_gerador_ideias_backend.dto.response.PaginationInfo;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
@@ -55,6 +57,8 @@ public class ChatService {
     private final ContentModerationService contentModerationService;
     private final UserCacheService userCacheService;
     private final ChatMetricsService chatMetricsService;
+    private final IdeaSummaryService ideaSummaryService;
+    private final IpEncryptionService ipEncryptionService;
     @Lazy
     private ChatService self;
 
@@ -69,7 +73,9 @@ public class ChatService {
             ChatLimitValidator chatLimitValidator,
             ContentModerationService contentModerationService,
             UserCacheService userCacheService,
-            ChatMetricsService chatMetricsService) {
+            ChatMetricsService chatMetricsService,
+            IdeaSummaryService ideaSummaryService,
+            IpEncryptionService ipEncryptionService) {
         this.chatSessionRepository = chatSessionRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.ideaRepository = ideaRepository;
@@ -81,6 +87,8 @@ public class ChatService {
         this.contentModerationService = contentModerationService;
         this.userCacheService = userCacheService;
         this.chatMetricsService = chatMetricsService;
+        this.ideaSummaryService = ideaSummaryService;
+        this.ipEncryptionService = ipEncryptionService;
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -210,7 +218,7 @@ public class ChatService {
     }
 
     @Transactional
-    public ChatMessageResponse sendMessage(Long sessionId, ChatMessageRequest request) {
+    public ChatMessageResponse sendMessage(Long sessionId, ChatMessageRequest request, String clientIp) {
         long startTime = System.currentTimeMillis();
         String chatType = "UNKNOWN";
         
@@ -220,7 +228,7 @@ public class ChatService {
             chatType = preparation.isFreeChat() ? "FREE" : "IDEA_BASED";
             
             OllamaResponseResult ollamaResult = callOllamaAndValidate(sessionId, preparation);
-            ChatMessageResponse response = transactionalService.saveMessageAndResponse(sessionId, preparation, ollamaResult.getResponse(), ollamaResult.getTokens());
+            ChatMessageResponse response = transactionalService.saveMessageAndResponse(sessionId, preparation, ollamaResult.getResponse(), ollamaResult.getTokens(), clientIp);
             
             recordSuccessMetrics(startTime, chatType, preparation.getMessageTokens(), ollamaResult.getTokens());
             return response;
@@ -399,7 +407,8 @@ public class ChatService {
             Long sessionId, 
             MessagePreparationResult preparation, 
             String aiResponse, 
-            int responseTokens) {
+            int responseTokens,
+            String clientIp) {
         
         ChatSession session;
         try {
@@ -425,6 +434,9 @@ public class ChatService {
                 preparation.getUserMessage(), 
                 preparation.getMessageTokens()
             );
+            String encryptedIp = ipEncryptionService.encryptIp(clientIp);
+            userMessageEntity.setIpAddress(encryptedIp);
+            log.debug("IP capturado: {}, IP criptografado: {}", clientIp, encryptedIp != null ? "***" : "null");
             chatMessageRepository.save(userMessageEntity);
             chatMessageRepository.flush();
 
@@ -726,20 +738,44 @@ public class ChatService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<IdeaSummaryResponse> getUserIdeasSummary() {
         User currentUser = getCurrentAuthenticatedUser();
-        List<Idea> ideas = ideaRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId());
+        List<Object[]> results = ideaRepository.findIdeasSummaryOnlyByUserId(currentUser.getId());
         
-        return ideas.stream().map(idea -> {
-            String summary = summarizeIdeaSimple(idea.getGeneratedContent());
-            return new IdeaSummaryResponse(
-                    idea.getId(),
+        List<IdeaSummaryResponse> responses = new ArrayList<>();
+        List<Idea> ideasToUpdate = new ArrayList<>();
+        
+        for (Object[] row : results) {
+            Long id = ((Number) row[0]).longValue();
+            String summary = row[1] != null ? (String) row[1] : "";
+            String themeName = row[2] != null ? (String) row[2] : "";
+            LocalDateTime createdAt = (LocalDateTime) row[3];
+            
+            if (summary == null || summary.isBlank()) {
+                Idea idea = ideaRepository.findById(id).orElse(null);
+                if (idea != null) {
+                    summary = ideaSummaryService.summarizeIdeaSimple(idea.getGeneratedContent());
+                    idea.setSummary(summary);
+                    ideasToUpdate.add(idea);
+                } else {
+                    summary = "Sem resumo disponível";
+                }
+            }
+            
+            responses.add(new IdeaSummaryResponse(
+                    id,
                     summary,
-                    idea.getTheme().getName(),
-                    idea.getCreatedAt().toString()
-            );
-        }).toList();
+                    themeName,
+                    createdAt.toString()
+            ));
+        }
+        
+        if (!ideasToUpdate.isEmpty()) {
+            ideaRepository.saveAll(ideasToUpdate);
+        }
+        
+        return responses;
     }
 
     @Transactional(readOnly = true)
@@ -888,7 +924,9 @@ public class ChatService {
     private Interaction createInteraction(long interactionId, ChatMessage userMessage, ChatSession session, ChatMessage assistantMessage) {
         String userContent = userMessage.getContent();
         int tokensInput = userMessage.getTokensUsed();
-        String timestamp = userMessage.getCreatedAt().toString();
+        String timestamp = userMessage.getCreatedAt() != null 
+            ? userMessage.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            : LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
         
         if (assistantMessage != null) {
             return createInteractionWithAssistant(interactionId, userContent, tokensInput, timestamp, session, userMessage, assistantMessage);
@@ -1001,114 +1039,13 @@ public class ChatService {
         }
         
         String trimmed = content.trim();
+        String[] words = trimmed.split("\\s+", 11);
         
-        String[] words = trimmed.split("\\s+");
         if (words.length <= 10) {
             return trimmed;
         }
         
-        try {
-            String systemPrompt = """
-                Você é um assistente especializado em criar títulos curtos, completos e descritivos.
-                Crie títulos concisos que capturem a essência do conteúdo em português do Brasil.
-                O título deve ser uma frase completa e fazer sentido, nunca cortado no meio.
-                """;
-            
-            String userPrompt = String.format("""
-                Crie um título curto e completo (máximo 5 palavras) para esta ideia: %s
-                
-                REGRAS OBRIGATÓRIAS:
-                - Título deve ter EXATAMENTE 5 palavras ou menos
-                - O título deve ser uma frase COMPLETA que faz sentido
-                - NUNCA corte no meio de uma palavra ou frase
-                - Seja direto e descritivo
-                - Responda APENAS o título, sem explicações, saudações, formatação ou pontuação final
-                - Não use aspas, dois pontos ou pontuação desnecessária
-                - O título deve fazer sentido completo, não pode terminar com preposições ou artigos soltos
-                """, trimmed);
-            
-            String generatedTitle = ollamaIntegrationService.callOllamaWithSystemPrompt(systemPrompt, userPrompt);
-            
-            String cleanedTitle = generatedTitle.trim();
-            if (cleanedTitle.startsWith("\"") || cleanedTitle.startsWith("'")) {
-                cleanedTitle = cleanedTitle.substring(1);
-            }
-            if (cleanedTitle.endsWith("\"") || cleanedTitle.endsWith("'")) {
-                cleanedTitle = cleanedTitle.substring(0, cleanedTitle.length() - 1);
-            }
-            if (cleanedTitle.startsWith("Título") || cleanedTitle.startsWith("Titulo")) {
-                int colonIndex = cleanedTitle.indexOf(':');
-                if (colonIndex != -1) {
-                    cleanedTitle = cleanedTitle.substring(colonIndex + 1).trim();
-                }
-            }
-            cleanedTitle = removeTrailingPunctuationFromString(cleanedTitle);
-            
-            String[] titleWords = cleanedTitle.split("\\s+");
-            if (titleWords.length > 5) {
-                cleanedTitle = cleanTitleToMaxWords(cleanedTitle, 5);
-            }
-            
-            cleanedTitle = ensureTitleCompleteness(cleanedTitle);
-            
-            if (cleanedTitle != null && !cleanedTitle.isBlank() && cleanedTitle.length() > 3) {
-                log.debug("Generated title using Ollama", Map.of(
-                    "originalLength", trimmed.length(),
-                    "titleLength", cleanedTitle.length(),
-                    "title", cleanedTitle
-                ));
-                return cleanedTitle;
-            }
-        } catch (Exception e) {
-            log.warn("Failed to generate title with Ollama, using fallback", Map.of(
-                "error", e.getMessage()
-            ), e);
-        }
-        
         return summarizeIdeaSimpleFallback(trimmed, words);
-    }
-    
-    private String cleanTitleToMaxWords(String title, int maxWords) {
-        String[] words = title.split("\\s+");
-        if (words.length <= maxWords) {
-            return title;
-        }
-        
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < maxWords; i++) {
-            if (i > 0) {
-                result.append(" ");
-            }
-            result.append(words[i]);
-        }
-        return result.toString().trim();
-    }
-    
-    private String ensureTitleCompleteness(String title) {
-        if (title == null || title.isBlank()) {
-            return title;
-        }
-        
-        String[] words = title.split("\\s+");
-        if (words.length == 0) {
-            return title;
-        }
-        
-        String[] incompleteWords = {"e", "a", "o", "os", "as", "de", "do", "da", "dos", "das",
-                                    "em", "no", "na", "nos", "nas", "com", "para", "por", "que",
-                                    "mais", "menos", "maior", "menor", "melhor", "pior"};
-        
-        String lastWord = removeTrailingPunctuationFromString(words[words.length - 1].toLowerCase());
-        
-        for (String incomplete : incompleteWords) {
-            if (lastWord.equals(incomplete) && words.length > 1) {
-                String[] newWords = new String[words.length - 1];
-                System.arraycopy(words, 0, newWords, 0, words.length - 1);
-                return String.join(" ", newWords).trim();
-            }
-        }
-        
-        return title;
     }
     
     private String summarizeIdeaSimpleFallback(String trimmed, String[] words) {
@@ -1124,14 +1061,13 @@ public class ChatService {
             return result;
         }
         
-        result = buildDefaultSummary(words, maxWords);
-        result = removeTrailingPunctuation(result);
-        String[] resultWords = result.split("\\s+");
-        resultWords = removeIncompleteWords(resultWords, maxWords);
-        resultWords = limitWords(resultWords, maxWords);
+        int targetWords = Math.min(maxWords, words.length);
+        String[] selectedWords = Arrays.copyOf(words, targetWords);
+        selectedWords = removeIncompleteWords(selectedWords, maxWords);
         
-        if (resultWords.length > 0) {
-            return joinWords(resultWords);
+        if (selectedWords.length > 0) {
+            String summary = joinWords(selectedWords);
+            return removeTrailingPunctuation(summary);
         }
         
         return buildFallbackSummary(words, maxWords, trimmed);
@@ -1311,7 +1247,11 @@ public class ChatService {
         if (session.getIdea() == null) {
             return null;
         }
-        return summarizeIdeaSimple(session.getIdea().getGeneratedContent());
+        String summary = session.getIdea().getSummary();
+        if (summary == null || summary.isBlank()) {
+            summary = ideaSummaryService.summarizeIdeaSimple(session.getIdea().getGeneratedContent());
+        }
+        return summary;
     }
 
     private List<ChatMessageResponse> buildMessageResponses(List<ChatMessage> messages) {
@@ -1466,8 +1406,209 @@ public class ChatService {
         }
     }
 
-    private User getCurrentAuthenticatedUser() {
+    public User getCurrentAuthenticatedUser() {
         return userCacheService.getCurrentAuthenticatedUser();
+    }
+    
+    /**
+     * Verifica se o usuário atual é admin (por role)
+     */
+    private boolean isAdmin(User user) {
+        return user.getRole() != null && user.getRole() == projeto_gerador_ideias_backend.model.Role.ADMIN;
+    }
+    
+    /**
+     * Obtém logs de chat para admin (todos os usuários ou de um usuário específico)
+     */
+    @Transactional(readOnly = true)
+    public AdminChatLogsResponse getAdminChatLogs(String dateStr, Long userId, Integer page, Integer size) {
+        User currentUser = getCurrentAuthenticatedUser();
+        
+        if (!isAdmin(currentUser)) {
+            throw new ChatPermissionException("Acesso negado. Apenas administradores podem acessar este endpoint.");
+        }
+        
+        LocalDate targetDate;
+        if (dateStr != null && !dateStr.isBlank()) {
+            try {
+                targetDate = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE);
+            } catch (java.time.format.DateTimeParseException e) {
+                throw new ValidationException("Formato de data inválido. Use YYYY-MM-DD (exemplo: 2024-01-15).");
+            }
+        } else {
+            targetDate = LocalDate.now();
+        }
+        
+        int pageNumber = (page != null && page > 0) ? page - 1 : 0;
+        int pageSize = (size != null && size > 0) ? Math.min(size, 100) : 10;
+        
+        LocalDateTime startDate = targetDate.atStartOfDay();
+        LocalDateTime endDate = targetDate.plusDays(1).atStartOfDay();
+        
+        List<ChatMessage> allMessages = chatMessageRepository.findByUserIdAndDateRangeAdmin(
+            userId, startDate, endDate);
+        
+        List<AdminInteraction> allInteractions = transformMessagesToAdminInteractions(allMessages);
+        
+        int totalInteractions = allInteractions.size();
+        int totalPages = (int) Math.ceil((double) totalInteractions / pageSize);
+        
+        int startIndex = pageNumber * pageSize;
+        int endIndex = Math.min(startIndex + pageSize, totalInteractions);
+        
+        List<AdminInteraction> paginatedInteractions = new ArrayList<>();
+        if (startIndex < totalInteractions) {
+            paginatedInteractions = allInteractions.subList(startIndex, endIndex);
+        }
+        
+        List<Interaction> interactionsForSummary = allInteractions.stream()
+            .map(ai -> new Interaction(
+                ai.getInteractionId(),
+                ai.getTimestamp(),
+                ai.getSessionId(),
+                ai.getChatType(),
+                ai.getIdeaId(),
+                ai.getUserMessage(),
+                ai.getAssistantMessage(),
+                ai.getMetrics()
+            ))
+            .collect(java.util.stream.Collectors.toList());
+        
+        LogsSummary summary = calculateSummary(interactionsForSummary);
+        
+        PaginationInfo pagination = new PaginationInfo(
+                (long) totalInteractions,
+                totalPages,
+                pageNumber + 1,
+                pageNumber + 1 < totalPages,
+                pageNumber > 0
+        );
+        
+        return new AdminChatLogsResponse(
+                targetDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                userId,
+                summary,
+                paginatedInteractions,
+                pagination
+        );
+    }
+    
+    private List<AdminInteraction> transformMessagesToAdminInteractions(List<ChatMessage> messages) {
+        List<AdminInteraction> interactions = new ArrayList<>();
+        long interactionId = 1;
+        
+        int i = 0;
+        while (i < messages.size()) {
+            ChatMessage message = messages.get(i);
+            
+            if (!isValidUserMessage(message)) {
+                i++;
+                continue;
+            }
+            
+            ChatSession session = message.getSession();
+            User user = session.getUser();
+            ChatMessage assistantMessage = findMatchingAssistantMessage(messages, i, session);
+            
+            AdminInteraction interaction = createAdminInteraction(
+                interactionId++,
+                message,
+                session,
+                user,
+                assistantMessage
+            );
+            
+            interactions.add(interaction);
+            
+            i++;
+            if (assistantMessage != null) {
+                i++;
+            }
+        }
+        
+        return interactions;
+    }
+    
+    private AdminInteraction createAdminInteraction(long interactionId, ChatMessage userMessage, 
+                                                   ChatSession session, User user, ChatMessage assistantMessage) {
+        String userContent = userMessage.getContent();
+        int tokensInput = userMessage.getTokensUsed();
+        String timestamp = userMessage.getCreatedAt() != null 
+            ? userMessage.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            : LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        
+        if (assistantMessage != null) {
+            return createAdminInteractionWithAssistant(interactionId, userContent, tokensInput, timestamp, 
+                                                     session, user, userMessage, assistantMessage);
+        } else {
+            return createAdminInteractionWithoutAssistant(interactionId, userMessage, tokensInput, timestamp, 
+                                                        session, user);
+        }
+    }
+    
+    private AdminInteraction createAdminInteractionWithAssistant(long interactionId, String userMessageContent, 
+                                                                 int tokensInput, String timestamp, ChatSession session,
+                                                                 User user, ChatMessage userMessage, ChatMessage assistantMessage) {
+        String assistantContent = assistantMessage.getContent();
+        int tokensOutput = assistantMessage.getTokensUsed();
+        int totalTokens = tokensInput + tokensOutput;
+        Long responseTimeMs = calculateResponseTime(userMessage, assistantMessage);
+        
+        InteractionMetrics metrics = new InteractionMetrics(
+            tokensInput,
+            tokensOutput,
+            totalTokens,
+            responseTimeMs
+        );
+        
+        String userIp = userMessage.getIpAddress() != null 
+            ? ipEncryptionService.decryptIp(userMessage.getIpAddress())
+            : "unknown";
+        
+        return new AdminInteraction(
+            interactionId,
+            timestamp,
+            session.getId(),
+            session.getType().name(),
+            session.getIdea() != null ? session.getIdea().getId() : null,
+            user.getId(),
+            user.getName(),
+            user.getEmail(),
+            userIp,
+            userMessageContent,
+            assistantContent,
+            metrics
+        );
+    }
+    
+    private AdminInteraction createAdminInteractionWithoutAssistant(long interactionId, ChatMessage userMessageEntity, 
+                                                                   int tokensInput, String timestamp, 
+                                                                   ChatSession session, User user) {
+        InteractionMetrics metrics = new InteractionMetrics(
+            tokensInput,
+            0,
+            tokensInput,
+            null
+        );
+        
+        String userIp = userMessageEntity.getIpAddress() != null 
+            ? ipEncryptionService.decryptIp(userMessageEntity.getIpAddress())
+            : "unknown";
+        
+        return new AdminInteraction(
+            interactionId,
+            timestamp,
+            session.getId(),
+            session.getType().name(),
+            session.getIdea() != null ? session.getIdea().getId() : null,
+            user.getId(),
+            user.getName(),
+            user.getEmail(),
+            userIp,
+            userMessageEntity.getContent(),
+            null,
+            metrics
+        );
     }
     
     private String removeModerationTags(String content) {
