@@ -20,10 +20,11 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado: " + email));
         
         boolean isEnabled = user.getEnabled() != null && user.getEnabled();
+        String role = user.getRole() != null ? user.getRole().name() : "USER";
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getEmail())
                 .password(user.getPassword())
-                .authorities("ROLE_USER")
+                .authorities("ROLE_" + role)
                 .disabled(!isEnabled)
                 .build();
     }

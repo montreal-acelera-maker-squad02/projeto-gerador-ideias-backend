@@ -421,6 +421,87 @@ class ChatControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "admin@criaitor.com")
+    void shouldGetAdminChatLogsSuccessfully() throws Exception {
+
+        User adminUser = new User();
+        adminUser.setEmail("admin@criaitor.com");
+        adminUser.setName("Admin User");
+        adminUser.setPassword(passwordEncoder.encode("password"));
+        adminUser.setEnabled(true);
+        adminUser.setRole(projeto_gerador_ideias_backend.model.Role.ADMIN);
+        adminUser = userRepository.save(adminUser);
+        
+        User regularUser = new User();
+        regularUser.setEmail("regular@example.com");
+        regularUser.setName("Regular User");
+        regularUser.setPassword(passwordEncoder.encode("password"));
+        regularUser.setEnabled(true);
+        regularUser = userRepository.save(regularUser);
+        
+        ChatSession session = new ChatSession(regularUser, ChatSession.ChatType.FREE, null);
+        session.setLastResetAt(LocalDateTime.now());
+        session = chatSessionRepository.save(session);
+        
+        String today = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
+        
+        mockMvc.perform(get("/api/chat/admin/logs")
+                        .param("date", today))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.selectedDate").exists())
+                .andExpect(jsonPath("$.interactions").isArray());
+    }
+
+    @Test
+    @WithMockUser(username = "admin@criaitor.com")
+    void shouldGetAdminChatLogsFilteredByUserId() throws Exception {
+        User adminUser = new User();
+        adminUser.setEmail("admin@criaitor.com");
+        adminUser.setName("Admin User");
+        adminUser.setPassword(passwordEncoder.encode("password"));
+        adminUser.setEnabled(true);
+        adminUser.setRole(projeto_gerador_ideias_backend.model.Role.ADMIN);
+        adminUser = userRepository.save(adminUser);
+        
+        User regularUser = new User();
+        regularUser.setEmail("regular@example.com");
+        regularUser.setName("Regular User");
+        regularUser.setPassword(passwordEncoder.encode("password"));
+        regularUser.setEnabled(true);
+        regularUser = userRepository.save(regularUser);
+        
+        String today = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
+        
+        mockMvc.perform(get("/api/chat/admin/logs")
+                        .param("date", today)
+                        .param("userId", regularUser.getId().toString()))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.filteredUserId").value(regularUser.getId()))
+                .andExpect(jsonPath("$.interactions").isArray());
+    }
+
+    @Test
+    @WithMockUser(username = "regular@example.com")
+    void shouldDenyAccessToAdminEndpointForNonAdmin() throws Exception {
+
+        User regularUser = new User();
+        regularUser.setEmail("regular@example.com");
+        regularUser.setName("Regular User");
+        regularUser.setPassword(passwordEncoder.encode("password"));
+        regularUser.setEnabled(true);
+        regularUser = userRepository.save(regularUser);
+        
+        String today = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
+        
+        mockMvc.perform(get("/api/chat/admin/logs")
+                        .param("date", today))
+                .andDo(print())
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @WithMockUser(username = "chat-controller@example.com")
     void shouldGetOlderMessages() throws Exception {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);

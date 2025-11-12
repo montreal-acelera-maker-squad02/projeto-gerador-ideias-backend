@@ -103,7 +103,7 @@ class PromptBuilderServiceTest {
         String prompt = promptBuilderService.buildSystemPromptForIdeaChat(session);
 
         assertNotNull(prompt);
-        assertEquals("Você é um assistente útil e criativo. Responda de forma concisa e em português do Brasil.", prompt);
+        assertEquals("Você é Aiko, um assistente útil e criativo. Responda de forma concisa e em português do Brasil.", prompt);
         verify(promptSanitizer, never()).escapeForFormat(anyString());
     }
 
@@ -115,7 +115,7 @@ class PromptBuilderServiceTest {
         String prompt = promptBuilderService.buildSystemPromptForIdeaChat(session);
 
         assertNotNull(prompt);
-        assertEquals("Você é um assistente útil e criativo. Responda de forma concisa e em português do Brasil.", prompt);
+        assertEquals("Você é Aiko, um assistente útil e criativo. Responda de forma concisa e em português do Brasil.", prompt);
         verify(session, never()).getCachedIdeaContent();
         verify(session, never()).getCachedIdeaContext();
         verify(session, never()).getIdea();

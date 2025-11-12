@@ -8,11 +8,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import projeto_gerador_ideias_backend.dto.request.ChatMessageRequest;
 import projeto_gerador_ideias_backend.dto.request.StartChatRequest;
 import projeto_gerador_ideias_backend.dto.response.ChatLogsResponse;
+import projeto_gerador_ideias_backend.dto.response.AdminChatLogsResponse;
 import projeto_gerador_ideias_backend.dto.response.ChatMessageResponse;
 import projeto_gerador_ideias_backend.dto.response.ChatSessionResponse;
 import projeto_gerador_ideias_backend.dto.response.ErrorResponse;
@@ -26,10 +28,12 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/chat")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Chat", description = "Endpoints para gerenciamento de chat com IA")
 public class ChatController {
-
+    
     private final ChatService chatService;
+    private final projeto_gerador_ideias_backend.service.IdeasSummaryCacheService ideasSummaryCacheService;
 
     @Operation(
             summary = "Iniciar sessão de chat",
@@ -61,7 +65,8 @@ public class ChatController {
     public ResponseEntity<ChatMessageResponse> sendMessage(
             @Parameter(description = "ID da sessão de chat", required = true, example = "85")
             @PathVariable Long sessionId,
-            @Valid @RequestBody ChatMessageRequest request) {
+            @Valid @RequestBody ChatMessageRequest request,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
         
         String message = request.getMessage();
         if (message == null) {
@@ -76,8 +81,53 @@ public class ChatController {
             );
         }
         
-        ChatMessageResponse response = chatService.sendMessage(sessionId, request);
+        String clientIp = getClientIpAddress(httpRequest);
+        log.debug("IP capturado no controller: {}", clientIp);
+        ChatMessageResponse response = chatService.sendMessage(sessionId, request, clientIp);
         return ResponseEntity.ok(response);
+    }
+    
+    private String getClientIpAddress(jakarta.servlet.http.HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("Proxy-Client-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("WL-Proxy-Client-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("HTTP_CLIENT_IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("HTTP_X_FORWARDED_FOR");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        if ("0:0:0:0:0:0:0:1".equals(ip) || "::1".equals(ip)) {
+            ip = "127.0.0.1";
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            String remoteAddr = request.getRemoteAddr();
+            if (remoteAddr != null && !remoteAddr.isEmpty() && !"unknown".equalsIgnoreCase(remoteAddr)) {
+                ip = remoteAddr;
+            } else {
+                ip = "127.0.0.1";
+            }
+        }
+        String finalIp = ip != null ? ip : "127.0.0.1";
+        log.debug("IP capturado: {} (X-Forwarded-For: {}, X-Real-IP: {}, RemoteAddr: {})", 
+            finalIp, 
+            request.getHeader("X-Forwarded-For"),
+            request.getHeader("X-Real-IP"),
+            request.getRemoteAddr());
+        return finalIp;
     }
 
     @Operation(
@@ -88,7 +138,9 @@ public class ChatController {
     @ApiResponse(responseCode = "401", description = "Usuário não autenticado")
     @GetMapping("/ideas/summary")
     public ResponseEntity<List<IdeaSummaryResponse>> getUserIdeasSummary() {
-        List<IdeaSummaryResponse> response = chatService.getUserIdeasSummary();
+        List<IdeaSummaryResponse> response = ideasSummaryCacheService.getUserIdeasSummary(
+            chatService.getCurrentAuthenticatedUser().getId()
+        );
         return ResponseEntity.ok(response);
     }
 
@@ -126,6 +178,28 @@ public class ChatController {
             @Parameter(description = "Tamanho da página (padrão: 10, máximo: 100)", example = "10")
             @RequestParam(required = false, defaultValue = "10") Integer size) {
         ChatLogsResponse response = chatService.getChatLogs(date, page, size);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(
+            summary = "Obter logs de chat (Admin)",
+            description = "Retorna todos os logs de mensagens de todos os usuários ou de um usuário específico. Requer permissão de administrador. Inclui informações do usuário (ID, nome, email) em cada interação."
+    )
+    @ApiResponse(responseCode = "200", description = "Logs retornados com sucesso",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AdminChatLogsResponse.class)))
+    @ApiResponse(responseCode = "401", description = "Usuário não autenticado")
+    @ApiResponse(responseCode = "403", description = "Acesso negado. Apenas administradores podem acessar este endpoint.")
+    @GetMapping("/admin/logs")
+    public ResponseEntity<AdminChatLogsResponse> getAdminChatLogs(
+            @Parameter(description = "Data no formato YYYY-MM-DD (padrão: hoje)", example = "2025-11-08")
+            @RequestParam(required = false) String date,
+            @Parameter(description = "ID do usuário para filtrar (opcional, null para todos)", example = "1")
+            @RequestParam(required = false) Long userId,
+            @Parameter(description = "Número da página (padrão: 1)", example = "1")
+            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @Parameter(description = "Tamanho da página (padrão: 10, máximo: 100)", example = "10")
+            @RequestParam(required = false, defaultValue = "10") Integer size) {
+        AdminChatLogsResponse response = chatService.getAdminChatLogs(date, userId, page, size);
         return ResponseEntity.ok(response);
     }
 

@@ -101,5 +101,17 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
            "AND m.createdAt < :beforeTimestamp")
     long countMessagesBeforeTimestamp(@Param("sessionId") Long sessionId,
                                       @Param("beforeTimestamp") LocalDateTime beforeTimestamp);
+    
+    @Query("SELECT m FROM ChatMessage m " +
+           "JOIN FETCH m.session s " +
+           "JOIN FETCH s.user u " +
+           "LEFT JOIN FETCH s.idea i " +
+           "WHERE (:userId IS NULL OR s.user.id = :userId) " +
+           "AND m.createdAt >= :startDate " +
+           "AND m.createdAt < :endDate " +
+           "ORDER BY m.createdAt ASC")
+    List<ChatMessage> findByUserIdAndDateRangeAdmin(@Param("userId") Long userId,
+                                                     @Param("startDate") LocalDateTime startDate,
+                                                     @Param("endDate") LocalDateTime endDate);
 }
 

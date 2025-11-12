@@ -72,6 +72,12 @@ class ChatServiceTest {
     @Mock
     private ChatMetricsService chatMetricsService;
 
+    @Mock
+    private IdeaSummaryService ideaSummaryService;
+
+    @Mock
+    private projeto_gerador_ideias_backend.service.IpEncryptionService ipEncryptionService;
+
     private ChatService chatService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -117,6 +123,18 @@ class ChatServiceTest {
         lenient().when(contentModerationService.validateAndNormalizeResponse(anyString(), anyBoolean())).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(chatMessageRepository.countBySessionId(any())).thenReturn(0L);
         lenient().when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt())).thenReturn(Collections.emptyList());
+        lenient().when(ipEncryptionService.encryptIp(anyString())).thenAnswer(invocation -> {
+            String ip = invocation.getArgument(0);
+            return ip != null && !ip.isBlank() ? "encrypted_" + ip : null;
+        });
+        lenient().when(ipEncryptionService.decryptIp(anyString())).thenAnswer(invocation -> {
+            String encrypted = invocation.getArgument(0);
+            if (encrypted == null || encrypted.isBlank()) return "unknown";
+            if (encrypted.startsWith("encrypted_")) {
+                return encrypted.substring("encrypted_".length());
+            }
+            return encrypted;
+        });
         
         org.springframework.data.domain.Page<ChatMessage> emptyPage = org.springframework.data.domain.Page.empty();
         lenient().when(chatMessageRepository.findLastMessagesBySessionIdAndRole(any(), any(), any())).thenReturn(emptyPage);
@@ -132,7 +150,9 @@ class ChatServiceTest {
                 chatLimitValidator,
                 contentModerationService,
                 userCacheService,
-                chatMetricsService
+                chatMetricsService,
+                ideaSummaryService,
+                ipEncryptionService
         );
 
         try {
@@ -285,7 +305,7 @@ class ChatServiceTest {
         when(contentModerationService.validateAndNormalizeResponse("AI Response", true)).thenReturn("AI Response");
         when(tokenCalculationService.getTotalTokensUsedByUser(any())).thenReturn(10);
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
         assertNotNull(response);
         assertEquals("assistant", response.getRole());
@@ -300,7 +320,7 @@ class ChatServiceTest {
 
         when(chatSessionRepository.findByIdWithLock(999L)).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> chatService.sendMessage(999L, messageRequest));
+        assertThrows(ResourceNotFoundException.class, () -> chatService.sendMessage(999L, messageRequest, "127.0.0.1"));
     }
 
     @Test
@@ -331,7 +351,7 @@ class ChatServiceTest {
             return msg;
         });
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
         
         assertNotNull(response);
         assertEquals("Desculpe, não posso processar essa mensagem devido ao conteúdo. Posso ajudá-lo com outras questões?", response.getContent());
@@ -339,22 +359,15 @@ class ChatServiceTest {
 
     @Test
     void shouldGetUserIdeasSummarySuccessfully() {
-        Idea idea = new Idea();
-        idea.setId(1L);
-        idea.setUser(testUser);
-        idea.setTheme(tecnologiaTheme);
-        idea.setContext("Contexto");
-        idea.setGeneratedContent("Ideia de teste para resumo completo");
-        idea.setCreatedAt(LocalDateTime.now());
-
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(Collections.singletonList(idea));
+        Object[] row = new Object[]{1L, "Resumo da ideia", "TECNOLOGIA", LocalDateTime.now()};
+        when(ideaRepository.findIdeasSummaryOnlyByUserId(1L)).thenReturn(Collections.singletonList(row));
 
         List<IdeaSummaryResponse> response = chatService.getUserIdeasSummary();
 
         assertNotNull(response);
         assertEquals(1, response.size());
         assertEquals(1L, response.get(0).getId());
-        assertNotNull(response.get(0).getSummary());
+        assertEquals("Resumo da ideia", response.get(0).getSummary());
     }
 
     @Test
@@ -399,7 +412,7 @@ class ChatServiceTest {
         doThrow(new TokenLimitExceededException("Este chat atingiu o limite"))
                 .when(chatLimitValidator).validateChatNotBlocked(eq(session), anyInt());
 
-        assertThrows(TokenLimitExceededException.class, () -> chatService.sendMessage(1L, messageRequest));
+        assertThrows(TokenLimitExceededException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
 
     @Test
@@ -416,7 +429,7 @@ class ChatServiceTest {
 
         when(chatSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(session));
 
-        assertThrows(ChatPermissionException.class, () -> chatService.sendMessage(1L, messageRequest));
+        assertThrows(ChatPermissionException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
 
     @Test
@@ -589,7 +602,7 @@ class ChatServiceTest {
         when(contentModerationService.validateAndNormalizeResponse("AI Response", false)).thenReturn("AI Response");
         when(tokenCalculationService.getTotalTokensUsedByUser(any())).thenReturn(10);
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
         assertNotNull(response);
         assertEquals("assistant", response.getRole());
@@ -633,7 +646,7 @@ class ChatServiceTest {
         when(contentModerationService.validateAndNormalizeResponse("Estou bem, obrigado!", true)).thenReturn("Estou bem, obrigado!");
         when(tokenCalculationService.getTotalTokensUsedByUser(any())).thenReturn(20);
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
         assertNotNull(response);
         verify(ollamaIntegrationService, times(1)).callOllamaWithSystemPrompt(anyString(), anyString());
@@ -672,7 +685,7 @@ class ChatServiceTest {
         doThrow(new TokenLimitExceededException("Este chat atingiu o limite"))
                 .when(chatLimitValidator).validateChatNotBlocked(eq(session), anyInt());
 
-        assertThrows(TokenLimitExceededException.class, () -> chatService.sendMessage(1L, messageRequest));
+        assertThrows(TokenLimitExceededException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
 
 
@@ -693,7 +706,9 @@ class ChatServiceTest {
                     chatLimitValidator,
                     contentModerationService,
                     userCacheService,
-                    chatMetricsService
+                    chatMetricsService,
+                    ideaSummaryService,
+                    ipEncryptionService
             );
 
             try {
@@ -720,7 +735,7 @@ class ChatServiceTest {
                     .thenThrow(new OllamaServiceException("Connection refused"));
 
             RuntimeException exception = assertThrows(RuntimeException.class, () -> {
-                disconnectedService.sendMessage(1L, messageRequest);
+                disconnectedService.sendMessage(1L, messageRequest, "127.0.0.1");
             });
 
             assertTrue(exception.getMessage().contains("Connection") || exception.getMessage().contains("Ollama"));
@@ -754,7 +769,7 @@ class ChatServiceTest {
                 .thenThrow(new OllamaServiceException("Erro HTTP 500 do Ollama: Internal Server Error"));
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> {
-            chatService.sendMessage(1L, messageRequest);
+            chatService.sendMessage(1L, messageRequest, "127.0.0.1");
         });
 
         assertTrue(exception.getMessage().contains("Erro") || exception.getMessage().contains("Ollama"));
@@ -787,7 +802,8 @@ class ChatServiceTest {
         when(chatMessageRepository.countBySessionId(any())).thenReturn(0L);
         when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10);
         when(tokenCalculationService.getTotalTokensUsedByUser(1L)).thenReturn(10);
-        lenient().when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("Resumo da Ideia");
+        when(ideaSummaryService.summarizeIdeaSimple("Ideia completa para resumo")).thenReturn("Resumo da Ideia");
+        idea.setSummary(null);
 
         ChatSessionResponse response = chatService.getSession(1L);
 
@@ -802,23 +818,9 @@ class ChatServiceTest {
 
     @Test
     void shouldGetUserIdeasSummaryWithMultipleIdeas() {
-        Idea idea1 = new Idea();
-        idea1.setId(1L);
-        idea1.setUser(testUser);
-        idea1.setTheme(tecnologiaTheme);
-        idea1.setContext("Contexto 1");
-        idea1.setGeneratedContent("Ideia completa com várias palavras para resumo");
-        idea1.setCreatedAt(LocalDateTime.now());
-
-        Idea idea2 = new Idea();
-        idea2.setId(2L);
-        idea2.setUser(testUser);
-        idea2.setTheme(trabalhoTheme);
-        idea2.setContext("Contexto 2");
-        idea2.setGeneratedContent("Outra ideia");
-        idea2.setCreatedAt(LocalDateTime.now());
-
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(Arrays.asList(idea1, idea2));
+        Object[] row1 = new Object[]{1L, "Resumo 1", "TECNOLOGIA", LocalDateTime.now()};
+        Object[] row2 = new Object[]{2L, "Resumo 2", "TRABALHO", LocalDateTime.now()};
+        when(ideaRepository.findIdeasSummaryOnlyByUserId(1L)).thenReturn(Arrays.asList(row1, row2));
 
         List<IdeaSummaryResponse> response = chatService.getUserIdeasSummary();
 
@@ -1077,7 +1079,7 @@ class ChatServiceTest {
 
         when(chatSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(session));
 
-        assertThrows(ValidationException.class, () -> chatService.sendMessage(1L, messageRequest));
+        assertThrows(ValidationException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
 
     @Test
@@ -1090,7 +1092,7 @@ class ChatServiceTest {
 
         when(chatSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(session));
 
-        assertThrows(ValidationException.class, () -> chatService.sendMessage(1L, messageRequest));
+        assertThrows(ValidationException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
 
     @Test
@@ -1105,7 +1107,7 @@ class ChatServiceTest {
         when(chatSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(session));
         when(chatProperties.getMaxCharsPerMessage()).thenReturn(1000);
 
-        assertThrows(ValidationException.class, () -> chatService.sendMessage(1L, messageRequest));
+        assertThrows(ValidationException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
 
     @Test
@@ -1135,7 +1137,7 @@ class ChatServiceTest {
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
         doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
         assertNotNull(response);
         verify(tokenCalculationService, atLeastOnce()).estimateTokens(anyString());
@@ -1167,7 +1169,7 @@ class ChatServiceTest {
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
         assertNotNull(response);
         verify(chatSessionRepository, atLeastOnce()).findByIdWithIdea(1L);
@@ -1201,7 +1203,7 @@ class ChatServiceTest {
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
         assertNotNull(response);
     }
@@ -1221,7 +1223,7 @@ class ChatServiceTest {
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString()))
                 .thenThrow(new jakarta.persistence.OptimisticLockException());
 
-        assertThrows(TokenLimitExceededException.class, () -> chatService.sendMessage(1L, messageRequest));
+        assertThrows(TokenLimitExceededException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
 
     @Test
@@ -1311,7 +1313,7 @@ class ChatServiceTest {
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
         assertNotNull(response);
         assertFalse(response.getContent().contains("[MODERACAO"));
@@ -1345,7 +1347,7 @@ class ChatServiceTest {
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
         doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
         assertNotNull(response);
         assertFalse(response.getContent().contains("[MODERACAO"));
@@ -1379,7 +1381,7 @@ class ChatServiceTest {
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
         doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
-        assertThrows(OllamaServiceException.class, () -> chatService.sendMessage(1L, messageRequest));
+        assertThrows(OllamaServiceException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
 
     @Test
@@ -1423,7 +1425,7 @@ class ChatServiceTest {
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(30);
         doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
         assertNotNull(response);
         verify(ollamaIntegrationService).callOllamaWithHistory(anyString(), anyList(), anyString());
@@ -1461,7 +1463,7 @@ class ChatServiceTest {
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(10);
         doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
         assertNotNull(response);
         assertNotNull(response.getTokensRemaining());
@@ -1495,7 +1497,7 @@ class ChatServiceTest {
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
         doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
         assertNotNull(response);
         assertNotNull(response.getTokensRemaining());
@@ -1503,15 +1505,8 @@ class ChatServiceTest {
 
     @Test
     void shouldSummarizeIdeaWithShortContent() {
-        Idea idea = new Idea();
-        idea.setId(1L);
-        idea.setUser(testUser);
-        idea.setTheme(tecnologiaTheme);
-        idea.setContext("Contexto");
-        idea.setGeneratedContent("Ideia curta");
-        idea.setCreatedAt(LocalDateTime.now());
-
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(Collections.singletonList(idea));
+        Object[] row = new Object[]{1L, "Ideia curta", "TECNOLOGIA", LocalDateTime.now()};
+        when(ideaRepository.findIdeasSummaryOnlyByUserId(1L)).thenReturn(Collections.singletonList(row));
 
         List<IdeaSummaryResponse> response = chatService.getUserIdeasSummary();
 
@@ -1522,18 +1517,8 @@ class ChatServiceTest {
 
     @Test
     void shouldSummarizeIdeaWithLongContent() {
-        Idea idea = new Idea();
-        idea.setId(1L);
-        idea.setUser(testUser);
-        idea.setTheme(tecnologiaTheme);
-        idea.setContext("Contexto");
-        idea.setGeneratedContent("Esta é uma ideia muito longa que contém várias palavras e precisa ser resumida para exibição na lista de ideias do usuário. " +
-                "O resumo deve capturar a essência da ideia de forma concisa.");
-        idea.setCreatedAt(LocalDateTime.now());
-
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(Collections.singletonList(idea));
-        when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString()))
-                .thenReturn("Ideia resumida com título");
+        Object[] row = new Object[]{1L, "Esta é uma ideia muito longa que contém várias palavras e precisa ser resumida para exibição na lista de ideias do usuário. O resumo deve capturar a essência da ideia de forma concisa.", "TECNOLOGIA", LocalDateTime.now()};
+        when(ideaRepository.findIdeasSummaryOnlyByUserId(1L)).thenReturn(Collections.singletonList(row));
 
         List<IdeaSummaryResponse> response = chatService.getUserIdeasSummary();
 
@@ -1552,7 +1537,10 @@ class ChatServiceTest {
         idea.setGeneratedContent("");
         idea.setCreatedAt(LocalDateTime.now());
 
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(Collections.singletonList(idea));
+        Object[] row = new Object[]{1L, "", "TECNOLOGIA", LocalDateTime.now()};
+        when(ideaRepository.findIdeasSummaryOnlyByUserId(1L)).thenReturn(Collections.singletonList(row));
+        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
+        when(ideaSummaryService.summarizeIdeaSimple("")).thenReturn("");
 
         List<IdeaSummaryResponse> response = chatService.getUserIdeasSummary();
 
@@ -1624,7 +1612,7 @@ class ChatServiceTest {
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
         doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
-        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
         assertNotNull(response);
     }
@@ -1660,7 +1648,8 @@ class ChatServiceTest {
         when(chatMessageRepository.findLastMessagesBySessionIdAndRole(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT), any()))
                 .thenReturn(org.springframework.data.domain.Page.empty());
         when(chatProperties.getMaxTokensPerChat()).thenReturn(10000);
-        when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("Resumo da Ideia");
+        when(ideaSummaryService.summarizeIdeaSimple("Ideia completa para resumo")).thenReturn("Resumo da Ideia");
+        idea.setSummary(null);
 
         ChatSessionResponse response = chatService.getSession(1L);
 
@@ -1707,7 +1696,7 @@ class ChatServiceTest {
         when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt()))
                 .thenThrow(new org.springframework.dao.InvalidDataAccessApiUsageException("Erro de acesso"));
 
-        assertThrows(OllamaServiceException.class, () -> chatService.sendMessage(1L, messageRequest));
+        assertThrows(OllamaServiceException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
 
     @Test
@@ -1722,7 +1711,7 @@ class ChatServiceTest {
         when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt()))
                 .thenThrow(new org.springframework.dao.DataAccessException("Erro de banco de dados") {});
 
-        assertThrows(OllamaServiceException.class, () -> chatService.sendMessage(1L, messageRequest));
+        assertThrows(OllamaServiceException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
 
     @Test
@@ -1992,7 +1981,10 @@ class ChatServiceTest {
         idea.setGeneratedContent("");
         idea.setCreatedAt(LocalDateTime.now());
 
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(Collections.singletonList(idea));
+        Object[] row = new Object[]{1L, "", "TECNOLOGIA", LocalDateTime.now()};
+        when(ideaRepository.findIdeasSummaryOnlyByUserId(1L)).thenReturn(Collections.singletonList(row));
+        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
+        when(ideaSummaryService.summarizeIdeaSimple("")).thenReturn("");
 
         List<IdeaSummaryResponse> response = chatService.getUserIdeasSummary();
 
@@ -2011,13 +2003,16 @@ class ChatServiceTest {
         idea.setGeneratedContent(null);
         idea.setCreatedAt(LocalDateTime.now());
 
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(Collections.singletonList(idea));
+        Object[] row = new Object[]{1L, null, "TECNOLOGIA", LocalDateTime.now()};
+        when(ideaRepository.findIdeasSummaryOnlyByUserId(1L)).thenReturn(Collections.singletonList(row));
+        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
+        when(ideaSummaryService.summarizeIdeaSimple(null)).thenReturn("Sem resumo disponível");
 
         List<IdeaSummaryResponse> response = chatService.getUserIdeasSummary();
 
         assertNotNull(response);
         assertEquals(1, response.size());
-        assertEquals("", response.get(0).getSummary());
+        assertNotNull(response.get(0).getSummary());
     }
 
     @Test
@@ -2441,7 +2436,7 @@ class ChatServiceTest {
         ChatMessageRequest request = new ChatMessageRequest();
         request.setMessage("Test");
 
-        ChatMessageResponse response = chatService.sendMessage(1L, request);
+        ChatMessageResponse response = chatService.sendMessage(1L, request, "127.0.0.1");
 
         assertNotNull(response);
         verify(chatMessageRepository).findRecentMessagesOptimized(1L, 3);
