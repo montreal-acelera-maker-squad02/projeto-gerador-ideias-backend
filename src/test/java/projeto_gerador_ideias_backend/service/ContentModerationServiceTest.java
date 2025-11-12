@@ -52,24 +52,26 @@ class ContentModerationServiceTest {
 
     @Test
     void shouldNotThrowExceptionWhenContentIsNull() {
-        assertDoesNotThrow(() -> {
-            contentModerationService.validateModerationResponse(null, true);
-        });
-
-        assertDoesNotThrow(() -> {
-            contentModerationService.validateModerationResponse(null, false);
-        });
+        // Para free chat, null é retornado como está (não é normalizado)
+        String result1 = contentModerationService.validateAndNormalizeResponse(null, true);
+        assertNull(result1);
+        
+        // Para chat baseado em ideia, resposta null é normalizada
+        String result2 = contentModerationService.validateAndNormalizeResponse(null, false);
+        assertNotNull(result2);
+        assertEquals("Desculpe, sua mensagem não está relacionada à ideia desta conversa. Por favor, mantenha o foco no tópico da ideia. Como posso ajudá-lo a desenvolver ou melhorar esta ideia?", result2);
     }
 
     @Test
     void shouldNotThrowExceptionWhenContentIsBlank() {
-        assertDoesNotThrow(() -> {
-            contentModerationService.validateModerationResponse("   ", true);
-        });
-
-        assertDoesNotThrow(() -> {
-            contentModerationService.validateModerationResponse("", false);
-        });
+        String result1 = contentModerationService.validateAndNormalizeResponse("   ", true);
+        assertNotNull(result1);
+        assertEquals("   ", result1); // Para free chat, conteúdo em branco é retornado como está
+        
+        String result2 = contentModerationService.validateAndNormalizeResponse("", false);
+        assertNotNull(result2);
+        // Para chat baseado em ideia, resposta vazia é normalizada
+        assertEquals("Desculpe, sua mensagem não está relacionada à ideia desta conversa. Por favor, mantenha o foco no tópico da ideia. Como posso ajudá-lo a desenvolver ou melhorar esta ideia?", result2);
     }
 
     @Test

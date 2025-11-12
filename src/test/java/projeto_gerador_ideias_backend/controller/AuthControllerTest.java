@@ -175,7 +175,8 @@ class AuthControllerTest {
         response.setUuid(UUID.randomUUID());
         response.setName("João Silva");
         response.setEmail("joao@example.com");
-        response.setToken("jwt-token-123");
+        response.setAccessToken("jwt-token-123");
+        response.setRefreshToken("refresh-token-123");
         
         when(userService.login(any(LoginRequest.class))).thenReturn(response);
         
@@ -185,7 +186,8 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("joao@example.com"))
                 .andExpect(jsonPath("$.name").value("João Silva"))
-                .andExpect(jsonPath("$.token").value("jwt-token-123"))
+                .andExpect(jsonPath("$.accessToken").value("jwt-token-123"))
+                .andExpect(jsonPath("$.refreshToken").value("refresh-token-123"))
                 .andExpect(jsonPath("$.uuid").exists());
         
         verify(userService, times(1)).login(any(LoginRequest.class));
@@ -264,6 +266,96 @@ class AuthControllerTest {
                 .andExpect(status().isBadRequest());
         
         verify(userService, never()).login(any(LoginRequest.class));
+    }
+    
+    @Test
+    void shouldRefreshTokenSuccessfully() throws Exception {
+        projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest request = 
+            new projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest();
+        request.setRefreshToken("valid-refresh-token");
+        
+        projeto_gerador_ideias_backend.dto.response.RefreshTokenResponse response = 
+            new projeto_gerador_ideias_backend.dto.response.RefreshTokenResponse();
+        response.setAccessToken("new-access-token");
+        response.setRefreshToken("new-refresh-token");
+        
+        when(userService.refreshToken(any(projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest.class)))
+            .thenReturn(response);
+        
+        mockMvc.perform(post("/api/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("new-access-token"))
+                .andExpect(jsonPath("$.refreshToken").value("new-refresh-token"));
+        
+        verify(userService, times(1)).refreshToken(any(projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest.class));
+    }
+    
+    @Test
+    void shouldReturnBadRequestWhenRefreshTokenInvalid() throws Exception {
+        projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest request = 
+            new projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest();
+        request.setRefreshToken("invalid-refresh-token");
+        
+        when(userService.refreshToken(any(projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest.class)))
+            .thenThrow(new ValidationException("Refresh token inválido ou expirado"));
+        
+        mockMvc.perform(post("/api/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Erro de validação"));
+        
+        verify(userService, times(1)).refreshToken(any(projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest.class));
+    }
+    
+    @Test
+    void shouldLogoutSuccessfullyWithAccessToken() throws Exception {
+        mockMvc.perform(post("/api/auth/logout")
+                .header("Authorization", "Bearer access-token-123")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+        
+        verify(userService, times(1)).logout("access-token-123", null);
+    }
+    
+    @Test
+    void shouldLogoutSuccessfullyWithRefreshToken() throws Exception {
+        projeto_gerador_ideias_backend.dto.request.LogoutRequest request = 
+            new projeto_gerador_ideias_backend.dto.request.LogoutRequest();
+        request.setRefreshToken("refresh-token-123");
+        
+        mockMvc.perform(post("/api/auth/logout")
+                .header("Authorization", "Bearer access-token-123")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+        
+        verify(userService, times(1)).logout("access-token-123", "refresh-token-123");
+    }
+    
+    @Test
+    void shouldLogoutSuccessfullyWithoutTokens() throws Exception {
+        mockMvc.perform(post("/api/auth/logout")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+        
+        verify(userService, times(1)).logout(null, null);
+    }
+    
+    @Test
+    void shouldLogoutWithRefreshTokenOnly() throws Exception {
+        projeto_gerador_ideias_backend.dto.request.LogoutRequest request = 
+            new projeto_gerador_ideias_backend.dto.request.LogoutRequest();
+        request.setRefreshToken("refresh-token-123");
+        
+        mockMvc.perform(post("/api/auth/logout")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+        
+        verify(userService, times(1)).logout(null, "refresh-token-123");
     }
 }
 

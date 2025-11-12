@@ -321,7 +321,8 @@ class ChatControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(messageRequest)))
                 .andDo(print())
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").value("Desculpe, não posso processar essa mensagem devido ao conteúdo. Posso ajudá-lo com outras questões?"));
     }
 
     @Test
@@ -431,7 +432,8 @@ class ChatControllerTest {
                         .param("limit", "20"))
                 .andDo(print())
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$.messages").isArray())
+                .andExpect(jsonPath("$.hasMore").exists());
     }
 
     @Test
@@ -445,7 +447,8 @@ class ChatControllerTest {
                         .param("before", "2025-11-08T13:00:00"))
                 .andDo(print())
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$.messages").isArray())
+                .andExpect(jsonPath("$.hasMore").exists());
     }
 
     @Test
@@ -634,7 +637,8 @@ class ChatControllerTest {
                         .param("limit", "4"))
                 .andDo(print())
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$.messages").isArray())
+                .andExpect(jsonPath("$.hasMore").exists());
     }
 
     @Test

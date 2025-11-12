@@ -519,6 +519,443 @@ class OllamaIntegrationServiceTest {
         assertTrue(result.getMessage().contains("Ollama"));
     }
 
+    @Test
+    void shouldHandleWebClientResponseException404() {
+        WebClientResponseException exception = mock(WebClientResponseException.class);
+        when(exception.getStatusCode()).thenReturn(org.springframework.http.HttpStatus.NOT_FOUND);
+        when(exception.getResponseBodyAsString()).thenReturn("Not Found");
+        Mono<OllamaResponse> errorMono = Mono.<OllamaResponse>error(exception)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(errorMono);
+        when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
+
+        OllamaServiceException result = assertThrows(OllamaServiceException.class, () -> 
+            ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User"));
+        
+        assertNotNull(result);
+        assertTrue(result.getMessage().contains("Ollama"));
+    }
+
+    @Test
+    void shouldHandleWebClientResponseException503() {
+        WebClientResponseException exception = mock(WebClientResponseException.class);
+        when(exception.getStatusCode()).thenReturn(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
+        when(exception.getResponseBodyAsString()).thenReturn("Service Unavailable");
+        Mono<OllamaResponse> errorMono = Mono.<OllamaResponse>error(exception)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(errorMono);
+        when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
+
+        OllamaServiceException result = assertThrows(OllamaServiceException.class, () -> 
+            ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User"));
+        
+        assertNotNull(result);
+    }
+
+    @Test
+    void shouldHandleWebClientException() {
+        org.springframework.web.reactive.function.client.WebClientRequestException exception = 
+            new org.springframework.web.reactive.function.client.WebClientRequestException(
+                new RuntimeException("WebClient error"), 
+                org.springframework.http.HttpMethod.POST,
+                null,
+                new org.springframework.http.HttpHeaders());
+        Mono<OllamaResponse> errorMono = Mono.<OllamaResponse>error(exception)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(errorMono);
+
+        OllamaServiceException result = assertThrows(OllamaServiceException.class, () -> 
+            ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User"));
+        
+        assertNotNull(result);
+        assertTrue(result.getMessage().contains("Ollama"));
+    }
+
+
+    @Test
+    void shouldHandleModerationTagAtStartWithContent() {
+        String contentWithTags = "[MODERACAO: SEGURA]Resposta";
+        OllamaResponse ollamaResponse = createMockResponse(contentWithTags);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("Resposta", result);
+    }
+
+    @Test
+    void shouldHandleModerationTagInMiddle() {
+        String contentWithTags = "Texto [MODERACAO: SEGURA] mais texto";
+        OllamaResponse ollamaResponse = createMockResponse(contentWithTags);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("Texto  mais texto", result);
+    }
+
+    @Test
+    void shouldHandleModerationTagWithSpaces() {
+        String contentWithTags = "[ MODERACAO : SEGURA ]Resposta";
+        OllamaResponse ollamaResponse = createMockResponse(contentWithTags);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("Resposta", result);
+    }
+
+    @Test
+    void shouldHandleModerationTagPatternMatching() {
+        String dangerousContent = "[MODERACAO:PERIGOSO]";
+        OllamaResponse ollamaResponse = createMockResponse(dangerousContent);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("[MODERACAO:PERIGOSO]", result);
+    }
+
+    @Test
+    void shouldHandleResponseWithWhitespaceOnly() {
+        String content = "   ";
+        OllamaResponse ollamaResponse = createMockResponse(content);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("", result);
+    }
+
+    @Test
+    void shouldHandleResponseAtMaxLength() {
+        String content = "a".repeat(TEST_MAX_RESPONSE_LENGTH);
+        OllamaResponse ollamaResponse = createMockResponse(content);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals(content, result);
+    }
+
+    @Test
+    void shouldHandleModerationTagWithSubstringExtraction() {
+        String contentWithTags = "[MODERACAO: SEGURA]Resto do texto";
+        OllamaResponse ollamaResponse = createMockResponse(contentWithTags);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("Resto do texto", result);
+    }
+
+    @Test
+    void shouldHandleExceptionWithNullMessage() {
+        RuntimeException exception = new RuntimeException((String) null);
+        Mono<OllamaResponse> errorMono = Mono.<OllamaResponse>error(exception)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(errorMono);
+
+        OllamaServiceException result = assertThrows(OllamaServiceException.class, () -> 
+            ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User"));
+        
+        assertNotNull(result);
+    }
+
+    @Test
+    void shouldHandleExceptionWithNullCause() {
+        RuntimeException exception = new RuntimeException("Error");
+        Mono<OllamaResponse> errorMono = Mono.<OllamaResponse>error(exception)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(errorMono);
+
+        OllamaServiceException result = assertThrows(OllamaServiceException.class, () -> 
+            ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User"));
+        
+        assertNotNull(result);
+    }
+
+    @Test
+    void shouldUseChatPropertiesForOllamaRequest() {
+        when(chatProperties.getOllamaNumPredict()).thenReturn(300);
+        when(chatProperties.getOllamaTemperature()).thenReturn(0.7);
+        when(chatProperties.getOllamaTopP()).thenReturn(0.9);
+        when(chatProperties.getOllamaNumCtx()).thenReturn(2048);
+
+        String content = "Response";
+        OllamaResponse ollamaResponse = createMockResponse(content);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        ArgumentCaptor<OllamaRequest> requestCaptor = ArgumentCaptor.forClass(OllamaRequest.class);
+        ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        verify(requestBodySpec).bodyValue(requestCaptor.capture());
+        OllamaRequest capturedRequest = requestCaptor.getValue();
+        
+        assertNotNull(capturedRequest);
+    }
+
+    @Test
+    void shouldHandleWebClientResponseExceptionWith500AndSpecificMessage() {
+        WebClientResponseException exception = mock(WebClientResponseException.class);
+        when(exception.getStatusCode()).thenReturn(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
+        when(exception.getResponseBodyAsString()).thenReturn("Internal Server Error");
+        Mono<OllamaResponse> errorMono = Mono.<OllamaResponse>error(exception)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(errorMono);
+        when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
+
+        OllamaServiceException result = assertThrows(OllamaServiceException.class, () -> 
+            ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User"));
+        
+        assertNotNull(result);
+        assertTrue(result.getMessage().contains("Ollama"));
+    }
+
+    @Test
+    void shouldHandleWebClientResponseExceptionWithBlankBody() {
+        WebClientResponseException exception = mock(WebClientResponseException.class);
+        when(exception.getStatusCode()).thenReturn(org.springframework.http.HttpStatus.BAD_REQUEST);
+        when(exception.getResponseBodyAsString()).thenReturn("   ");
+        when(exception.getMessage()).thenReturn("Error message");
+        Mono<OllamaResponse> errorMono = Mono.<OllamaResponse>error(exception)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(errorMono);
+
+        OllamaServiceException result = assertThrows(OllamaServiceException.class, () -> 
+            ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User"));
+        
+        assertNotNull(result);
+        assertTrue(result.getMessage().contains("Ollama"));
+    }
+
+    @Test
+    void shouldHandleModerationTagWithComplexPattern() {
+        String contentWithTags = "[MODERACAO: SEGURA]Texto[MODERACAO: PERIGOSO]Mais texto";
+        OllamaResponse ollamaResponse = createMockResponse(contentWithTags);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("TextoMais texto", result);
+    }
+
+    @Test
+    void shouldHandleResponseWithOnlyWhitespaceAfterTagRemoval() {
+        String content = "[MODERACAO: SEGURA]   ";
+        OllamaResponse ollamaResponse = createMockResponse(content);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("", result);
+    }
+
+    @Test
+    void shouldHandleResponseWithModerationTagAtEnd() {
+        String content = "Resposta[MODERACAO: SEGURA]";
+        OllamaResponse ollamaResponse = createMockResponse(content);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("Resposta", result);
+    }
+
+    @Test
+    void shouldHandleResponseWithMultipleModerationTagsInSequence() {
+        String content = "[MODERACAO: SEGURA][MODERACAO: PERIGOSO][MODERACAO: SEGURA]Resposta";
+        OllamaResponse ollamaResponse = createMockResponse(content);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("Resposta", result);
+    }
+
+    @Test
+    void shouldHandleResponseWithModerationTagPatternAtStart() {
+        String content = "[MODERACAO: SEGURA]Resto";
+        OllamaResponse ollamaResponse = createMockResponse(content);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("Resto", result);
+    }
+
+    @Test
+    void shouldHandleResponseWithCaseInsensitiveModerationTags() {
+        String content = "[moderacao: segura]Resposta";
+        OllamaResponse ollamaResponse = createMockResponse(content);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("Resposta", result);
+    }
+
+    @Test
+    void shouldHandleWebClientResponseException502() {
+        WebClientResponseException exception = mock(WebClientResponseException.class);
+        when(exception.getStatusCode()).thenReturn(org.springframework.http.HttpStatus.BAD_GATEWAY);
+        when(exception.getResponseBodyAsString()).thenReturn("Bad Gateway");
+        Mono<OllamaResponse> errorMono = Mono.<OllamaResponse>error(exception)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(errorMono);
+        when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
+
+        OllamaServiceException result = assertThrows(OllamaServiceException.class, () -> 
+            ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User"));
+        
+        assertNotNull(result);
+    }
+
+    @Test
+    void shouldHandleWebClientResponseException504() {
+        WebClientResponseException exception = mock(WebClientResponseException.class);
+        when(exception.getStatusCode()).thenReturn(org.springframework.http.HttpStatus.GATEWAY_TIMEOUT);
+        when(exception.getResponseBodyAsString()).thenReturn("Gateway Timeout");
+        Mono<OllamaResponse> errorMono = Mono.<OllamaResponse>error(exception)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(errorMono);
+        when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
+
+        OllamaServiceException result = assertThrows(OllamaServiceException.class, () -> 
+            ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User"));
+        
+        assertNotNull(result);
+    }
+
+    @Test
+    void shouldHandleResponseWithModerationTagAndSubstringExtraction() {
+        String content = "[MODERACAO: SEGURA]Resto do texto aqui";
+        OllamaResponse ollamaResponse = createMockResponse(content);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("Resto do texto aqui", result);
+    }
+
+    @Test
+    void shouldHandleResponseWithTrimmedWhitespace() {
+        String content = "  Resposta com espaços  ";
+        OllamaResponse ollamaResponse = createMockResponse(content);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+
+        assertEquals("Resposta com espaços", result);
+    }
+
+    @Test
+    void shouldHandleOllamaRequestException() {
+        org.springframework.web.reactive.function.client.WebClientRequestException exception = 
+            new org.springframework.web.reactive.function.client.WebClientRequestException(
+                new RuntimeException("Connection refused"), 
+                org.springframework.http.HttpMethod.POST,
+                null,
+                new org.springframework.http.HttpHeaders());
+        Mono<OllamaResponse> errorMono = Mono.<OllamaResponse>error(exception)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(errorMono);
+
+        OllamaServiceException result = assertThrows(OllamaServiceException.class, () -> 
+            ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User"));
+        
+        assertNotNull(result);
+        assertTrue(result.getMessage().contains("Ollama"));
+    }
+
+    @Test
+    void shouldHandleExceptionWithConnectionReset() {
+        RuntimeException exception = new RuntimeException("Connection reset by peer");
+        Mono<OllamaResponse> errorMono = Mono.<OllamaResponse>error(exception)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(errorMono);
+
+        OllamaServiceException result = assertThrows(OllamaServiceException.class, () -> 
+            ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User"));
+        
+        assertNotNull(result);
+        assertTrue(result.getMessage().contains("conectar"));
+    }
+
+    @Test
+    void shouldHandleExceptionWithFailedToConnect() {
+        RuntimeException exception = new RuntimeException("Failed to connect to host");
+        Mono<OllamaResponse> errorMono = Mono.<OllamaResponse>error(exception)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(errorMono);
+
+        OllamaServiceException result = assertThrows(OllamaServiceException.class, () -> 
+            ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User"));
+        
+        assertNotNull(result);
+        assertTrue(result.getMessage().contains("conectar"));
+    }
+
+    @Test
+    void shouldUseChatPropertiesForOllamaRequestWithHistory() {
+        when(chatProperties.getOllamaNumPredict()).thenReturn(300);
+        when(chatProperties.getOllamaTemperature()).thenReturn(0.7);
+        when(chatProperties.getOllamaTopP()).thenReturn(0.9);
+        when(chatProperties.getOllamaNumCtx()).thenReturn(2048);
+
+        String content = "Response";
+        OllamaResponse ollamaResponse = createMockResponse(content);
+        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
+                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
+        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
+
+        List<OllamaRequest.Message> history = List.of(
+            new OllamaRequest.Message("user", "Hist1"),
+            new OllamaRequest.Message("assistant", "Resp1")
+        );
+
+        ArgumentCaptor<OllamaRequest> requestCaptor = ArgumentCaptor.forClass(OllamaRequest.class);
+        ollamaIntegrationService.callOllamaWithHistory("System", history, "User");
+
+        verify(requestBodySpec).bodyValue(requestCaptor.capture());
+        OllamaRequest capturedRequest = requestCaptor.getValue();
+        
+        assertNotNull(capturedRequest);
+        assertEquals(4, capturedRequest.getMessages().size());
+    }
+
     private OllamaResponse createMockResponse(String content) {
         OllamaResponse response = new OllamaResponse();
         OllamaResponse.Message message = new OllamaResponse.Message();

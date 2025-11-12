@@ -35,7 +35,7 @@ class PromptBuilderServiceTest {
         String prompt = promptBuilderService.buildSystemPromptForFreeChat();
 
         assertNotNull(prompt);
-        assertTrue(prompt.contains("assistente útil e criativo"));
+        assertTrue(prompt.contains("assistente útil"));
         assertTrue(prompt.contains("MODERACAO: PERIGOSO"));
     }
 
@@ -89,7 +89,7 @@ class PromptBuilderServiceTest {
 
         assertNotNull(prompt);
         assertTrue(prompt.contains("Ideia: \"\""));
-        assertTrue(prompt.contains("Contexto original: \"\""));
+        assertTrue(prompt.contains("Contexto: \"\""));
     }
 
     @Test
