@@ -75,6 +75,29 @@ class CustomUserDetailsServiceTest {
     
     @Test
     void shouldReturnUserWithRoleUser() {
+        testUser.setRole(projeto_gerador_ideias_backend.model.Role.USER);
+        when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
+        
+        UserDetails userDetails = userDetailsService.loadUserByUsername(testUser.getEmail());
+        
+        assertEquals(1, userDetails.getAuthorities().size());
+        assertEquals("ROLE_USER", userDetails.getAuthorities().iterator().next().getAuthority());
+    }
+    
+    @Test
+    void shouldReturnUserWithRoleAdmin() {
+        testUser.setRole(projeto_gerador_ideias_backend.model.Role.ADMIN);
+        when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
+        
+        UserDetails userDetails = userDetailsService.loadUserByUsername(testUser.getEmail());
+        
+        assertEquals(1, userDetails.getAuthorities().size());
+        assertEquals("ROLE_ADMIN", userDetails.getAuthorities().iterator().next().getAuthority());
+    }
+    
+    @Test
+    void shouldReturnUserWithRoleUserWhenRoleIsNull() {
+        testUser.setRole(null);
         when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
         
         UserDetails userDetails = userDetailsService.loadUserByUsername(testUser.getEmail());
