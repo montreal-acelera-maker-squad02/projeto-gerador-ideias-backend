@@ -54,6 +54,9 @@ class UserServiceTest {
     @Mock
     private TokenBlacklistService tokenBlacklistService;
     
+    @Mock
+    private IdeasSummaryCacheService ideasSummaryCacheService;
+    
     @InjectMocks
     private UserService userService;
     
@@ -66,6 +69,8 @@ class UserServiceTest {
         validRequest.setEmail("joao@example.com");
         validRequest.setPassword("Senha@123");
         validRequest.setConfirmPassword("Senha@123");
+        
+        doNothing().when(ideasSummaryCacheService).preloadUserIdeasSummary(anyLong());
     }
     
     @Test
@@ -182,10 +187,10 @@ class UserServiceTest {
     
     private static java.util.stream.Stream<Arguments> invalidPasswordProvider() {
         return java.util.stream.Stream.of(
-            Arguments.of("joao2@example.com", "senha@123", "senha@123"), // falta maiúscula
-            Arguments.of("joao3@example.com", "SENHA@123", "SENHA@123"), // falta minúscula
-            Arguments.of("joao4@example.com", "Senha@Boa", "Senha@Boa"), // falta dígito
-            Arguments.of("joao5@example.com", "Senha123", "Senha123")   // falta caractere especial
+            Arguments.of("joao2@example.com", "senha@123", "senha@123"),
+            Arguments.of("joao3@example.com", "SENHA@123", "SENHA@123"),
+            Arguments.of("joao4@example.com", "Senha@Boa", "Senha@Boa"),
+            Arguments.of("joao5@example.com", "Senha123", "Senha123")
         );
     }
     

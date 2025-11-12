@@ -59,6 +59,12 @@ class IdeaServiceTest {
     @Mock
     private ThemeService themeService;
 
+    @Mock
+    private IdeaSummaryService ideaSummaryService;
+
+    @Mock
+    private IdeasSummaryCacheService ideasSummaryCacheService;
+
     @InjectMocks
     private IdeaService ideaService;
 
@@ -98,6 +104,12 @@ class IdeaServiceTest {
         when(themeService.findByID(1L)).thenReturn(tecnologiaTheme);
         when(themeService.findByID(2L)).thenReturn(trabalhoTheme);
         when(themeService.findByID(3L)).thenReturn(estudosTheme);
+        when(ideaSummaryService.summarizeIdeaSimple(anyString())).thenAnswer(inv -> {
+            String content = inv.getArgument(0);
+            if (content == null || content.length() <= 50) return content;
+            return content.substring(0, Math.min(50, content.length()));
+        });
+        doNothing().when(ideasSummaryCacheService).invalidateUserCache(anyLong());
 
         when(themeRepository.findById(1L)).thenReturn(Optional.of(tecnologiaTheme));
         when(themeRepository.findById(2L)).thenReturn(Optional.of(trabalhoTheme));
