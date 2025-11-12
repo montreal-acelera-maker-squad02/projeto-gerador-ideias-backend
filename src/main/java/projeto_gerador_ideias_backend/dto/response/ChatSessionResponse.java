@@ -32,6 +32,8 @@ public class ChatSessionResponse {
     private String lastResetAt;
     @Schema(description = "Lista de mensagens da sessão")
     private List<ChatMessageResponse> messages;
+    @Schema(description = "Indica se há mais mensagens antigas disponíveis para carregar", example = "true")
+    private Boolean hasMoreMessages;
 }
 
 

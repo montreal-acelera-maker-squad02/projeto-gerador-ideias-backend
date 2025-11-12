@@ -14,7 +14,17 @@ import java.util.Optional;
 @Repository
 public interface ChatSessionRepository extends JpaRepository<ChatSession, Long> {
     Optional<ChatSession> findByUserIdAndType(Long userId, ChatSession.ChatType type);
-    Optional<ChatSession> findByUserIdAndIdeaId(Long userId, Long ideaId);
+    
+    @Query("SELECT s FROM ChatSession s " +
+           "WHERE s.user.id = :userId AND s.idea.id = :ideaId " +
+           "ORDER BY s.createdAt DESC")
+    List<ChatSession> findByUserIdAndIdeaIdOrderByCreatedAtDesc(@Param("userId") Long userId, @Param("ideaId") Long ideaId);
+    
+    default Optional<ChatSession> findByUserIdAndIdeaId(Long userId, Long ideaId) {
+        List<ChatSession> sessions = findByUserIdAndIdeaIdOrderByCreatedAtDesc(userId, ideaId);
+        return sessions.isEmpty() ? Optional.empty() : Optional.of(sessions.get(0));
+    }
+    
     List<ChatSession> findByUserIdOrderByCreatedAtDesc(Long userId);
     
     @Lock(LockModeType.OPTIMISTIC)
