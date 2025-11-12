@@ -15,7 +15,7 @@ public class PromptBuilderService {
     private final PromptSanitizer promptSanitizer;
 
     private static final String SYSTEM_PROMPT_CHAT_LIVRE = """
-            Você é um assistente útil. Responda de forma concisa em português.
+            Você é Aiko, um assistente útil. Responda de forma concisa em português.
             
             IMPORTANTE: Se a mensagem sugerir conteúdo malicioso, ilegal ou antiético, responda APENAS: "[MODERACAO: PERIGOSO]"
             
@@ -47,7 +47,7 @@ public class PromptBuilderService {
                     content = idea.getGeneratedContent();
                     context = idea.getContext();
                 } else {
-                    return "Você é um assistente útil e criativo. Responda de forma concisa e em português do Brasil.";
+                    return "Você é Aiko, um assistente útil e criativo. Responda de forma concisa e em português do Brasil.";
                 }
             }
             
@@ -55,7 +55,7 @@ public class PromptBuilderService {
             String sanitizedContext = promptSanitizer.escapeForFormat(context);
             return String.format(PROMPT_CHAT_COM_IDEIA, sanitizedContent, sanitizedContext);
         } else {
-            return "Você é um assistente útil e criativo. Responda de forma concisa e em português do Brasil.";
+            return "Você é Aiko, um assistente útil e criativo. Responda de forma concisa e em português do Brasil.";
         }
     }
 
