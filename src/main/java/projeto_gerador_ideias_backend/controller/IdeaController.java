@@ -19,6 +19,7 @@ import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
 import projeto_gerador_ideias_backend.service.IdeaService;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.List;
 
 @RestController
@@ -165,5 +166,19 @@ public class IdeaController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .build();
         }
+    }
+
+    @Operation(
+            summary = "Obter Estatísticas de Geração",
+            description = "Retorna estatísticas agregadas sobre a geração de ideias, como o tempo médio de resposta histórico de todas as ideias já geradas."
+    )
+    @ApiResponse(responseCode = "200", description = "Estatísticas retornadas com sucesso")
+    @GetMapping("/stats")
+    public ResponseEntity<Map<String, Object>> getIdeaStats() {
+        Double averageTime = ideaService.getAverageIdeaGenerationTime();
+        Map<String, Object> stats = Map.of(
+                "averageGenerationTimeMs", averageTime != null ? averageTime : 0.0
+        );
+        return ResponseEntity.ok(stats);
     }
 }

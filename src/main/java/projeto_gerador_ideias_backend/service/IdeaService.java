@@ -386,4 +386,9 @@ public class IdeaService {
                 .map(IdeaResponse::new)
                 .toList();
     }
+
+    @Transactional(readOnly = true)
+    public Double getAverageIdeaGenerationTime() {
+        return ideaRepository.getAverageExecutionTime();
+    }
 }
