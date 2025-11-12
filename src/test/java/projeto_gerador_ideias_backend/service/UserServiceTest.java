@@ -397,6 +397,258 @@ class UserServiceTest {
         verify(jwtService, never()).generateAccessToken(anyString(), anyLong());
         verify(jwtService, never()).generateRefreshToken(anyString(), anyLong());
     }
+    
+    @Test
+    void shouldThrowExceptionWhenAccountDisabledOnLogin() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("joao@example.com");
+        request.setPassword("Senha@123");
+        
+        User user = new User();
+        user.setId(1L);
+        user.setEmail("joao@example.com");
+        user.setPassword("encodedPassword");
+        user.setEnabled(false);
+        
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(user));
+        when(passwordEncoder.matches(request.getPassword(), user.getPassword())).thenReturn(true);
+        
+        ValidationException exception = assertThrows(
+            ValidationException.class,
+            () -> userService.login(request)
+        );
+        
+        assertEquals("Conta desativada. Entre em contato com o suporte.", exception.getMessage());
+    }
+    
+    @Test
+    void shouldThrowExceptionWhenAccountEnabledIsNullOnLogin() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("joao@example.com");
+        request.setPassword("Senha@123");
+        
+        User user = new User();
+        user.setId(1L);
+        user.setEmail("joao@example.com");
+        user.setPassword("encodedPassword");
+        user.setEnabled(null);
+        
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(user));
+        when(passwordEncoder.matches(request.getPassword(), user.getPassword())).thenReturn(true);
+        
+        ValidationException exception = assertThrows(
+            ValidationException.class,
+            () -> userService.login(request)
+        );
+        
+        assertEquals("Conta desativada. Entre em contato com o suporte.", exception.getMessage());
+    }
+    
+    @Test
+    void shouldRefreshTokenSuccessfully() {
+        projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest request = 
+            new projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest();
+        request.setRefreshToken("valid-refresh-token");
+        
+        User user = new User();
+        user.setId(1L);
+        user.setEmail("joao@example.com");
+        user.setEnabled(true);
+        
+        RefreshToken refreshToken = new RefreshToken();
+        refreshToken.setToken("valid-refresh-token");
+        refreshToken.setUser(user);
+        refreshToken.setExpiresAt(java.time.LocalDateTime.now().plusDays(1));
+        refreshToken.setRevoked(false);
+        
+        when(jwtService.validateRefreshToken("valid-refresh-token")).thenReturn(true);
+        when(refreshTokenRepository.findByTokenAndRevokedFalse("valid-refresh-token"))
+            .thenReturn(java.util.Optional.of(refreshToken));
+        when(jwtService.generateAccessToken(user.getEmail(), user.getId())).thenReturn("new-access-token");
+        when(jwtService.generateRefreshToken(user.getEmail(), user.getId())).thenReturn("new-refresh-token");
+        when(refreshTokenRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        
+        projeto_gerador_ideias_backend.dto.response.RefreshTokenResponse response = 
+            userService.refreshToken(request);
+        
+        assertNotNull(response);
+        assertEquals("new-access-token", response.getAccessToken());
+        assertEquals("new-refresh-token", response.getRefreshToken());
+        assertTrue(refreshToken.getRevoked());
+        verify(refreshTokenRepository, times(2)).save(any());
+    }
+    
+    @Test
+    void shouldThrowExceptionWhenRefreshTokenInvalid() {
+        projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest request = 
+            new projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest();
+        request.setRefreshToken("invalid-token");
+        
+        when(jwtService.validateRefreshToken("invalid-token")).thenReturn(false);
+        
+        ValidationException exception = assertThrows(
+            ValidationException.class,
+            () -> userService.refreshToken(request)
+        );
+        
+        assertEquals("Refresh token inválido ou expirado", exception.getMessage());
+    }
+    
+    @Test
+    void shouldThrowExceptionWhenRefreshTokenNotFound() {
+        projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest request = 
+            new projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest();
+        request.setRefreshToken("valid-token");
+        
+        when(jwtService.validateRefreshToken("valid-token")).thenReturn(true);
+        when(refreshTokenRepository.findByTokenAndRevokedFalse("valid-token"))
+            .thenReturn(java.util.Optional.empty());
+        
+        ValidationException exception = assertThrows(
+            ValidationException.class,
+            () -> userService.refreshToken(request)
+        );
+        
+        assertEquals("Refresh token não encontrado ou revogado", exception.getMessage());
+    }
+    
+    @Test
+    void shouldThrowExceptionWhenRefreshTokenExpired() {
+        projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest request = 
+            new projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest();
+        request.setRefreshToken("expired-token");
+        
+        User user = new User();
+        user.setId(1L);
+        user.setEmail("joao@example.com");
+        
+        RefreshToken refreshToken = new RefreshToken();
+        refreshToken.setToken("expired-token");
+        refreshToken.setUser(user);
+        refreshToken.setExpiresAt(java.time.LocalDateTime.now().minusDays(1));
+        refreshToken.setRevoked(false);
+        
+        when(jwtService.validateRefreshToken("expired-token")).thenReturn(true);
+        when(refreshTokenRepository.findByTokenAndRevokedFalse("expired-token"))
+            .thenReturn(java.util.Optional.of(refreshToken));
+        when(refreshTokenRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        
+        ValidationException exception = assertThrows(
+            ValidationException.class,
+            () -> userService.refreshToken(request)
+        );
+        
+        assertEquals("Refresh token expirado", exception.getMessage());
+        assertTrue(refreshToken.getRevoked());
+    }
+    
+    @Test
+    void shouldThrowExceptionWhenAccountDisabledOnRefresh() {
+        projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest request = 
+            new projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest();
+        request.setRefreshToken("valid-token");
+        
+        User user = new User();
+        user.setId(1L);
+        user.setEmail("joao@example.com");
+        user.setEnabled(false);
+        
+        RefreshToken refreshToken = new RefreshToken();
+        refreshToken.setToken("valid-token");
+        refreshToken.setUser(user);
+        refreshToken.setExpiresAt(java.time.LocalDateTime.now().plusDays(1));
+        refreshToken.setRevoked(false);
+        
+        when(jwtService.validateRefreshToken("valid-token")).thenReturn(true);
+        when(refreshTokenRepository.findByTokenAndRevokedFalse("valid-token"))
+            .thenReturn(java.util.Optional.of(refreshToken));
+        
+        ValidationException exception = assertThrows(
+            ValidationException.class,
+            () -> userService.refreshToken(request)
+        );
+        
+        assertEquals("Conta desativada. Entre em contato com o suporte.", exception.getMessage());
+    }
+    
+    @Test
+    void shouldLogoutWithAccessToken() {
+        String accessToken = "access-token-123";
+        
+        userService.logout(accessToken, null);
+        
+        verify(tokenBlacklistService, times(1)).blacklistToken(accessToken);
+        verify(refreshTokenRepository, never()).findByToken(anyString());
+    }
+    
+    @Test
+    void shouldLogoutWithRefreshToken() {
+        String refreshToken = "refresh-token-123";
+        RefreshToken token = new RefreshToken();
+        token.setToken(refreshToken);
+        token.setRevoked(false);
+        
+        when(refreshTokenRepository.findByToken(refreshToken)).thenReturn(java.util.Optional.of(token));
+        when(refreshTokenRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        
+        userService.logout(null, refreshToken);
+        
+        verify(tokenBlacklistService, never()).blacklistToken(anyString());
+        verify(refreshTokenRepository, times(1)).findByToken(refreshToken);
+        assertTrue(token.getRevoked());
+    }
+    
+    @Test
+    void shouldLogoutWithBothTokens() {
+        String accessToken = "access-token-123";
+        String refreshToken = "refresh-token-123";
+        RefreshToken token = new RefreshToken();
+        token.setToken(refreshToken);
+        token.setRevoked(false);
+        
+        when(refreshTokenRepository.findByToken(refreshToken)).thenReturn(java.util.Optional.of(token));
+        when(refreshTokenRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        
+        userService.logout(accessToken, refreshToken);
+        
+        verify(tokenBlacklistService, times(1)).blacklistToken(accessToken);
+        verify(refreshTokenRepository, times(1)).findByToken(refreshToken);
+        assertTrue(token.getRevoked());
+    }
+    
+    @Test
+    void shouldLogoutWithNullTokens() {
+        userService.logout(null, null);
+        
+        verify(tokenBlacklistService, never()).blacklistToken(anyString());
+        verify(refreshTokenRepository, never()).findByToken(anyString());
+    }
+    
+    @Test
+    void shouldLogoutWithBlankAccessToken() {
+        userService.logout("   ", "refresh-token");
+        
+        verify(tokenBlacklistService, never()).blacklistToken(anyString());
+    }
+    
+    @Test
+    void shouldLogoutWithBlankRefreshToken() {
+        userService.logout("access-token", "   ");
+        
+        verify(refreshTokenRepository, never()).findByToken(anyString());
+    }
+    
+    @Test
+    void shouldLogoutWhenRefreshTokenNotFound() {
+        String refreshToken = "non-existent-token";
+        
+        when(refreshTokenRepository.findByToken(refreshToken)).thenReturn(java.util.Optional.empty());
+        
+        userService.logout(null, refreshToken);
+        
+        verify(refreshTokenRepository, times(1)).findByToken(refreshToken);
+        verify(refreshTokenRepository, never()).save(any());
+    }
 }
 
 

@@ -189,5 +189,101 @@ class JwtAuthenticationFilterTest {
         assertNotNull(SecurityContextHolder.getContext().getAuthentication());
         assertEquals(existingAuth, SecurityContextHolder.getContext().getAuthentication());
     }
+    
+    @Test
+    void shouldContinueWhenTokenIsBlacklisted() throws ServletException, IOException {
+        String blacklistedToken = "blacklisted-token";
+        
+        when(request.getHeader("Authorization")).thenReturn("Bearer " + blacklistedToken);
+        when(tokenBlacklistService.isTokenBlacklisted(blacklistedToken)).thenReturn(true);
+        
+        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
+        
+        verify(filterChain, times(1)).doFilter(request, response);
+        verify(jwtService, never()).validateToken(anyString());
+        verify(jwtService, never()).extractUsername(anyString());
+        verify(userDetailsService, never()).loadUserByUsername(anyString());
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+    
+    @Test
+    void shouldContinueWhenExtractUsernameThrowsException() throws ServletException, IOException {
+        String validToken = "valid-token";
+        
+        when(request.getHeader("Authorization")).thenReturn("Bearer " + validToken);
+        when(tokenBlacklistService.isTokenBlacklisted(validToken)).thenReturn(false);
+        when(jwtService.validateToken(validToken)).thenReturn(true);
+        when(jwtService.extractUsername(validToken)).thenThrow(new RuntimeException("Token parsing error"));
+        
+        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
+        
+        verify(filterChain, times(1)).doFilter(request, response);
+        verify(jwtService, times(1)).extractUsername(validToken);
+        verify(userDetailsService, never()).loadUserByUsername(anyString());
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+    
+    @Test
+    void shouldContinueWhenUserIsDisabled() throws ServletException, IOException {
+        String validToken = "valid-jwt-token";
+        String email = "joao@example.com";
+        
+        UserDetails disabledUser = User.builder()
+                .username(email)
+                .password("encodedPassword")
+                .authorities(Collections.emptyList())
+                .disabled(true)
+                .build();
+        
+        when(request.getHeader("Authorization")).thenReturn("Bearer " + validToken);
+        when(tokenBlacklistService.isTokenBlacklisted(validToken)).thenReturn(false);
+        when(jwtService.validateToken(validToken)).thenReturn(true);
+        when(jwtService.extractUsername(validToken)).thenReturn(email);
+        when(userDetailsService.loadUserByUsername(email)).thenReturn(disabledUser);
+        
+        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
+        
+        verify(filterChain, times(1)).doFilter(request, response);
+        verify(jwtService, times(1)).extractUsername(validToken);
+        verify(userDetailsService, times(1)).loadUserByUsername(email);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+    
+    @Test
+    void shouldContinueWhenUserEmailIsNull() throws ServletException, IOException {
+        String validToken = "valid-jwt-token";
+        
+        when(request.getHeader("Authorization")).thenReturn("Bearer " + validToken);
+        when(tokenBlacklistService.isTokenBlacklisted(validToken)).thenReturn(false);
+        when(jwtService.validateToken(validToken)).thenReturn(true);
+        when(jwtService.extractUsername(validToken)).thenReturn(null);
+        
+        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
+        
+        verify(filterChain, times(1)).doFilter(request, response);
+        verify(jwtService, times(1)).extractUsername(validToken);
+        verify(userDetailsService, never()).loadUserByUsername(anyString());
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+    
+    @Test
+    void shouldContinueWhenLoadUserByUsernameThrowsException() throws ServletException, IOException {
+        String validToken = "valid-jwt-token";
+        String email = "joao@example.com";
+        
+        when(request.getHeader("Authorization")).thenReturn("Bearer " + validToken);
+        when(tokenBlacklistService.isTokenBlacklisted(validToken)).thenReturn(false);
+        when(jwtService.validateToken(validToken)).thenReturn(true);
+        when(jwtService.extractUsername(validToken)).thenReturn(email);
+        when(userDetailsService.loadUserByUsername(email))
+                .thenThrow(new RuntimeException("Database error"));
+        
+        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
+        
+        verify(filterChain, times(1)).doFilter(request, response);
+        verify(jwtService, times(1)).extractUsername(validToken);
+        verify(userDetailsService, times(1)).loadUserByUsername(email);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
 }
 
