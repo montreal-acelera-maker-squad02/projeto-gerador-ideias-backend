@@ -608,5 +608,93 @@ class IdeaControllerTest {
                 .andExpect(status().isInternalServerError());
     }
 
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldGetStatsSuccessfully() throws Exception {
+        when(ideaService.getAverageIdeaGenerationTime()).thenReturn(1550.75);
+
+        mockMvc.perform(get("/api/ideas/stats")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.averageGenerationTimeMs", is(1550.75)));
+
+        verify(ideaService, times(1)).getAverageIdeaGenerationTime();
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldGetStatsWithNullAverageTime() throws Exception {
+        when(ideaService.getAverageIdeaGenerationTime()).thenReturn(null);
+
+        mockMvc.perform(get("/api/ideas/stats")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.averageGenerationTimeMs", is(0.0)));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturnZeroWhenServiceReturnsZero() throws Exception {
+        when(ideaService.getAverageIdeaGenerationTime()).thenReturn(0.0);
+
+        mockMvc.perform(get("/api/ideas/stats")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.averageGenerationTimeMs", is(0.0)));
+
+        verify(ideaService, times(1)).getAverageIdeaGenerationTime();
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldHandleLargeDoubleValue() throws Exception {
+        double largeValue = 987654321.12345;
+        when(ideaService.getAverageIdeaGenerationTime()).thenReturn(largeValue);
+
+        mockMvc.perform(get("/api/ideas/stats")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.averageGenerationTimeMs", is(largeValue)));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldHandleSmallFractionalValue() throws Exception {
+        double smallValue = 0.000123;
+        when(ideaService.getAverageIdeaGenerationTime()).thenReturn(smallValue);
+
+        mockMvc.perform(get("/api/ideas/stats")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.averageGenerationTimeMs", is(smallValue)));
+    }
+
+    @Test
+    void shouldReturnUnauthorizedWhenNotAuthenticated() throws Exception {
+        mockMvc.perform(get("/api/ideas/stats")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+
+        verify(ideaService, never()).getAverageIdeaGenerationTime();
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturnCorrectContentType() throws Exception {
+        mockMvc.perform(get("/api/ideas/stats"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturnOkEvenIfServiceThrowsException() throws Exception {
+        when(ideaService.getAverageIdeaGenerationTime()).thenThrow(new RuntimeException("Erro de banco de dados"));
+
+        mockMvc.perform(get("/api/ideas/stats"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error", is("Erro interno do servidor")))
+                .andExpect(jsonPath("$.message", is("Erro de banco de dados")));
+    }
 }
 

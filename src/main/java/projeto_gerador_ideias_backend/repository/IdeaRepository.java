@@ -38,4 +38,7 @@ public interface IdeaRepository extends JpaRepository<Idea, Long>, JpaSpecificat
     List<Object[]> findIdeasSummaryOnlyByUserId(@Param("userId") Long userId);
 
     Optional<Idea> findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(User user, Theme theme, String context);
+
+    @Query("SELECT AVG(i.executionTimeMs) FROM Idea i")
+    Double getAverageExecutionTime();
 }
