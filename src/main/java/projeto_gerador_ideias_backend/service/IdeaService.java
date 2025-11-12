@@ -36,6 +36,8 @@ public class IdeaService {
     private final OllamaCacheableService ollamaService;
     private final FailureCounterService failureCounterService;
     private final ThemeRepository themeRepository;
+    private final IdeaSummaryService ideaSummaryService;
+    private final IdeasSummaryCacheService ideasSummaryCacheService;
     @Value("${ollama.model}")
     private String ollamaModel;
 
@@ -81,19 +83,24 @@ public class IdeaService {
 
     public IdeaService(IdeaRepository ideaRepository,
                        UserRepository userRepository,
-                       OllamaCacheableService ollamaService, FailureCounterService failureCounterService, ThemeRepository themeRepository) {
+                       OllamaCacheableService ollamaService, 
+                       FailureCounterService failureCounterService, 
+                       ThemeRepository themeRepository,
+                       IdeaSummaryService ideaSummaryService,
+                       IdeasSummaryCacheService ideasSummaryCacheService) {
         this.ideaRepository = ideaRepository;
         this.userRepository = userRepository;
         this.ollamaService = ollamaService;
         this.failureCounterService = failureCounterService;
         this.themeRepository = themeRepository;
+        this.ideaSummaryService = ideaSummaryService;
+        this.ideasSummaryCacheService = ideasSummaryCacheService;
     }
 
     @Transactional
     public IdeaResponse generateIdea(IdeaRequest request, boolean skipCache) {
         User currentUser = getCurrentAuthenticatedUser();
 
-        // Busca o tema pelo ID informado no request
         Theme theme = themeRepository.findById(request.getTheme())
                 .orElseThrow(() -> new IllegalArgumentException("Tema inválido: " + request.getTheme()));
 
@@ -128,7 +135,12 @@ public class IdeaService {
                 executionTime
         );
         newIdea.setUser(currentUser);
+
+        String summary = ideaSummaryService.summarizeIdeaSimple(aiGeneratedContent);
+        newIdea.setSummary(summary);
         Idea savedIdea = ideaRepository.save(newIdea);
+        
+        ideasSummaryCacheService.invalidateUserCache(currentUser.getId());
 
         return new IdeaResponse(savedIdea);
     }
@@ -205,7 +217,13 @@ public class IdeaService {
         );
         newIdea.setUser(currentUser);
 
+        String summary = ideaSummaryService.summarizeIdeaSimple(finalContent);
+        newIdea.setSummary(summary);
+
         Idea savedIdea = ideaRepository.save(newIdea);
+        
+        ideasSummaryCacheService.invalidateUserCache(currentUser.getId());
+        
         return new IdeaResponse(savedIdea);
     }
 
@@ -253,20 +271,16 @@ public class IdeaService {
             Specification<Idea> spec = (root, query, criteriaBuilder) -> {
                 Predicate predicate = criteriaBuilder.conjunction();
 
-                // filtro por usuário
                 predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("user").get("id"), userId));
 
-                // filtro por tema (caso informado)
                 if (finalThemeEntity != null) {
                     predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("theme"), finalThemeEntity));
                 }
 
-                // filtro por data inicial
                 if (startDate != null) {
                     predicate = criteriaBuilder.and(predicate, criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), startDate));
                 }
 
-                // filtro por data final
                 if (endDate != null) {
                     predicate = criteriaBuilder.and(predicate, criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), endDate));
                 }
@@ -358,7 +372,6 @@ public class IdeaService {
         userRepository.saveAndFlush(user);
     }
 
-    // BUSCAR IDEIAS FAVORITAS
     @Transactional(readOnly = true)
     public List<IdeaResponse> listarIdeiasFavoritadas() {
         User user = getCurrentAuthenticatedUser();

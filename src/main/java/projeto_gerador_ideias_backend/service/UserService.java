@@ -31,6 +31,7 @@ public class UserService {
     private final UserCacheService userCacheService;
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenBlacklistService tokenBlacklistService;
+    private final IdeasSummaryCacheService ideasSummaryCacheService;
     
     @Transactional
     public RegisterResponse registerUser(RegisterRequest request) {
@@ -147,6 +148,8 @@ public class UserService {
         response.setEmail(user.getEmail());
         response.setAccessToken(accessToken);
         response.setRefreshToken(refreshTokenString);
+        
+        ideasSummaryCacheService.preloadUserIdeasSummary(user.getId());
         
         return response;
     }
