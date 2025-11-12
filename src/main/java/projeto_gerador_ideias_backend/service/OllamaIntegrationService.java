@@ -46,7 +46,15 @@ public class OllamaIntegrationService {
         backoff = @Backoff(delay = 1000, multiplier = 2)
     )
     public String callOllamaWithSystemPrompt(String systemPrompt, String userPrompt) {
-        OllamaRequest ollamaRequest = new OllamaRequest(ollamaModel, systemPrompt, userPrompt);
+        OllamaRequest ollamaRequest = new OllamaRequest(
+            ollamaModel, 
+            systemPrompt, 
+            userPrompt,
+            chatProperties.getOllamaNumPredict(),
+            chatProperties.getOllamaTemperature(),
+            chatProperties.getOllamaTopP(),
+            chatProperties.getOllamaNumCtx()
+        );
         return executeOllamaCall(ollamaRequest);
     }
 
@@ -56,7 +64,16 @@ public class OllamaIntegrationService {
         backoff = @Backoff(delay = 1000, multiplier = 2)
     )
     public String callOllamaWithHistory(String systemPrompt, List<OllamaRequest.Message> historyMessages, String userPrompt) {
-        OllamaRequest ollamaRequest = new OllamaRequest(ollamaModel, systemPrompt, historyMessages, userPrompt);
+        OllamaRequest ollamaRequest = new OllamaRequest(
+            ollamaModel, 
+            systemPrompt, 
+            historyMessages, 
+            userPrompt,
+            chatProperties.getOllamaNumPredict(),
+            chatProperties.getOllamaTemperature(),
+            chatProperties.getOllamaTopP(),
+            chatProperties.getOllamaNumCtx()
+        );
         return executeOllamaCall(ollamaRequest);
     }
 

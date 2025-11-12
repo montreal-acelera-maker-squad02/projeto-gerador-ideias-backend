@@ -197,6 +197,165 @@ class JwtServiceTest {
         }
     }
     
+    @Test
+    void shouldGenerateAccessTokenSuccessfully() {
+        String email = "test@example.com";
+        Long userId = 1L;
+        
+        String token = jwtService.generateAccessToken(email, userId);
+        
+        assertNotNull(token);
+        assertFalse(token.isEmpty());
+        
+        Claims claims = parseToken(token);
+        assertEquals(email, claims.getSubject());
+        assertEquals(userId, claims.get("userId", Long.class));
+        assertEquals("access", claims.get("type", String.class));
+    }
+    
+    @Test
+    void shouldGenerateRefreshTokenSuccessfully() {
+        String email = "test@example.com";
+        Long userId = 1L;
+        
+        String token = jwtService.generateRefreshToken(email, userId);
+        
+        assertNotNull(token);
+        assertFalse(token.isEmpty());
+        
+        Claims claims = parseToken(token);
+        assertEquals(email, claims.getSubject());
+        assertEquals(userId, claims.get("userId", Long.class));
+        assertEquals("refresh", claims.get("type", String.class));
+    }
+    
+    @Test
+    void shouldValidateRefreshTokenSuccessfully() {
+        String email = "test@example.com";
+        Long userId = 1L;
+        
+        String token = jwtService.generateRefreshToken(email, userId);
+        boolean isValid = jwtService.validateRefreshToken(token);
+        
+        assertTrue(isValid);
+    }
+    
+    @Test
+    void shouldInvalidateRefreshTokenWhenNull() {
+        boolean isValid = jwtService.validateRefreshToken(null);
+        assertFalse(isValid);
+    }
+    
+    @Test
+    void shouldInvalidateRefreshTokenWhenBlank() {
+        boolean isValid = jwtService.validateRefreshToken("");
+        assertFalse(isValid);
+    }
+    
+    @Test
+    void shouldInvalidateRefreshTokenWhenWrongType() {
+        String email = "test@example.com";
+        Long userId = 1L;
+        
+        String accessToken = jwtService.generateAccessToken(email, userId);
+        boolean isValid = jwtService.validateRefreshToken(accessToken);
+        
+        assertFalse(isValid);
+    }
+    
+    @Test
+    void shouldInvalidateRefreshTokenWhenExpired() {
+        JwtService serviceWithShortExpiration = new JwtService();
+        ReflectionTestUtils.setField(serviceWithShortExpiration, "secret", TEST_SECRET);
+        ReflectionTestUtils.setField(serviceWithShortExpiration, "accessTokenExpiration", TEST_EXPIRATION);
+        ReflectionTestUtils.setField(serviceWithShortExpiration, "refreshTokenExpiration", 1L);
+        
+        String email = "test@example.com";
+        Long userId = 1L;
+        
+        String token = serviceWithShortExpiration.generateRefreshToken(email, userId);
+        
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        boolean isValid = serviceWithShortExpiration.validateRefreshToken(token);
+        assertFalse(isValid);
+    }
+    
+    @Test
+    void shouldInvalidateAccessTokenWhenWrongType() {
+        String email = "test@example.com";
+        Long userId = 1L;
+        
+        String refreshToken = jwtService.generateRefreshToken(email, userId);
+        boolean isValid = jwtService.validateToken(refreshToken);
+        
+        assertFalse(isValid);
+    }
+    
+    @Test
+    void shouldInvalidateTokenWhenTypeIsNull() throws Exception {
+        SecretKey key = Keys.hmacShaKeyFor(TEST_SECRET.getBytes(StandardCharsets.UTF_8));
+        String tokenWithoutType = Jwts.builder()
+                .subject("test@example.com")
+                .claim("userId", 1L)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 3600000))
+                .signWith(key)
+                .compact();
+        
+        boolean isValid = jwtService.validateToken(tokenWithoutType);
+        assertFalse(isValid);
+    }
+    
+    @Test
+    void shouldInvalidateRefreshTokenWhenTypeIsNull() throws Exception {
+        SecretKey key = Keys.hmacShaKeyFor(TEST_SECRET.getBytes(StandardCharsets.UTF_8));
+        String tokenWithoutType = Jwts.builder()
+                .subject("test@example.com")
+                .claim("userId", 1L)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 3600000))
+                .signWith(key)
+                .compact();
+        
+        boolean isValid = jwtService.validateRefreshToken(tokenWithoutType);
+        assertFalse(isValid);
+    }
+    
+    @Test
+    void shouldInvalidateRefreshTokenWhenMalformed() {
+        String malformedToken = "invalid.token.here";
+        
+        boolean isValid = jwtService.validateRefreshToken(malformedToken);
+        assertFalse(isValid);
+    }
+    
+    @Test
+    void shouldInvalidateTokenWhenExpired() {
+        JwtService serviceWithShortExpiration = new JwtService();
+        ReflectionTestUtils.setField(serviceWithShortExpiration, "secret", TEST_SECRET);
+        ReflectionTestUtils.setField(serviceWithShortExpiration, "accessTokenExpiration", 1L);
+        ReflectionTestUtils.setField(serviceWithShortExpiration, "refreshTokenExpiration", 604800L);
+        
+        String email = "test@example.com";
+        Long userId = 1L;
+        
+        String token = serviceWithShortExpiration.generateAccessToken(email, userId);
+        
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        boolean isValid = serviceWithShortExpiration.validateToken(token);
+        assertFalse(isValid);
+    }
+    
     private Claims parseToken(String token) {
         SecretKey key = Keys.hmacShaKeyFor(TEST_SECRET.getBytes(StandardCharsets.UTF_8));
         return Jwts.parser()

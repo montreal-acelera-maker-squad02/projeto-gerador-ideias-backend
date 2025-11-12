@@ -246,15 +246,15 @@ public class ChatService {
                 ? ollamaIntegrationService.callOllamaWithSystemPrompt(preparation.getSystemPrompt(), preparation.getUserMessage())
                 : ollamaIntegrationService.callOllamaWithHistory(preparation.getSystemPrompt(), historyMessages, preparation.getUserMessage());
             
-            contentModerationService.validateModerationResponse(aiResponse, preparation.isFreeChat());
-            int responseTokens = tokenCalculationService.estimateTokens(aiResponse);
+            String normalizedResponse = contentModerationService.validateAndNormalizeResponse(aiResponse, preparation.isFreeChat());
+            int responseTokens = tokenCalculationService.estimateTokens(normalizedResponse);
             
                 if (responseTokens < 0) {
                 log.warn("Negative token count calculated, setting to 0", Map.of(LOG_KEY_SESSION_ID, sessionId, "responseTokens", responseTokens));
                     responseTokens = 0;
                 }
             
-            return new OllamaResponseResult(aiResponse, responseTokens);
+            return new OllamaResponseResult(normalizedResponse, responseTokens);
             } catch (ValidationException e) {
             log.error("Validation error during message processing", Map.of(LOG_KEY_SESSION_ID, sessionId), e);
                 chatMetricsService.recordValidationError("moderation");
@@ -559,6 +559,10 @@ public class ChatService {
         
         return messages;
     }
+    
+    private boolean hasMoreMessagesBefore(Long sessionId, LocalDateTime beforeTimestamp) {
+        return chatMessageRepository.countMessagesBeforeTimestamp(sessionId, beforeTimestamp) > 0;
+    }
 
     private List<ChatMessage> getRecentMessages(Long sessionId) {
         int limit = chatProperties.getMaxHistoryMessages();
@@ -573,13 +577,13 @@ public class ChatService {
     }
     
     @Transactional(readOnly = true)
-    public List<ChatMessageResponse> getOlderMessages(Long sessionId, String beforeTimestamp, Integer limit) {
+    public projeto_gerador_ideias_backend.dto.response.OlderMessagesResponse getOlderMessages(Long sessionId, String beforeTimestamp, Integer limit) {
         validateSessionAndPermission(sessionId);
         LocalDateTime before = parseTimestamp(beforeTimestamp);
         int messageLimit = calculateMessageLimit(limit);
         
         org.springframework.data.domain.Pageable pageable = 
-            org.springframework.data.domain.PageRequest.of(0, messageLimit);
+            org.springframework.data.domain.PageRequest.of(0, messageLimit + 1);
         
         List<ChatMessage> messages = chatMessageRepository.findMessagesBeforeTimestamp(
             sessionId, 
@@ -587,11 +591,18 @@ public class ChatService {
             pageable
         );
         
+        boolean hasMore = messages.size() > messageLimit;
+        if (hasMore) {
+            messages = messages.subList(0, messageLimit);
+        }
+        
         messages.sort((m1, m2) -> m1.getCreatedAt().compareTo(m2.getCreatedAt()));
         
-        return messages.stream()
+        List<ChatMessageResponse> messageResponses = messages.stream()
             .map(msg -> mapMessageToResponse(sessionId, msg))
             .toList();
+        
+        return new projeto_gerador_ideias_backend.dto.response.OlderMessagesResponse(messageResponses, hasMore);
     }
 
     private void validateSessionAndPermission(Long sessionId) {
@@ -1275,6 +1286,12 @@ public class ChatService {
         TokenSummary tokenSummary = calculateTokenSummary(session);
         int tokensRemaining = calculateTokensRemaining(session, tokenSummary.getTotalTokens());
         
+        boolean hasMore = false;
+        if (!messages.isEmpty()) {
+            LocalDateTime oldestMessageTime = messages.get(0).getCreatedAt();
+            hasMore = hasMoreMessagesBefore(session.getId(), oldestMessageTime);
+        }
+        
         return new ChatSessionResponse(
                 session.getId(),
                 session.getType().name(),
@@ -1285,7 +1302,8 @@ public class ChatService {
                 tokenSummary.getTotalTokens(),
                 tokensRemaining,
                 session.getLastResetAt().toString(),
-                messageResponses
+                messageResponses,
+                hasMore
         );
     }
 

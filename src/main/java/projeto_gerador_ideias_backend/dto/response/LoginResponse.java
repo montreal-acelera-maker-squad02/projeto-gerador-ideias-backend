@@ -1,5 +1,6 @@
 package projeto_gerador_ideias_backend.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,6 +19,7 @@ public class LoginResponse {
     private String refreshToken;
     
     @Deprecated
+    @JsonIgnore
     public String getToken() {
         return accessToken;
     }

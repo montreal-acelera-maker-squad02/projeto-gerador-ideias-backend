@@ -19,5 +19,9 @@ public class ChatProperties {
     private int ollamaRetryAttempts = 3;
     private long ollamaRetryDelayMs = 1000;
     private int maxResponseLength = 100000;
+    private int ollamaNumPredict = 300; 
+    private double ollamaTemperature = 0.7; 
+    private double ollamaTopP = 0.9;
+    private int ollamaNumCtx = 2048; 
 }
 

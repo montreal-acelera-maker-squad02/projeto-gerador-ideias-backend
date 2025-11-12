@@ -114,6 +114,7 @@ class ChatServiceTest {
         lenient().when(promptBuilderService.buildSystemPromptForFreeChat()).thenReturn("System prompt");
         lenient().when(promptBuilderService.buildSystemPromptForIdeaChat(any(ChatSession.class))).thenReturn("System prompt");
         lenient().when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("AI Response");
+        lenient().when(contentModerationService.validateAndNormalizeResponse(anyString(), anyBoolean())).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(chatMessageRepository.countBySessionId(any())).thenReturn(0L);
         lenient().when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt())).thenReturn(Collections.emptyList());
         
@@ -281,6 +282,7 @@ class ChatServiceTest {
         when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(0);
         when(tokenCalculationService.estimateTokens(anyString())).thenReturn(5);
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("AI Response");
+        when(contentModerationService.validateAndNormalizeResponse("AI Response", true)).thenReturn("AI Response");
         when(tokenCalculationService.getTotalTokensUsedByUser(any())).thenReturn(10);
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
@@ -311,7 +313,7 @@ class ChatServiceTest {
         messageRequest.setMessage("Conteúdo perigoso");
 
         mockWebServer.enqueue(new MockResponse()
-                .setBody(createMockOllamaResponse("PERIGOSO"))
+                .setBody(createMockOllamaResponse("[MODERACAO: PERIGOSO]"))
                 .addHeader("Content-Type", "application/json"));
 
         when(chatSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(session));
@@ -320,16 +322,19 @@ class ChatServiceTest {
         when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(0);
         when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(5);
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("[MODERACAO: PERIGOSO]");
+        when(contentModerationService.validateAndNormalizeResponse("[MODERACAO: PERIGOSO]", true))
+                .thenReturn("Desculpe, não posso processar essa mensagem devido ao conteúdo. Posso ajudá-lo com outras questões?");
         when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
             ChatMessage msg = invocation.getArgument(0);
             msg.setId(1L);
             msg.setCreatedAt(LocalDateTime.now());
             return msg;
         });
-        doThrow(new ValidationException("Desculpe, não posso processar essa mensagem devido ao conteúdo."))
-                .when(contentModerationService).validateModerationResponse("[MODERACAO: PERIGOSO]", true);
 
-        assertThrows(ValidationException.class, () -> chatService.sendMessage(1L, messageRequest));
+        ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
+        
+        assertNotNull(response);
+        assertEquals("Desculpe, não posso processar essa mensagem devido ao conteúdo. Posso ajudá-lo com outras questões?", response.getContent());
     }
 
     @Test
@@ -581,6 +586,7 @@ class ChatServiceTest {
         when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(0);
         when(tokenCalculationService.estimateTokens(anyString())).thenReturn(5);
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("AI Response");
+        when(contentModerationService.validateAndNormalizeResponse("AI Response", false)).thenReturn("AI Response");
         when(tokenCalculationService.getTotalTokensUsedByUser(any())).thenReturn(10);
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
@@ -624,6 +630,7 @@ class ChatServiceTest {
         when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10);
         when(tokenCalculationService.estimateTokens(anyString())).thenReturn(5);
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("Estou bem, obrigado!");
+        when(contentModerationService.validateAndNormalizeResponse("Estou bem, obrigado!", true)).thenReturn("Estou bem, obrigado!");
         when(tokenCalculationService.getTotalTokensUsedByUser(any())).thenReturn(20);
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest);
@@ -856,8 +863,6 @@ class ChatServiceTest {
         assertThrows(ResourceNotFoundException.class, () -> chatService.startChat(request));
     }
 
-    // ========== Testes para getOlderMessages ==========
-
     @Test
     void shouldGetOlderMessagesSuccessfully() {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
@@ -880,10 +885,11 @@ class ChatServiceTest {
                 .thenReturn(Arrays.asList(oldMessage1, oldMessage2));
 
         String beforeTimestamp = LocalDateTime.now().minusMinutes(30).toString();
-        List<ChatMessageResponse> response = chatService.getOlderMessages(1L, beforeTimestamp, 20);
+        OlderMessagesResponse response = chatService.getOlderMessages(1L, beforeTimestamp, 20);
 
         assertNotNull(response);
-        assertEquals(2, response.size());
+        assertNotNull(response.getMessages());
+        assertEquals(2, response.getMessages().size());
         verify(chatMessageRepository).findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any());
     }
 
@@ -927,9 +933,10 @@ class ChatServiceTest {
                 .thenReturn(Collections.emptyList());
 
         String beforeTimestamp = LocalDateTime.now().minusMinutes(30).toString();
-        List<ChatMessageResponse> response = chatService.getOlderMessages(1L, beforeTimestamp, 50);
+        OlderMessagesResponse response = chatService.getOlderMessages(1L, beforeTimestamp, 50);
 
         assertNotNull(response);
+        assertNotNull(response.getMessages());
         verify(chatMessageRepository).findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any());
     }
 
@@ -946,13 +953,12 @@ class ChatServiceTest {
                 .thenReturn(Collections.emptyList());
 
         String beforeTimestamp = LocalDateTime.now().minusMinutes(30).toString();
-        List<ChatMessageResponse> response = chatService.getOlderMessages(1L, beforeTimestamp, null);
+        OlderMessagesResponse response = chatService.getOlderMessages(1L, beforeTimestamp, null);
 
         assertNotNull(response);
+        assertNotNull(response.getMessages());
         verify(chatMessageRepository).findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any());
     }
-
-    // ========== Testes para getChatLogs ==========
 
     @Test
     void shouldGetChatLogsSuccessfully() {
@@ -1061,8 +1067,6 @@ class ChatServiceTest {
         assertEquals(1L, response.getInteractions().get(0).getIdeaId());
     }
 
-    // ========== Testes para edge cases de mensagens ==========
-
     @Test
     void shouldThrowExceptionWhenMessageIsEmpty() {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
@@ -1118,6 +1122,7 @@ class ChatServiceTest {
         when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt())).thenReturn(Collections.emptyList());
         when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(5);
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("Resposta");
+        when(contentModerationService.validateAndNormalizeResponse("Resposta", true)).thenReturn("Resposta");
         when(tokenCalculationService.estimateTokens(anyString())).thenReturn(-5);
         when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
             ChatMessage msg = invocation.getArgument(0);
@@ -1136,8 +1141,6 @@ class ChatServiceTest {
         verify(tokenCalculationService, atLeastOnce()).estimateTokens(anyString());
     }
 
-    // ========== Testes para OptimisticLockException ==========
-
     @Test
     void shouldHandleOptimisticLockExceptionInPrepareMessage() {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
@@ -1152,6 +1155,7 @@ class ChatServiceTest {
         when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt())).thenReturn(Collections.emptyList());
         when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(5);
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("Resposta");
+        when(contentModerationService.validateAndNormalizeResponse("Resposta", true)).thenReturn("Resposta");
         when(tokenCalculationService.estimateTokens(anyString())).thenReturn(10);
         when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
             ChatMessage msg = invocation.getArgument(0);
@@ -1220,8 +1224,6 @@ class ChatServiceTest {
         assertThrows(TokenLimitExceededException.class, () -> chatService.sendMessage(1L, messageRequest));
     }
 
-    // ========== Testes para ensureIdeaContextCache ==========
-
     @Test
     void shouldPopulateIdeaContextCacheWhenMissing() {
         Idea idea = new Idea();
@@ -1282,8 +1284,6 @@ class ChatServiceTest {
         assertNotNull(response);
     }
 
-    // ========== Testes para removeModerationTags ==========
-
     @Test
     void shouldRemoveModerationTagsFromResponse() {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
@@ -1298,6 +1298,8 @@ class ChatServiceTest {
         when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(5);
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString()))
                 .thenReturn("[MODERACAO: SEGURA]Resposta limpa");
+        when(contentModerationService.validateAndNormalizeResponse("[MODERACAO: SEGURA]Resposta limpa", true))
+                .thenReturn("Resposta limpa");
         when(tokenCalculationService.estimateTokens(anyString())).thenReturn(10);
         when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
             ChatMessage msg = invocation.getArgument(0);
@@ -1329,6 +1331,8 @@ class ChatServiceTest {
         when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(5);
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString()))
                 .thenReturn("[MODERACAO: PERIGOSO]Conteúdo perigoso");
+        when(contentModerationService.validateAndNormalizeResponse("[MODERACAO: PERIGOSO]Conteúdo perigoso", true))
+                .thenReturn("Desculpe, não posso processar essa mensagem devido ao conteúdo. Posso ajudá-lo com outras questões?");
         when(tokenCalculationService.estimateTokens(anyString())).thenReturn(10);
         when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
             ChatMessage msg = invocation.getArgument(0);
@@ -1361,6 +1365,8 @@ class ChatServiceTest {
         when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(5);
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString()))
                 .thenReturn("[MODERACAO: SEGURA]");
+        when(contentModerationService.validateAndNormalizeResponse("[MODERACAO: SEGURA]", true))
+                .thenReturn("");
         when(tokenCalculationService.estimateTokens(anyString())).thenReturn(10);
         when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
             ChatMessage msg = invocation.getArgument(0);
@@ -1375,8 +1381,6 @@ class ChatServiceTest {
 
         assertThrows(OllamaServiceException.class, () -> chatService.sendMessage(1L, messageRequest));
     }
-
-    // ========== Testes para callOllamaWithHistory ==========
 
     @Test
     void shouldCallOllamaWithHistoryWhenMessagesExist() {
@@ -1405,6 +1409,8 @@ class ChatServiceTest {
         ));
         when(ollamaIntegrationService.callOllamaWithHistory(anyString(), anyList(), anyString()))
                 .thenReturn("Estou bem, obrigado!");
+        when(contentModerationService.validateAndNormalizeResponse("Estou bem, obrigado!", true))
+                .thenReturn("Estou bem, obrigado!");
         when(tokenCalculationService.estimateTokens(anyString())).thenReturn(10);
         when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
             ChatMessage msg = invocation.getArgument(0);
@@ -1424,8 +1430,6 @@ class ChatServiceTest {
         verify(ollamaIntegrationService, never()).callOllamaWithSystemPrompt(anyString(), anyString());
     }
 
-    // ========== Testes para cálculo de tokens remaining ==========
-
     @Test
     void shouldCalculateTokensRemainingWithPreviousAssistantMessage() {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
@@ -1444,6 +1448,7 @@ class ChatServiceTest {
         when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt())).thenReturn(Collections.emptyList());
         when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(10);
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("Nova resposta");
+        when(contentModerationService.validateAndNormalizeResponse("Nova resposta", true)).thenReturn("Nova resposta");
         when(tokenCalculationService.estimateTokens(anyString())).thenReturn(15);
         when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
             ChatMessage msg = invocation.getArgument(0);
@@ -1476,6 +1481,7 @@ class ChatServiceTest {
         when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt())).thenReturn(Collections.emptyList());
         when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(10);
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("Primeira resposta");
+        when(contentModerationService.validateAndNormalizeResponse("Primeira resposta", true)).thenReturn("Primeira resposta");
         when(tokenCalculationService.estimateTokens(anyString())).thenReturn(15);
         when(chatProperties.getMaxTokensPerChat()).thenReturn(10000);
         when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
@@ -1494,8 +1500,6 @@ class ChatServiceTest {
         assertNotNull(response);
         assertNotNull(response.getTokensRemaining());
     }
-
-    // ========== Testes para summarizeIdeaSimple ==========
 
     @Test
     void shouldSummarizeIdeaWithShortContent() {
@@ -1557,8 +1561,6 @@ class ChatServiceTest {
         assertEquals("", response.get(0).getSummary());
     }
 
-    // ========== Testes para getInitialMessages e getRecentMessages ==========
-
     @Test
     void shouldGetInitialMessagesWithLimit() {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
@@ -1609,6 +1611,7 @@ class ChatServiceTest {
         when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(5);
         when(promptBuilderService.buildMessageHistory(anyList())).thenReturn(Collections.emptyList());
         when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("Resposta");
+        when(contentModerationService.validateAndNormalizeResponse("Resposta", true)).thenReturn("Resposta");
         when(tokenCalculationService.estimateTokens(anyString())).thenReturn(10);
         when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
             ChatMessage msg = invocation.getArgument(0);
@@ -1625,8 +1628,6 @@ class ChatServiceTest {
 
         assertNotNull(response);
     }
-
-    // ========== Testes para buildSessionResponse ==========
 
     @Test
     void shouldBuildSessionResponseWithIdeaBasedChat() {
@@ -1694,8 +1695,6 @@ class ChatServiceTest {
         assertNull(response.getIdeaSummary());
     }
 
-    // ========== Testes para DataAccessException ==========
-
     @Test
     void shouldHandleInvalidDataAccessApiUsageException() {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
@@ -1726,11 +1725,8 @@ class ChatServiceTest {
         assertThrows(OllamaServiceException.class, () -> chatService.sendMessage(1L, messageRequest));
     }
 
-    // ========== Testes para getTransactionalService ==========
-
     @Test
     void shouldUseSelfWhenAvailable() {
-        // Este teste verifica que o serviço usa o proxy quando disponível
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setId(1L);
         session.setLastResetAt(LocalDateTime.now());
@@ -1751,8 +1747,6 @@ class ChatServiceTest {
 
         assertNotNull(response);
     }
-
-    // ========== Testes para mapMessageToResponse ==========
 
     @Test
     void shouldMapUserMessageToResponse() {
@@ -1775,9 +1769,10 @@ class ChatServiceTest {
                 .thenReturn(Arrays.asList(userMessage, assistantMessage));
 
         String beforeTimestamp = LocalDateTime.now().toString();
-        List<ChatMessageResponse> response = chatService.getOlderMessages(1L, beforeTimestamp, 20);
+        OlderMessagesResponse response = chatService.getOlderMessages(1L, beforeTimestamp, 20);
 
         assertNotNull(response);
+        assertNotNull(response.getMessages());
     }
 
     @Test
@@ -1797,12 +1792,659 @@ class ChatServiceTest {
                 .thenReturn(Collections.singletonList(assistantMessage));
 
         String beforeTimestamp = LocalDateTime.now().toString();
-        List<ChatMessageResponse> response = chatService.getOlderMessages(1L, beforeTimestamp, 20);
+        OlderMessagesResponse response = chatService.getOlderMessages(1L, beforeTimestamp, 20);
 
         assertNotNull(response);
-        if (!response.isEmpty()) {
-            assertEquals("assistant", response.get(0).getRole());
+        assertNotNull(response.getMessages());
+        if (!response.getMessages().isEmpty()) {
+            assertEquals("assistant", response.getMessages().get(0).getRole());
         }
+    }
+
+    @Test
+    void shouldGetOlderMessagesWithLimitGreaterThan50() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
+        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+                .thenReturn(Collections.emptyList());
+        when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
+                .thenReturn(Collections.emptyList());
+
+        String beforeTimestamp = LocalDateTime.now().minusMinutes(30).toString();
+        OlderMessagesResponse response = chatService.getOlderMessages(1L, beforeTimestamp, 100);
+
+        assertNotNull(response);
+        assertNotNull(response.getMessages());
+        verify(chatMessageRepository).findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), argThat(pageable -> 
+            pageable.getPageSize() == 51));
+    }
+
+    @Test
+    void shouldGetOlderMessagesWithHasMoreTrue() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        ChatMessage msg1 = new ChatMessage(session, ChatMessage.MessageRole.USER, "Msg1", 10);
+        msg1.setId(1L);
+        msg1.setCreatedAt(LocalDateTime.now().minusHours(2));
+        ChatMessage msg2 = new ChatMessage(session, ChatMessage.MessageRole.ASSISTANT, "Msg2", 20);
+        msg2.setId(2L);
+        msg2.setCreatedAt(LocalDateTime.now().minusHours(1));
+        ChatMessage msg3 = new ChatMessage(session, ChatMessage.MessageRole.USER, "Msg3", 10);
+        msg3.setId(3L);
+        msg3.setCreatedAt(LocalDateTime.now().minusMinutes(30));
+
+        when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
+        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+                .thenReturn(Arrays.asList(msg1, msg2, msg3));
+        when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
+                .thenReturn(Arrays.asList(msg1, msg2, msg3));
+
+        String beforeTimestamp = LocalDateTime.now().toString();
+        OlderMessagesResponse response = chatService.getOlderMessages(1L, beforeTimestamp, 2);
+
+        assertNotNull(response);
+        assertTrue(response.isHasMore());
+        assertEquals(2, response.getMessages().size());
+    }
+
+    @Test
+    void shouldGetOlderMessagesWithHasMoreFalse() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        ChatMessage msg1 = new ChatMessage(session, ChatMessage.MessageRole.USER, "Msg1", 10);
+        msg1.setId(1L);
+        msg1.setCreatedAt(LocalDateTime.now().minusHours(2));
+
+        when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
+        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+                .thenReturn(Collections.singletonList(msg1));
+        when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
+                .thenReturn(Collections.singletonList(msg1));
+
+        String beforeTimestamp = LocalDateTime.now().toString();
+        OlderMessagesResponse response = chatService.getOlderMessages(1L, beforeTimestamp, 20);
+
+        assertNotNull(response);
+        assertFalse(response.isHasMore());
+        assertEquals(1, response.getMessages().size());
+    }
+
+    @Test
+    void shouldGetChatLogsWithEmptyMessages() {
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Collections.emptyList());
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(0, response.getInteractions().size());
+        assertEquals(0, response.getSummary().getTotalInteractions());
+    }
+
+
+    @Test
+    void shouldGetChatLogsWithMaxPageSize() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        ChatMessage userMessage = new ChatMessage(session, ChatMessage.MessageRole.USER, "Test", 10);
+        userMessage.setId(1L);
+        userMessage.setCreatedAt(LocalDateTime.now());
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Collections.singletonList(userMessage));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 200);
+
+        assertNotNull(response);
+        verify(chatMessageRepository).findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class));
+    }
+
+    @Test
+    void shouldGetChatLogsWithInvalidPageNumber() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        ChatMessage userMessage = new ChatMessage(session, ChatMessage.MessageRole.USER, "Test", 10);
+        userMessage.setId(1L);
+        userMessage.setCreatedAt(LocalDateTime.now());
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Collections.singletonList(userMessage));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 0, 10);
+
+        assertNotNull(response);
+        assertEquals(0, response.getPagination().getCurrentPage() - 1);
+    }
+
+    @Test
+    void shouldGetChatLogsWithNullPageAndSize() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        ChatMessage userMessage = new ChatMessage(session, ChatMessage.MessageRole.USER, "Test", 10);
+        userMessage.setId(1L);
+        userMessage.setCreatedAt(LocalDateTime.now());
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Collections.singletonList(userMessage));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, null, null);
+
+        assertNotNull(response);
+        assertEquals(1, response.getPagination().getCurrentPage());
+    }
+
+    @Test
+    void shouldGetChatLogsWithUserMessageWithoutAssistant() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        ChatMessage userMessage = new ChatMessage(session, ChatMessage.MessageRole.USER, "Test", 10);
+        userMessage.setId(1L);
+        userMessage.setCreatedAt(LocalDateTime.now());
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Collections.singletonList(userMessage));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(1, response.getInteractions().size());
+        assertNull(response.getInteractions().get(0).getAssistantMessage());
+    }
+
+    @Test
+    void shouldGetChatLogsWithMessagesFromDifferentSessions() {
+        ChatSession session1 = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session1.setId(1L);
+        ChatSession session2 = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session2.setId(2L);
+
+        ChatMessage msg1 = new ChatMessage(session1, ChatMessage.MessageRole.USER, "Msg1", 10);
+        msg1.setId(1L);
+        msg1.setCreatedAt(LocalDateTime.now());
+        ChatMessage msg2 = new ChatMessage(session2, ChatMessage.MessageRole.USER, "Msg2", 10);
+        msg2.setId(2L);
+        msg2.setCreatedAt(LocalDateTime.now().plusSeconds(1));
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Arrays.asList(msg1, msg2));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(2, response.getInteractions().size());
+    }
+
+    @Test
+    void shouldGetUserIdeasSummaryWithEmptyContent() {
+        Idea idea = new Idea();
+        idea.setId(1L);
+        idea.setUser(testUser);
+        idea.setTheme(tecnologiaTheme);
+        idea.setContext("Contexto");
+        idea.setGeneratedContent("");
+        idea.setCreatedAt(LocalDateTime.now());
+
+        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(Collections.singletonList(idea));
+
+        List<IdeaSummaryResponse> response = chatService.getUserIdeasSummary();
+
+        assertNotNull(response);
+        assertEquals(1, response.size());
+        assertEquals("", response.get(0).getSummary());
+    }
+
+    @Test
+    void shouldGetUserIdeasSummaryWithNullContent() {
+        Idea idea = new Idea();
+        idea.setId(1L);
+        idea.setUser(testUser);
+        idea.setTheme(tecnologiaTheme);
+        idea.setContext("Contexto");
+        idea.setGeneratedContent(null);
+        idea.setCreatedAt(LocalDateTime.now());
+
+        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(Collections.singletonList(idea));
+
+        List<IdeaSummaryResponse> response = chatService.getUserIdeasSummary();
+
+        assertNotNull(response);
+        assertEquals(1, response.size());
+        assertEquals("", response.get(0).getSummary());
+    }
+
+    @Test
+    void shouldStartChatWithExistingFreeSession() {
+        ChatSession existingSession = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        existingSession.setId(1L);
+        existingSession.setLastResetAt(LocalDateTime.now());
+
+        StartChatRequest request = new StartChatRequest();
+        request.setIdeaId(null);
+
+        when(chatSessionRepository.findByUserIdAndType(1L, ChatSession.ChatType.FREE))
+                .thenReturn(Optional.of(existingSession));
+        when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
+                .thenReturn(Collections.emptyList());
+        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(0);
+
+        ChatSessionResponse response = chatService.startChat(request);
+
+        assertNotNull(response);
+        assertEquals(1L, response.getSessionId());
+        verify(chatSessionRepository, never()).save(any(ChatSession.class));
+    }
+
+    @Test
+    void shouldStartChatWithExistingIdeaBasedSession() {
+        Idea idea = new Idea();
+        idea.setId(1L);
+        idea.setUser(testUser);
+        idea.setTheme(tecnologiaTheme);
+        idea.setContext("Contexto");
+        idea.setGeneratedContent("Conteúdo");
+
+        ChatSession existingSession = new ChatSession(testUser, ChatSession.ChatType.IDEA_BASED, idea);
+        existingSession.setId(1L);
+        existingSession.setLastResetAt(LocalDateTime.now());
+        existingSession.setCachedIdeaContent("Conteúdo");
+        existingSession.setCachedIdeaContext("Contexto");
+
+        StartChatRequest request = new StartChatRequest();
+        request.setIdeaId(1L);
+
+        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
+        when(chatSessionRepository.findByUserIdAndIdeaId(1L, 1L))
+                .thenReturn(Optional.of(existingSession));
+        when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
+                .thenReturn(Collections.emptyList());
+        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(0);
+        when(chatSessionRepository.save(any(ChatSession.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChatSessionResponse response = chatService.startChat(request);
+
+        assertNotNull(response);
+        assertEquals(1L, response.getSessionId());
+    }
+
+
+    @Test
+    void shouldGetOlderMessagesWithZeroLimit() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
+        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+                .thenReturn(Collections.emptyList());
+        when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
+                .thenReturn(Collections.emptyList());
+
+        String beforeTimestamp = LocalDateTime.now().minusMinutes(30).toString();
+        OlderMessagesResponse response = chatService.getOlderMessages(1L, beforeTimestamp, 0);
+
+        assertNotNull(response);
+        assertNotNull(response.getMessages());
+    }
+
+    @Test
+    void shouldGetOlderMessagesWithNegativeLimit() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
+        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+                .thenReturn(Collections.emptyList());
+        when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
+                .thenReturn(Collections.emptyList());
+
+        String beforeTimestamp = LocalDateTime.now().minusMinutes(30).toString();
+        OlderMessagesResponse response = chatService.getOlderMessages(1L, beforeTimestamp, -5);
+
+        assertNotNull(response);
+        assertNotNull(response.getMessages());
+    }
+
+    @Test
+    void shouldGetChatLogsWithInvalidUserMessages() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        ChatMessage assistantMessage = new ChatMessage(session, ChatMessage.MessageRole.ASSISTANT, "Test", 20);
+        assistantMessage.setId(1L);
+        assistantMessage.setCreatedAt(LocalDateTime.now());
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Collections.singletonList(assistantMessage));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(0, response.getInteractions().size());
+    }
+
+    @Test
+    void shouldGetChatLogsWithMessageWithoutSession() {
+        ChatMessage userMessage = new ChatMessage(null, ChatMessage.MessageRole.USER, "Test", 10);
+        userMessage.setId(1L);
+        userMessage.setCreatedAt(LocalDateTime.now());
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Collections.singletonList(userMessage));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(0, response.getInteractions().size());
+    }
+
+    @Test
+    void shouldGetChatLogsWithNullMessage() {
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Collections.singletonList(null));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(0, response.getInteractions().size());
+    }
+
+    @Test
+    void shouldGetChatLogsWithAssistantMessageWithoutMatchingUser() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        ChatMessage assistantMessage = new ChatMessage(session, ChatMessage.MessageRole.ASSISTANT, "Test", 20);
+        assistantMessage.setId(1L);
+        assistantMessage.setCreatedAt(LocalDateTime.now());
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Collections.singletonList(assistantMessage));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(0, response.getInteractions().size());
+    }
+
+    @Test
+    void shouldGetChatLogsWithAssistantMessageFromDifferentSession() {
+        ChatSession session1 = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session1.setId(1L);
+        ChatSession session2 = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session2.setId(2L);
+
+        ChatMessage userMessage = new ChatMessage(session1, ChatMessage.MessageRole.USER, "Test", 10);
+        userMessage.setId(1L);
+        userMessage.setCreatedAt(LocalDateTime.now());
+        ChatMessage assistantMessage = new ChatMessage(session2, ChatMessage.MessageRole.ASSISTANT, "Test", 20);
+        assistantMessage.setId(2L);
+        assistantMessage.setCreatedAt(LocalDateTime.now().plusSeconds(1));
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Arrays.asList(userMessage, assistantMessage));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(1, response.getInteractions().size());
+        assertNull(response.getInteractions().get(0).getAssistantMessage());
+    }
+
+    @Test
+    void shouldGetChatLogsWithNullResponseTime() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        ChatMessage userMessage = new ChatMessage(session, ChatMessage.MessageRole.USER, "Test", 10);
+        userMessage.setId(1L);
+        userMessage.setCreatedAt(LocalDateTime.now());
+        ChatMessage assistantMessage = new ChatMessage(session, ChatMessage.MessageRole.ASSISTANT, "Test", 20);
+        assistantMessage.setId(2L);
+        assistantMessage.setCreatedAt(null);
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Arrays.asList(userMessage, assistantMessage));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(1, response.getInteractions().size());
+        assertNull(response.getInteractions().get(0).getMetrics().getResponseTimeMs());
+    }
+
+    @Test
+    void shouldGetChatLogsWithNullUserMessageCreatedAt() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        ChatMessage userMessage = new ChatMessage(session, ChatMessage.MessageRole.USER, "Test", 10);
+        userMessage.setId(1L);
+        userMessage.setCreatedAt(LocalDateTime.now());
+        ChatMessage assistantMessage = new ChatMessage(session, ChatMessage.MessageRole.ASSISTANT, "Test", 20);
+        assistantMessage.setId(2L);
+        assistantMessage.setCreatedAt(null);
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Arrays.asList(userMessage, assistantMessage));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(1, response.getInteractions().size());
+        assertNull(response.getInteractions().get(0).getMetrics().getResponseTimeMs());
+    }
+
+    @Test
+    void shouldGetChatLogsWithEmptyInteractionsSummary() {
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Collections.emptyList());
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertNotNull(response.getSummary());
+        assertEquals(0, response.getSummary().getTotalInteractions());
+        assertEquals(0, response.getSummary().getTotalTokensInput());
+        assertEquals(0, response.getSummary().getTotalTokensOutput());
+        assertNull(response.getSummary().getAverageResponseTimeMs());
+    }
+
+    @Test
+    void shouldGetChatLogsWithInteractionsWithoutResponseTime() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        ChatMessage userMessage = new ChatMessage(session, ChatMessage.MessageRole.USER, "Test", 10);
+        userMessage.setId(1L);
+        userMessage.setCreatedAt(LocalDateTime.now());
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Collections.singletonList(userMessage));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(1, response.getInteractions().size());
+        assertNull(response.getInteractions().get(0).getMetrics().getResponseTimeMs());
+        assertNull(response.getSummary().getAverageResponseTimeMs());
+    }
+
+    @Test
+    void shouldGetChatLogsWithInteractionsWithResponseTime() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        LocalDateTime userTime = LocalDateTime.now();
+        ChatMessage userMessage = new ChatMessage(session, ChatMessage.MessageRole.USER, "Test", 10);
+        userMessage.setId(1L);
+        userMessage.setCreatedAt(userTime);
+        ChatMessage assistantMessage = new ChatMessage(session, ChatMessage.MessageRole.ASSISTANT, "Test", 20);
+        assistantMessage.setId(2L);
+        assistantMessage.setCreatedAt(userTime.plusSeconds(2));
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(Arrays.asList(userMessage, assistantMessage));
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(1, response.getInteractions().size());
+        assertNotNull(response.getInteractions().get(0).getMetrics().getResponseTimeMs());
+        assertTrue(response.getInteractions().get(0).getMetrics().getResponseTimeMs() > 0);
+    }
+
+    @Test
+    void shouldGetChatLogsWithMultipleInteractionsAndCalculateAverage() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+
+        List<ChatMessage> messages = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            LocalDateTime userTime = LocalDateTime.now().minusMinutes(3 - i);
+            ChatMessage userMsg = new ChatMessage(session, ChatMessage.MessageRole.USER, "Msg " + i, 10);
+            userMsg.setId((long) (i * 2 + 1));
+            userMsg.setCreatedAt(userTime);
+            messages.add(userMsg);
+
+            ChatMessage assistantMsg = new ChatMessage(session, ChatMessage.MessageRole.ASSISTANT, "Resp " + i, 20);
+            assistantMsg.setId((long) (i * 2 + 2));
+            assistantMsg.setCreatedAt(userTime.plusSeconds(1));
+            messages.add(assistantMsg);
+        }
+
+        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(messages);
+
+        ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
+
+        assertNotNull(response);
+        assertEquals(3, response.getInteractions().size());
+        assertNotNull(response.getSummary().getAverageResponseTimeMs());
+        assertTrue(response.getSummary().getAverageResponseTimeMs() > 0);
+    }
+
+    @Test
+    void shouldStartChatWhenFreeSessionIsBlocked() {
+        ChatSession blockedSession = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        blockedSession.setId(1L);
+
+        StartChatRequest request = new StartChatRequest();
+        request.setIdeaId(null);
+
+        when(chatSessionRepository.findByUserIdAndType(1L, ChatSession.ChatType.FREE))
+                .thenReturn(Optional.of(blockedSession));
+        when(chatLimitValidator.isChatBlocked(blockedSession)).thenReturn(true);
+        when(chatSessionRepository.save(any(ChatSession.class))).thenAnswer(invocation -> {
+            ChatSession session = invocation.getArgument(0);
+            session.setId(2L);
+            return session;
+        });
+        when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(any()))
+                .thenReturn(Collections.emptyList());
+        when(tokenCalculationService.getTotalUserTokensInChat(any())).thenReturn(0);
+
+        ChatSessionResponse response = chatService.startChat(request);
+
+        assertNotNull(response);
+        verify(chatSessionRepository, times(1)).save(any(ChatSession.class));
+    }
+
+    @Test
+    void shouldStartChatWhenIdeaBasedSessionIsBlocked() {
+        Idea idea = new Idea();
+        idea.setId(1L);
+        idea.setUser(testUser);
+        idea.setTheme(tecnologiaTheme);
+
+        ChatSession blockedSession = new ChatSession(testUser, ChatSession.ChatType.IDEA_BASED, idea);
+        blockedSession.setId(1L);
+
+        StartChatRequest request = new StartChatRequest();
+        request.setIdeaId(1L);
+
+        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
+        when(chatSessionRepository.findByUserIdAndIdeaId(1L, 1L))
+                .thenReturn(Optional.of(blockedSession));
+        doThrow(new TokenLimitExceededException("Chat bloqueado"))
+                .when(chatLimitValidator).validateSessionNotBlocked(blockedSession);
+
+        assertThrows(TokenLimitExceededException.class, () -> chatService.startChat(request));
+    }
+
+    @Test
+    void shouldGetInitialMessagesWithLimitExceeded() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+        session.setLastResetAt(LocalDateTime.now());
+
+        List<ChatMessage> messages = new ArrayList<>();
+        for (int i = 0; i < 15; i++) {
+            ChatMessage msg = new ChatMessage(session, ChatMessage.MessageRole.USER, "Msg " + i, 10);
+            msg.setId((long) i);
+            msg.setCreatedAt(LocalDateTime.now().minusMinutes(15 - i));
+            messages.add(msg);
+        }
+
+        when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
+        when(chatProperties.getMaxInitialMessages()).thenReturn(10);
+        when(chatMessageRepository.findRecentMessagesOptimized(1L, 10)).thenReturn(messages);
+        when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L)).thenReturn(messages);
+        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(0);
+        when(tokenCalculationService.getTotalTokensUsedByUser(1L)).thenReturn(0);
+
+        ChatSessionResponse response = chatService.getSession(1L);
+
+        assertNotNull(response);
+        verify(chatMessageRepository).findRecentMessagesOptimized(1L, 10);
+    }
+
+    @Test
+    void shouldGetRecentMessagesWithLimitExceeded() {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setId(1L);
+        session.setLastResetAt(LocalDateTime.now());
+
+        List<ChatMessage> messages = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            ChatMessage msg = new ChatMessage(session, ChatMessage.MessageRole.USER, "Msg " + i, 10);
+            msg.setId((long) i);
+            msg.setCreatedAt(LocalDateTime.now().minusMinutes(5 - i));
+            messages.add(msg);
+        }
+
+        when(chatProperties.getMaxHistoryMessages()).thenReturn(3);
+        when(chatMessageRepository.findRecentMessagesOptimized(1L, 3)).thenReturn(messages);
+        when(chatSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(session));
+        when(chatMessageRepository.countBySessionId(1L)).thenReturn(5L);
+        when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt())).thenReturn(messages);
+        when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(5);
+        when(ollamaIntegrationService.callOllamaWithSystemPrompt(anyString(), anyString())).thenReturn("Response");
+        when(contentModerationService.validateAndNormalizeResponse("Response", true)).thenReturn("Response");
+        when(tokenCalculationService.estimateTokens(anyString())).thenReturn(10);
+        when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
+            ChatMessage msg = invocation.getArgument(0);
+            msg.setId(100L);
+            msg.setCreatedAt(LocalDateTime.now());
+            return msg;
+        });
+        when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
+                .thenReturn(Collections.emptyList());
+        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
+
+        ChatMessageRequest request = new ChatMessageRequest();
+        request.setMessage("Test");
+
+        ChatMessageResponse response = chatService.sendMessage(1L, request);
+
+        assertNotNull(response);
+        verify(chatMessageRepository).findRecentMessagesOptimized(1L, 3);
     }
 }
 

@@ -17,6 +17,7 @@ import projeto_gerador_ideias_backend.dto.response.ChatMessageResponse;
 import projeto_gerador_ideias_backend.dto.response.ChatSessionResponse;
 import projeto_gerador_ideias_backend.dto.response.ErrorResponse;
 import projeto_gerador_ideias_backend.dto.response.IdeaSummaryResponse;
+import projeto_gerador_ideias_backend.dto.response.OlderMessagesResponse;
 import projeto_gerador_ideias_backend.exceptions.ValidationException;
 import projeto_gerador_ideias_backend.service.ChatService;
 
@@ -130,23 +131,23 @@ public class ChatController {
 
     @Operation(
             summary = "Carregar mensagens antigas (paginação)",
-            description = "Carrega mensagens anteriores a um timestamp específico. Usado para paginação estilo WhatsApp ao fazer scroll para cima. Retorna mensagens ordenadas do mais antigo para o mais recente."
+            description = "Carrega mensagens anteriores a um timestamp específico. Usado para paginação estilo WhatsApp ao fazer scroll para cima. Retorna mensagens ordenadas do mais antigo para o mais recente e indica se há mais mensagens disponíveis."
     )
     @ApiResponse(responseCode = "200", description = "Mensagens retornadas com sucesso",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChatMessageResponse.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = OlderMessagesResponse.class)))
     @ApiResponse(responseCode = "400", description = "Parâmetros inválidos",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "404", description = "Sessão não encontrada",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     @GetMapping("/sessions/{sessionId}/messages")
-    public ResponseEntity<List<ChatMessageResponse>> getOlderMessages(
+    public ResponseEntity<OlderMessagesResponse> getOlderMessages(
             @Parameter(description = "ID da sessão de chat", required = true, example = "85")
             @PathVariable Long sessionId,
             @Parameter(description = "Timestamp ISO 8601 para buscar mensagens anteriores", required = true, example = "2025-11-08T13:00:00")
             @RequestParam String before,
             @Parameter(description = "Limite de mensagens (padrão: 20, máximo: 50)", example = "20")
             @RequestParam(required = false, defaultValue = "20") Integer limit) {
-        List<ChatMessageResponse> response = chatService.getOlderMessages(sessionId, before, limit);
+        OlderMessagesResponse response = chatService.getOlderMessages(sessionId, before, limit);
         return ResponseEntity.ok(response);
     }
 }

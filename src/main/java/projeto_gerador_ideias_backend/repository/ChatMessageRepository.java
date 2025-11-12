@@ -95,5 +95,11 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     List<ChatMessage> findMessagesBeforeTimestamp(@Param("sessionId") Long sessionId,
                                                    @Param("beforeTimestamp") LocalDateTime beforeTimestamp,
                                                    org.springframework.data.domain.Pageable pageable);
+    
+    @Query("SELECT COUNT(m) FROM ChatMessage m " +
+           "WHERE m.session.id = :sessionId " +
+           "AND m.createdAt < :beforeTimestamp")
+    long countMessagesBeforeTimestamp(@Param("sessionId") Long sessionId,
+                                      @Param("beforeTimestamp") LocalDateTime beforeTimestamp);
 }
 

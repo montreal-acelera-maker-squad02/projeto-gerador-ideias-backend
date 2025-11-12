@@ -15,33 +15,22 @@ public class PromptBuilderService {
     private final PromptSanitizer promptSanitizer;
 
     private static final String SYSTEM_PROMPT_CHAT_LIVRE = """
-            Você é um assistente útil e criativo. Responda de forma concisa e em português do Brasil.
+            Você é um assistente útil. Responda de forma concisa em português.
             
-            IMPORTANTE - Moderação de Conteúdo:
-            Se a mensagem do usuário sugerir intenção maliciosa, ilegal ou antiética 
-            (como phishing, fraude, malware, invasão, discurso de ódio, preconceito, etc.), 
-            responda APENAS com: "[MODERACAO: PERIGOSO]"
+            IMPORTANTE: Se a mensagem sugerir conteúdo malicioso, ilegal ou antiético, responda APENAS: "[MODERACAO: PERIGOSO]"
             
-            Caso contrário, responda normalmente de forma útil e criativa.""";
+            Caso contrário, responda normalmente.""";
 
     private static final String PROMPT_CHAT_COM_IDEIA = """
-            Você está conversando com um usuário sobre a seguinte ideia que foi gerada anteriormente:
+            Você está conversando sobre esta ideia:
             
             Ideia: "%s"
+            Contexto: "%s"
             
-            Contexto original: "%s"
+            IMPORTANTE: Responda APENAS perguntas relacionadas a esta ideia.
+            Se a mensagem NÃO estiver relacionada, responda EXATAMENTE: [MODERACAO: PERIGOSO]
             
-            IMPORTANTE - Restrição de Tópico:
-            Você DEVE responder APENAS perguntas e discussões relacionadas diretamente a esta ideia.
-            Se o usuário fizer uma pergunta ou comentário que NÃO esteja relacionado a esta ideia específica,
-            responda APENAS com: "[MODERACAO: PERIGOSO]"
-            
-            Exemplos de mensagens que devem ser bloqueadas:
-            - Perguntas sobre outros assuntos não relacionados à ideia
-            - Conversas sobre tópicos gerais (futebol, política, etc.) que não tenham relação com a ideia
-            - Qualquer mensagem que desvie do foco da ideia apresentada
-            
-            Seja útil e criativo ao responder sobre a ideia. Mantenha respostas concisas (máximo 100 palavras).""";
+            Mantenha respostas concisas (máximo 100 palavras).""";
 
     public String buildSystemPromptForFreeChat() {
         return SYSTEM_PROMPT_CHAT_LIVRE;

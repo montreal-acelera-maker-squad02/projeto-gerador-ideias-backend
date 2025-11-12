@@ -10,6 +10,7 @@ import org.springframework.web.reactive.function.client.WebClient.RequestBodySpe
 import org.springframework.web.reactive.function.client.WebClient.RequestBodyUriSpec;
 import org.springframework.web.reactive.function.client.WebClient.RequestHeadersSpec;
 import org.springframework.web.reactive.function.client.WebClient.ResponseSpec;
+import projeto_gerador_ideias_backend.config.ChatProperties;
 import projeto_gerador_ideias_backend.dto.request.OllamaRequest;
 import projeto_gerador_ideias_backend.dto.response.OllamaResponse;
 import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
@@ -41,6 +42,9 @@ class OllamaCacheableServiceTest {
     @Mock
     private ResponseSpec responseSpec;
 
+    @Mock
+    private ChatProperties chatProperties;
+
     private OllamaCacheableService ollamaCacheableService;
 
     private static final String OLLAMA_BASE_URL = "http://localhost:11434";
@@ -57,7 +61,7 @@ class OllamaCacheableServiceTest {
         doReturn(requestHeadersSpec).when(requestBodySpec).bodyValue(any(OllamaRequest.class));
         when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
 
-        ollamaCacheableService = new OllamaCacheableService(webClientBuilder, OLLAMA_BASE_URL, OLLAMA_MODEL);
+        ollamaCacheableService = new OllamaCacheableService(webClientBuilder, OLLAMA_BASE_URL, OLLAMA_MODEL, chatProperties);
     }
 
     @Test
