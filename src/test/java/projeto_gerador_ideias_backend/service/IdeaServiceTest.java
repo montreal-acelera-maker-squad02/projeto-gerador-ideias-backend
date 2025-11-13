@@ -894,4 +894,19 @@ class IdeaServiceTest {
 
         assertEquals("Ideia não encontrada.", exception.getMessage());
     }
+
+    @Test
+    void shouldReturnFavoriteIdeasCount() {
+        // Arrange
+        setupSecurityContext();
+        long expectedCount = 7L;
+        when(ideaRepository.countFavoriteIdeasByUserId(testUser.getId())).thenReturn(expectedCount);
+
+        // Act
+        long actualCount = ideaService.getFavoriteIdeasCount();
+
+        // Assert
+        assertEquals(expectedCount, actualCount);
+        verify(ideaRepository, times(1)).countFavoriteIdeasByUserId(testUser.getId());
+    }
 }

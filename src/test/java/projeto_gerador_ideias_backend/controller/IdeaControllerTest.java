@@ -2,11 +2,13 @@ package projeto_gerador_ideias_backend.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -26,6 +28,7 @@ import projeto_gerador_ideias_backend.model.User;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
 import projeto_gerador_ideias_backend.repository.ThemeRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
+import projeto_gerador_ideias_backend.config.EmbeddedRedisConfig;
 import projeto_gerador_ideias_backend.service.IdeaService;
 
 import java.time.LocalDateTime;
@@ -42,6 +45,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Import(EmbeddedRedisConfig.class)
 class IdeaControllerTest {
 
     @Autowired
@@ -657,7 +661,7 @@ class IdeaControllerTest {
     void shouldGetStatsSuccessfully() throws Exception {
         when(ideaService.getAverageIdeaGenerationTime()).thenReturn(1550.75);
 
-        mockMvc.perform(get("/api/ideas/stats")
+        mockMvc.perform(get("/api/ideas/generation-stats")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.averageGenerationTimeMs", is(1550.75)));
@@ -670,7 +674,7 @@ class IdeaControllerTest {
     void shouldGetStatsWithNullAverageTime() throws Exception {
         when(ideaService.getAverageIdeaGenerationTime()).thenReturn(null);
 
-        mockMvc.perform(get("/api/ideas/stats")
+        mockMvc.perform(get("/api/ideas/generation-stats")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.averageGenerationTimeMs", is(0.0)));
@@ -681,7 +685,7 @@ class IdeaControllerTest {
     void shouldReturnZeroWhenServiceReturnsZero() throws Exception {
         when(ideaService.getAverageIdeaGenerationTime()).thenReturn(0.0);
 
-        mockMvc.perform(get("/api/ideas/stats")
+        mockMvc.perform(get("/api/ideas/generation-stats")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.averageGenerationTimeMs", is(0.0)));
@@ -695,7 +699,7 @@ class IdeaControllerTest {
         double largeValue = 987654321.12345;
         when(ideaService.getAverageIdeaGenerationTime()).thenReturn(largeValue);
 
-        mockMvc.perform(get("/api/ideas/stats")
+        mockMvc.perform(get("/api/ideas/generation-stats")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.averageGenerationTimeMs", is(largeValue)));
@@ -707,7 +711,7 @@ class IdeaControllerTest {
         double smallValue = 0.000123;
         when(ideaService.getAverageIdeaGenerationTime()).thenReturn(smallValue);
 
-        mockMvc.perform(get("/api/ideas/stats")
+        mockMvc.perform(get("/api/ideas/generation-stats")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.averageGenerationTimeMs", is(smallValue)));
@@ -715,7 +719,7 @@ class IdeaControllerTest {
 
     @Test
     void shouldReturnUnauthorizedWhenNotAuthenticated() throws Exception {
-        mockMvc.perform(get("/api/ideas/stats")
+        mockMvc.perform(get("/api/ideas/generation-stats")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isForbidden());
 
@@ -725,7 +729,7 @@ class IdeaControllerTest {
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturnCorrectContentType() throws Exception {
-        mockMvc.perform(get("/api/ideas/stats"))
+        mockMvc.perform(get("/api/ideas/generation-stats"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON));
     }
@@ -735,10 +739,127 @@ class IdeaControllerTest {
     void shouldReturnOkEvenIfServiceThrowsException() throws Exception {
         when(ideaService.getAverageIdeaGenerationTime()).thenThrow(new RuntimeException("Erro de banco de dados"));
 
-        mockMvc.perform(get("/api/ideas/stats"))
+        mockMvc.perform(get("/api/ideas/generation-stats"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error", is("Erro interno do servidor")))
                 .andExpect(jsonPath("$.message", is("Erro de banco de dados")));
     }
-}
 
+    @Test
+    @WithMockUser(username = testUserEmail)
+    @DisplayName("Deve retornar a contagem de ideias favoritas com sucesso")
+    void shouldGetFavoriteIdeasCountSuccessfully() throws Exception {
+        // Arrange
+        long favoriteCount = 5L;
+        when(ideaService.getFavoriteIdeasCount()).thenReturn(favoriteCount);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/ideas/favorites/count")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count", is(5)));
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden ao buscar contagem de favoritos sem autenticação")
+    void shouldReturnForbiddenWhenGettingFavoritesCountWithoutUser() throws Exception {
+        mockMvc.perform(get("/api/ideas/favorites/count"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden ao gerar ideia sem autenticação")
+    void shouldReturnForbiddenWhenGeneratingIdeaWithoutUser() throws Exception {
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(estudosTheme.getId());
+        request.setContext("Contexto");
+
+        mockMvc.perform(post("/api/ideas/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden ao gerar ideia surpresa sem autenticação")
+    void shouldReturnForbiddenWhenGeneratingSurpriseIdeaWithoutUser() throws Exception {
+        mockMvc.perform(post("/api/ideas/surprise-me"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden ao listar histórico sem autenticação")
+    void shouldReturnForbiddenWhenListingHistoryWithoutUser() throws Exception {
+        mockMvc.perform(get("/api/ideas/history"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden ao favoritar ideia sem autenticação")
+    void shouldReturnForbiddenWhenFavoritingWithoutUser() throws Exception {
+        mockMvc.perform(post("/api/ideas/1/favorite"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden ao desfavoritar ideia sem autenticação")
+    void shouldReturnForbiddenWhenUnfavoritingWithoutUser() throws Exception {
+        mockMvc.perform(delete("/api/ideas/1/favorite"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    @DisplayName("Deve listar ideias com filtro de usuário")
+    void shouldListIdeasWithUserFilter() throws Exception {
+        List<IdeaResponse> mockList = List.of(mockIdeaResponse);
+        when(ideaService.listarHistoricoIdeiasFiltrado(eq(testUser.getId()), isNull(), isNull(), isNull()))
+                .thenReturn(mockList);
+
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("userId", String.valueOf(testUser.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].userName", is("Controller User")));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    @DisplayName("Deve listar ideias com todos os filtros combinados")
+    void shouldListIdeasWithAllFilters() throws Exception {
+        List<IdeaResponse> mockList = List.of(mockIdeaResponse);
+        LocalDateTime startDate = LocalDateTime.now().minusDays(1);
+        LocalDateTime endDate = LocalDateTime.now();
+
+        when(ideaService.listarHistoricoIdeiasFiltrado(eq(testUser.getId()), eq(estudosTheme.getId()), eq(startDate), eq(endDate)))
+                .thenReturn(mockList);
+
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("userId", String.valueOf(testUser.getId()))
+                        .param("theme", String.valueOf(estudosTheme.getId()))
+                        .param("startDate", startDate.toString())
+                        .param("endDate", endDate.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].theme", is("estudos")));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    @DisplayName("Deve retornar 500 em generation-stats quando o serviço falha")
+    void shouldReturn500WhenStatsServiceFails() throws Exception {
+        when(ideaService.getAverageIdeaGenerationTime()).thenThrow(new RuntimeException("Falha no banco de dados"));
+
+        mockMvc.perform(get("/api/ideas/generation-stats"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error", is("Erro interno do servidor")))
+                .andExpect(jsonPath("$.message", is("Falha no banco de dados")));
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden em generation-stats sem autenticação")
+    void shouldReturnForbiddenForStatsWithoutUser() throws Exception {
+        mockMvc.perform(get("/api/ideas/generation-stats"))
+                .andExpect(status().isForbidden());
+    }
+}
