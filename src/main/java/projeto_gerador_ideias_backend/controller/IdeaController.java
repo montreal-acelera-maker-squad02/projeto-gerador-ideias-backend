@@ -173,12 +173,23 @@ public class IdeaController {
             description = "Retorna estatísticas agregadas sobre a geração de ideias, como o tempo médio de resposta histórico de todas as ideias já geradas."
     )
     @ApiResponse(responseCode = "200", description = "Estatísticas retornadas com sucesso")
-    @GetMapping("/stats")
+    @GetMapping("/generation-stats")
     public ResponseEntity<Map<String, Object>> getIdeaStats() {
         Double averageTime = ideaService.getAverageIdeaGenerationTime();
         Map<String, Object> stats = Map.of(
                 "averageGenerationTimeMs", averageTime != null ? averageTime : 0.0
         );
         return ResponseEntity.ok(stats);
+    }
+
+    @Operation(
+            summary = "Obter contagem de ideias favoritas",
+            description = "Retorna o número total de ideias favoritadas pelo usuário autenticado."
+    )
+    @ApiResponse(responseCode = "200", description = "Contagem retornada com sucesso")
+    @GetMapping("/favorites/count")
+    public ResponseEntity<Map<String, Long>> getFavoriteIdeasCount() {
+        long count = ideaService.getFavoriteIdeasCount();
+        return ResponseEntity.ok(Map.of("count", count));
     }
 }

@@ -41,4 +41,7 @@ public interface IdeaRepository extends JpaRepository<Idea, Long>, JpaSpecificat
 
     @Query("SELECT AVG(i.executionTimeMs) FROM Idea i")
     Double getAverageExecutionTime();
+
+    @Query("SELECT COUNT(i) FROM User u JOIN u.favoriteIdeas i WHERE u.id = :userId")
+    long countFavoriteIdeasByUserId(@Param("userId") Long userId);
 }

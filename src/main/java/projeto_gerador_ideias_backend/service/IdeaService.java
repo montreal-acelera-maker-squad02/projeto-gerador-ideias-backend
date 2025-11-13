@@ -391,4 +391,10 @@ public class IdeaService {
     public Double getAverageIdeaGenerationTime() {
         return ideaRepository.getAverageExecutionTime();
     }
+
+    @Transactional(readOnly = true)
+    public long getFavoriteIdeasCount() {
+        User user = getCurrentAuthenticatedUser();
+        return ideaRepository.countFavoriteIdeasByUserId(user.getId());
+    }
 }

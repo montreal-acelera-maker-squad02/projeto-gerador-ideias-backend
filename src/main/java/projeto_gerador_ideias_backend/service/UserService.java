@@ -1,16 +1,20 @@
 package projeto_gerador_ideias_backend.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import projeto_gerador_ideias_backend.dto.request.LoginRequest;
-import projeto_gerador_ideias_backend.dto.response.LoginResponse;
 import projeto_gerador_ideias_backend.dto.request.RegisterRequest;
-import projeto_gerador_ideias_backend.dto.response.RegisterResponse;
 import projeto_gerador_ideias_backend.dto.request.RefreshTokenRequest;
-import projeto_gerador_ideias_backend.dto.response.RefreshTokenResponse;
 import projeto_gerador_ideias_backend.dto.request.UpdateUserRequest;
+import projeto_gerador_ideias_backend.dto.response.LoginResponse;
+import projeto_gerador_ideias_backend.dto.response.RefreshTokenResponse;
+import projeto_gerador_ideias_backend.dto.response.RegisterResponse;
+import projeto_gerador_ideias_backend.dto.response.UserStatsResponse;
 import projeto_gerador_ideias_backend.model.RefreshToken;
 import projeto_gerador_ideias_backend.repository.RefreshTokenRepository;
 import projeto_gerador_ideias_backend.exceptions.EmailAlreadyExistsException;
@@ -208,5 +212,22 @@ public class UserService {
                     });
         }
     }
-}
 
+    @Transactional(readOnly = true)
+    public UserStatsResponse getUserStats() {
+        User user = getCurrentAuthenticatedUser();
+        return new UserStatsResponse(user.getGeneratedIdeasCount());
+    }
+
+    private User getCurrentAuthenticatedUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserDetails)) {
+            throw new ResourceNotFoundException("Usuário não autenticado.");
+        }
+
+        String userEmail = ((UserDetails) authentication.getPrincipal()).getUsername();
+        return userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário autenticado não encontrado: " + userEmail));
+    }
+}
