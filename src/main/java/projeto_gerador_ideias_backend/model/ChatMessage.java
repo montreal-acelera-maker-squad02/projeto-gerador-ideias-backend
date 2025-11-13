@@ -59,7 +59,7 @@ public class ChatMessage {
     @Column(nullable = true)
     private Integer tokensRemaining;
 
-    @Column(name = "ip_address", length = 45)
+    @Column(name = "ip_address", length = 100)
     private String ipAddress;
 
     @CreationTimestamp

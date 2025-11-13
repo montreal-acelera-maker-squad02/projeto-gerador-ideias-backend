@@ -5,9 +5,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
 
@@ -16,7 +18,11 @@ import java.util.Base64;
 public class IpEncryptionService {
 
     private static final String ALGORITHM = "AES";
-    private static final String TRANSFORMATION = "AES/ECB/PKCS5Padding";
+    private static final String TRANSFORMATION = "AES/GCM/NoPadding";
+    private static final int GCM_IV_LENGTH = 12;
+    private static final int GCM_TAG_LENGTH = 16;
+    private static final SecureRandom secureRandom = new SecureRandom();
+    private static final String UNKNOWN_IP = "unknown";
 
     @Value("${ip.encryption.key:default-encryption-key-change-in-production-32-chars}")
     private String encryptionKey;
@@ -25,17 +31,27 @@ public class IpEncryptionService {
         if (ip == null || ip.isBlank()) {
             return null;
         }
-        if ("unknown".equalsIgnoreCase(ip)) {
+        if (UNKNOWN_IP.equalsIgnoreCase(ip)) {
             return null;
         }
 
         try {
             SecretKeySpec secretKey = getSecretKey();
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+            
+            byte[] iv = new byte[GCM_IV_LENGTH];
+            secureRandom.nextBytes(iv);
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv);
+            
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
             
             byte[] encryptedBytes = cipher.doFinal(ip.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(encryptedBytes);
+            
+            byte[] ivAndCiphertext = new byte[GCM_IV_LENGTH + encryptedBytes.length];
+            System.arraycopy(iv, 0, ivAndCiphertext, 0, GCM_IV_LENGTH);
+            System.arraycopy(encryptedBytes, 0, ivAndCiphertext, GCM_IV_LENGTH, encryptedBytes.length);
+            
+            return Base64.getEncoder().encodeToString(ivAndCiphertext);
         } catch (Exception e) {
             log.error("Erro ao criptografar IP: {}", ip, e);
             return null;
@@ -44,15 +60,27 @@ public class IpEncryptionService {
 
     public String decryptIp(String encryptedIp) {
         if (encryptedIp == null || encryptedIp.isBlank()) {
-            return "unknown";
+            return UNKNOWN_IP;
         }
 
         try {
+            byte[] ivAndCiphertext = Base64.getDecoder().decode(encryptedIp);
+            
+            if (ivAndCiphertext.length < GCM_IV_LENGTH) {
+                log.error("Texto cifrado muito curto para conter IV");
+                return UNKNOWN_IP;
+            }
+            
+            byte[] iv = Arrays.copyOfRange(ivAndCiphertext, 0, GCM_IV_LENGTH);
+            byte[] ciphertext = Arrays.copyOfRange(ivAndCiphertext, GCM_IV_LENGTH, ivAndCiphertext.length);
+            
             SecretKeySpec secretKey = getSecretKey();
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.DECRYPT_MODE, secretKey);
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv);
             
-            byte[] decryptedBytes = cipher.doFinal(Base64.getDecoder().decode(encryptedIp));
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec);
+            
+            byte[] decryptedBytes = cipher.doFinal(ciphertext);
             String decryptedIp = new String(decryptedBytes, StandardCharsets.UTF_8);
             
             if ("0:0:0:0:0:0:0:1".equals(decryptedIp) || "::1".equals(decryptedIp)) {
@@ -62,7 +90,7 @@ public class IpEncryptionService {
             return decryptedIp;
         } catch (Exception e) {
             log.error("Erro ao descriptografar IP", e);
-            return "unknown";
+            return UNKNOWN_IP;
         }
     }
 

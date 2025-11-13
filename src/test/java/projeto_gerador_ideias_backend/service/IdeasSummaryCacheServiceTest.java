@@ -3,7 +3,6 @@ package projeto_gerador_ideias_backend.service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.Cache;
@@ -37,7 +36,6 @@ class IdeasSummaryCacheServiceTest {
     @Mock
     private Cache cache;
 
-    @InjectMocks
     private IdeasSummaryCacheService ideasSummaryCacheService;
 
     private Long userId;
@@ -50,6 +48,20 @@ class IdeasSummaryCacheServiceTest {
         testTheme.setId(1L);
 
         when(cacheManager.getCache("ideasSummaryCache")).thenReturn(cache);
+        
+        IdeasSummaryCacheService tempService = new IdeasSummaryCacheService(
+                cacheManager,
+                ideaRepository,
+                ideaSummaryService,
+                null
+        );
+        
+        ideasSummaryCacheService = new IdeasSummaryCacheService(
+                cacheManager,
+                ideaRepository,
+                ideaSummaryService,
+                tempService
+        );
     }
 
     @Test

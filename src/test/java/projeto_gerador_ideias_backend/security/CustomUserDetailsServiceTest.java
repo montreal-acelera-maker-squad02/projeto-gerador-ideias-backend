@@ -105,5 +105,35 @@ class CustomUserDetailsServiceTest {
         assertEquals(1, userDetails.getAuthorities().size());
         assertEquals("ROLE_USER", userDetails.getAuthorities().iterator().next().getAuthority());
     }
+
+    @Test
+    void shouldReturnDisabledUserWhenEnabledIsNull() {
+        testUser.setEnabled(null);
+        when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
+        
+        UserDetails userDetails = userDetailsService.loadUserByUsername(testUser.getEmail());
+        
+        assertFalse(userDetails.isEnabled());
+    }
+
+    @Test
+    void shouldReturnDisabledUserWhenEnabledIsFalse() {
+        testUser.setEnabled(false);
+        when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
+        
+        UserDetails userDetails = userDetailsService.loadUserByUsername(testUser.getEmail());
+        
+        assertFalse(userDetails.isEnabled());
+    }
+
+    @Test
+    void shouldReturnEnabledUserWhenEnabledIsTrue() {
+        testUser.setEnabled(true);
+        when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
+        
+        UserDetails userDetails = userDetailsService.loadUserByUsername(testUser.getEmail());
+        
+        assertTrue(userDetails.isEnabled());
+    }
 }
 

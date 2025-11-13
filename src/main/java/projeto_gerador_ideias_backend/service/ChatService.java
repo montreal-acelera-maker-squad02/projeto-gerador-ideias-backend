@@ -33,7 +33,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -1033,189 +1032,6 @@ public class ChatService {
     }
     
 
-    private String summarizeIdeaSimple(String content) {
-        if (content == null || content.trim().isEmpty()) {
-            return "";
-        }
-        
-        String trimmed = content.trim();
-        String[] words = trimmed.split("\\s+", 11);
-        
-        if (words.length <= 10) {
-            return trimmed;
-        }
-        
-        return summarizeIdeaSimpleFallback(trimmed, words);
-    }
-    
-    private String summarizeIdeaSimpleFallback(String trimmed, String[] words) {
-        int maxWords = 5;
-        
-        String result = findSummaryByPunctuation(words, maxWords, ",", ";");
-        if (result != null) {
-            return result;
-        }
-        
-        result = findSummaryByPunctuation(words, maxWords, ".", "!", "?");
-        if (result != null) {
-            return result;
-        }
-        
-        int targetWords = Math.min(maxWords, words.length);
-        String[] selectedWords = Arrays.copyOf(words, targetWords);
-        selectedWords = removeIncompleteWords(selectedWords, maxWords);
-        
-        if (selectedWords.length > 0) {
-            String summary = joinWords(selectedWords);
-            return removeTrailingPunctuation(summary);
-        }
-        
-        return buildFallbackSummary(words, maxWords, trimmed);
-    }
-
-    private String findSummaryByPunctuation(String[] words, int maxWords, String... punctuation) {
-        int searchLimit = Math.min(words.length, maxWords);
-        for (int i = 0; i < searchLimit; i++) {
-            if (endsWithAnyPunctuation(words[i], punctuation)) {
-                return buildSummaryUpToIndex(words, i, maxWords, punctuation.length > 0 && punctuation[0].equals(","));
-            }
-        }
-        return null;
-    }
-
-    private boolean endsWithAnyPunctuation(String word, String... punctuation) {
-        if (word == null || word.length() == 0) {
-            return false;
-        }
-        for (String p : punctuation) {
-            if (word.endsWith(p)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private String buildSummaryUpToIndex(String[] words, int endIndex, int maxWords, boolean cleanCommas) {
-        StringBuilder summary = new StringBuilder();
-        for (int j = 0; j <= endIndex; j++) {
-            if (j > 0) {
-                summary.append(" ");
-            }
-            String word = cleanCommas ? removeTrailingCommasAndSemicolons(words[j]) : words[j];
-            summary.append(word);
-        }
-        String result = summary.toString().trim();
-        return limitResultWords(result, maxWords);
-    }
-
-    private String limitResultWords(String result, int maxWords) {
-        String[] resultWords = result.split("\\s+");
-        if (resultWords.length > maxWords) {
-            return joinWords(Arrays.copyOf(resultWords, maxWords));
-        }
-        return result;
-    }
-
-    private String buildDefaultSummary(String[] words, int maxWords) {
-        int targetWords = Math.min(maxWords, words.length);
-        return joinWords(Arrays.copyOf(words, targetWords));
-    }
-
-    private String removeTrailingPunctuation(String text) {
-        String[] trailingPunctuation = {":", ";", ",", "-", "—", "–"};
-        String result = text.trim();
-        while (result.length() > 0 && endsWithAnyPunctuation(result, trailingPunctuation)) {
-            result = result.substring(0, result.length() - 1).trim();
-        }
-        return result;
-    }
-
-    private String removeTrailingPunctuationFromString(String text) {
-        if (text == null || text.isEmpty()) {
-            return text;
-        }
-        String result = text;
-        while (result.length() > 0) {
-            char lastChar = result.charAt(result.length() - 1);
-            if (lastChar == ':' || lastChar == ';' || lastChar == ',' || lastChar == '.' || lastChar == '!' || lastChar == '?') {
-                result = result.substring(0, result.length() - 1);
-                } else {
-                break;
-            }
-        }
-        return result;
-    }
-
-    private String removeTrailingCommasAndSemicolons(String text) {
-        if (text == null || text.isEmpty()) {
-            return text;
-        }
-        String result = text;
-        while (result.length() > 0) {
-            char lastChar = result.charAt(result.length() - 1);
-            if (lastChar == ',' || lastChar == ';') {
-                result = result.substring(0, result.length() - 1);
-            } else {
-                break;
-            }
-        }
-        return result;
-    }
-
-    private String[] removeIncompleteWords(String[] words, int maxWords) {
-        String[] incompleteWords = {"mais", "menos", "maior", "menor", "melhor", "pior",
-                                    "com", "de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas",
-                                    "a", "o", "os", "as", "ao", "à", "aos", "às", "para", "por", "que"};
-        
-        String[] result = words;
-        while (result.length > 1 && result.length <= maxWords) {
-            String lastWord = removeTrailingPunctuationFromString(result[result.length - 1].toLowerCase());
-            if (!isIncompleteWord(lastWord, incompleteWords)) {
-                break;
-            }
-            result = Arrays.copyOf(result, result.length - 1);
-        }
-        return result;
-    }
-
-    private boolean isIncompleteWord(String word, String[] incompleteWords) {
-        for (String incomplete : incompleteWords) {
-            if (word.equals(incomplete)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private String[] limitWords(String[] words, int maxWords) {
-        if (words.length > maxWords) {
-            return Arrays.copyOf(words, maxWords);
-        }
-        return words;
-    }
-
-    private String joinWords(String[] words) {
-        if (words.length == 0) {
-            return "";
-        }
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < words.length; i++) {
-            if (i > 0) {
-                result.append(" ");
-            }
-            result.append(words[i]);
-        }
-        return result.toString().trim();
-    }
-
-    private String buildFallbackSummary(String[] words, int maxWords, String trimmed) {
-        if (words.length >= 3) {
-            int wordsToTake = Math.min(3, maxWords);
-            return joinWords(Arrays.copyOf(words, wordsToTake));
-        }
-        return trimmed;
-    }
-
     private ChatSessionResponse buildSessionResponse(ChatSession session, List<ChatMessage> messages) {
         String ideaSummary = getIdeaSummary(session);
         List<ChatMessageResponse> messageResponses = buildMessageResponses(messages);
@@ -1382,6 +1198,16 @@ public class ChatService {
         }
     }
 
+    private static class ChatMessages {
+        final ChatMessage userMessage;
+        final ChatMessage assistantMessage;
+
+        ChatMessages(ChatMessage userMessage, ChatMessage assistantMessage) {
+            this.userMessage = userMessage;
+            this.assistantMessage = assistantMessage;
+        }
+    }
+
     private static class TokenSummary {
         private final int totalUserTokens;
         private final int totalAssistantTokens;
@@ -1472,7 +1298,7 @@ public class ChatService {
                 ai.getAssistantMessage(),
                 ai.getMetrics()
             ))
-            .collect(java.util.stream.Collectors.toList());
+            .toList();
         
         LogsSummary summary = calculateSummary(interactionsForSummary);
         
@@ -1538,8 +1364,9 @@ public class ChatService {
             : LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
         
         if (assistantMessage != null) {
+            ChatMessages messages = new ChatMessages(userMessage, assistantMessage);
             return createAdminInteractionWithAssistant(interactionId, userContent, tokensInput, timestamp, 
-                                                     session, user, userMessage, assistantMessage);
+                                                     session, user, messages);
         } else {
             return createAdminInteractionWithoutAssistant(interactionId, userMessage, tokensInput, timestamp, 
                                                         session, user);
@@ -1548,11 +1375,11 @@ public class ChatService {
     
     private AdminInteraction createAdminInteractionWithAssistant(long interactionId, String userMessageContent, 
                                                                  int tokensInput, String timestamp, ChatSession session,
-                                                                 User user, ChatMessage userMessage, ChatMessage assistantMessage) {
-        String assistantContent = assistantMessage.getContent();
-        int tokensOutput = assistantMessage.getTokensUsed();
+                                                                 User user, ChatMessages messages) {
+        String assistantContent = messages.assistantMessage.getContent();
+        int tokensOutput = messages.assistantMessage.getTokensUsed();
         int totalTokens = tokensInput + tokensOutput;
-        Long responseTimeMs = calculateResponseTime(userMessage, assistantMessage);
+        Long responseTimeMs = calculateResponseTime(messages.userMessage, messages.assistantMessage);
         
         InteractionMetrics metrics = new InteractionMetrics(
             tokensInput,
@@ -1561,8 +1388,8 @@ public class ChatService {
             responseTimeMs
         );
         
-        String userIp = userMessage.getIpAddress() != null 
-            ? ipEncryptionService.decryptIp(userMessage.getIpAddress())
+        String userIp = messages.userMessage.getIpAddress() != null 
+            ? ipEncryptionService.decryptIp(messages.userMessage.getIpAddress())
             : "unknown";
         
         return new AdminInteraction(

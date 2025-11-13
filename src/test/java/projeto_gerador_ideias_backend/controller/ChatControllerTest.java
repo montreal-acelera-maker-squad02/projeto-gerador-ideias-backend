@@ -8,6 +8,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +34,7 @@ import projeto_gerador_ideias_backend.repository.*;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.stream.Stream;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -194,6 +198,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         mockMvc.perform(get("/api/chat/sessions/" + session.getId()))
                 .andDo(print())
@@ -243,6 +248,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         ChatMessageRequest messageRequest = new ChatMessageRequest();
         messageRequest.setMessage("x".repeat(1001));
@@ -309,6 +315,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         mockWebServer.enqueue(new MockResponse()
                 .setBody(createMockOllamaResponse("[MODERACAO: PERIGOSO]"))
@@ -331,6 +338,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         String largeMessage = "word ".repeat(1875);
         for (int i = 0; i < 4; i++) {
@@ -343,6 +351,7 @@ class ChatControllerTest {
                 );
             chatMessageRepository.save(msg);
         }
+        chatMessageRepository.flush();
 
         ChatMessageRequest messageRequest = new ChatMessageRequest();
         messageRequest.setMessage("Teste");
@@ -360,6 +369,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         ChatMessageRequest messageRequest = new ChatMessageRequest();
         messageRequest.setMessage(null);
@@ -378,6 +388,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         ChatMessageRequest messageRequest = new ChatMessageRequest();
         messageRequest.setMessage("x".repeat(1001));
@@ -431,6 +442,7 @@ class ChatControllerTest {
         adminUser.setEnabled(true);
         adminUser.setRole(projeto_gerador_ideias_backend.model.Role.ADMIN);
         adminUser = userRepository.save(adminUser);
+        userRepository.flush();
         
         User regularUser = new User();
         regularUser.setEmail("regular@example.com");
@@ -438,10 +450,12 @@ class ChatControllerTest {
         regularUser.setPassword(passwordEncoder.encode("password"));
         regularUser.setEnabled(true);
         regularUser = userRepository.save(regularUser);
+        userRepository.flush();
         
         ChatSession session = new ChatSession(regularUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
         
         String today = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
         
@@ -463,6 +477,7 @@ class ChatControllerTest {
         adminUser.setEnabled(true);
         adminUser.setRole(projeto_gerador_ideias_backend.model.Role.ADMIN);
         adminUser = userRepository.save(adminUser);
+        userRepository.flush();
         
         User regularUser = new User();
         regularUser.setEmail("regular@example.com");
@@ -470,6 +485,7 @@ class ChatControllerTest {
         regularUser.setPassword(passwordEncoder.encode("password"));
         regularUser.setEnabled(true);
         regularUser = userRepository.save(regularUser);
+        userRepository.flush();
         
         String today = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
         
@@ -491,7 +507,7 @@ class ChatControllerTest {
         regularUser.setName("Regular User");
         regularUser.setPassword(passwordEncoder.encode("password"));
         regularUser.setEnabled(true);
-        regularUser = userRepository.save(regularUser);
+        userRepository.save(regularUser);
         
         String today = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
         
@@ -507,6 +523,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         mockMvc.perform(get("/api/chat/sessions/" + session.getId() + "/messages")
                         .param("before", "2025-11-08T13:00:00")
@@ -523,6 +540,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         mockMvc.perform(get("/api/chat/sessions/" + session.getId() + "/messages")
                         .param("before", "2025-11-08T13:00:00"))
@@ -538,6 +556,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         String aiResponse = "Olá! Como posso ajudar você hoje?";
         mockWebServer.enqueue(new MockResponse()
@@ -610,6 +629,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         String[] aiResponses = {
             "Primeira resposta",
@@ -649,6 +669,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         String aiResponse = "Resposta para logs";
         mockWebServer.enqueue(new MockResponse()
@@ -686,6 +707,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         LocalDateTime baseTime = LocalDateTime.now().minusMinutes(10);
 
@@ -728,6 +750,7 @@ class ChatControllerTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
         session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
 
         String aiResponse = "Resposta curta";
         mockWebServer.enqueue(new MockResponse()
@@ -804,6 +827,43 @@ class ChatControllerTest {
                 .andExpect(jsonPath("$.ideaId").value(idea.getId().intValue()))
                 .andExpect(jsonPath("$.ideaSummary").exists())
                 .andExpect(jsonPath("$.messages.length()").value(2));
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideIpExtractionTestCases")
+    @WithMockUser(username = "chat-controller@example.com")
+    void shouldExtractAndNormalizeIpFromHeaders(String headerName, String headerValue) throws Exception {
+        ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
+        session.setLastResetAt(LocalDateTime.now());
+        session = chatSessionRepository.save(session);
+        chatSessionRepository.flush();
+
+        String aiResponse = "Resposta";
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(createMockOllamaResponse(aiResponse))
+                .addHeader("Content-Type", "application/json"));
+
+        ChatMessageRequest messageRequest = new ChatMessageRequest();
+        messageRequest.setMessage("Teste IP");
+
+        mockMvc.perform(post("/api/chat/sessions/" + session.getId() + "/messages")
+                        .header(headerName, headerValue)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(messageRequest)))
+                .andExpect(status().isOk());
+    }
+
+    private static Stream<Arguments> provideIpExtractionTestCases() {
+        return Stream.of(
+                Arguments.of("X-Forwarded-For", "192.168.1.100"),
+                Arguments.of("X-Real-IP", "10.0.0.1"),
+                Arguments.of("Proxy-Client-IP", "172.16.0.1"),
+                Arguments.of("X-Forwarded-For", "192.168.1.1, 10.0.0.1"),
+                Arguments.of("X-Forwarded-For", "0:0:0:0:0:0:0:1"),
+                Arguments.of("X-Forwarded-For", "::1"),
+                Arguments.of("X-Forwarded-For", "unknown"),
+                Arguments.of("X-Forwarded-For", "")
+        );
     }
 }
 

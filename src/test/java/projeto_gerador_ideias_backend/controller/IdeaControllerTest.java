@@ -37,7 +37,9 @@ import java.util.List;
 
 import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -812,27 +814,27 @@ class IdeaControllerTest {
     @WithMockUser(username = testUserEmail)
     @DisplayName("Deve listar ideias com filtro de usuário")
     void shouldListIdeasWithUserFilter() throws Exception {
-        List<IdeaResponse> mockList = List.of(mockIdeaResponse);
-        when(ideaService.listarHistoricoIdeiasFiltrado(eq(testUser.getId()), isNull(), isNull(), isNull()))
-                .thenReturn(mockList);
+        Page<IdeaResponse> mockPage = new PageImpl<>(List.of(mockIdeaResponse));
+        when(ideaService.listarHistoricoIdeiasFiltrado(eq(testUser.getId()), isNull(), isNull(), isNull(), anyInt(), anyInt()))
+                .thenReturn(mockPage);
 
         mockMvc.perform(get("/api/ideas/history")
                         .param("userId", String.valueOf(testUser.getId())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].userName", is("Controller User")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].userName", is("Controller User")));
     }
 
     @Test
     @WithMockUser(username = testUserEmail)
     @DisplayName("Deve listar ideias com todos os filtros combinados")
     void shouldListIdeasWithAllFilters() throws Exception {
-        List<IdeaResponse> mockList = List.of(mockIdeaResponse);
+        Page<IdeaResponse> mockPage = new PageImpl<>(List.of(mockIdeaResponse));
         LocalDateTime startDate = LocalDateTime.now().minusDays(1);
         LocalDateTime endDate = LocalDateTime.now();
 
-        when(ideaService.listarHistoricoIdeiasFiltrado(eq(testUser.getId()), eq(estudosTheme.getId()), eq(startDate), eq(endDate)))
-                .thenReturn(mockList);
+        when(ideaService.listarHistoricoIdeiasFiltrado(eq(testUser.getId()), eq(estudosTheme.getId()), eq(startDate), eq(endDate), anyInt(), anyInt()))
+                .thenReturn(mockPage);
 
         mockMvc.perform(get("/api/ideas/history")
                         .param("userId", String.valueOf(testUser.getId()))
@@ -840,8 +842,8 @@ class IdeaControllerTest {
                         .param("startDate", startDate.toString())
                         .param("endDate", endDate.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].theme", is("estudos")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].theme", is("estudos")));
     }
 
     @Test

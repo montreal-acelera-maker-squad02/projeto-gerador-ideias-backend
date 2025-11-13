@@ -3,6 +3,9 @@ package projeto_gerador_ideias_backend.service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -90,14 +93,23 @@ class OllamaCacheableServiceTest {
         verify(requestBodySpec, times(1)).bodyValue(any(OllamaRequest.class));
     }
 
-    @Test
-    void shouldTrimResponseContent() {
-        OllamaResponse ollamaResponse = createOllamaResponse("  Response content with spaces  ");
+    @ParameterizedTest
+    @MethodSource("provideTrimResponseContentCases")
+    void shouldTrimResponseContent(String input, String expected) {
+        OllamaResponse ollamaResponse = createOllamaResponse(input);
         when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(Mono.just(ollamaResponse));
 
         String result = ollamaCacheableService.getAiResponse(TEST_PROMPT);
 
-        assertEquals("Response content with spaces", result);
+        assertEquals(expected, result);
+    }
+
+    private static java.util.stream.Stream<Arguments> provideTrimResponseContentCases() {
+        return java.util.stream.Stream.of(
+                Arguments.of("  Response content with spaces  ", "Response content with spaces"),
+                Arguments.of("", ""),
+                Arguments.of("   ", "")
+        );
     }
 
     @Test
@@ -208,25 +220,6 @@ class OllamaCacheableServiceTest {
         verify(webClient, times(2)).post();
     }
 
-    @Test
-    void shouldHandleEmptyContent() {
-        OllamaResponse ollamaResponse = createOllamaResponse("");
-        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(Mono.just(ollamaResponse));
-
-        String result = ollamaCacheableService.getAiResponse(TEST_PROMPT);
-
-        assertEquals("", result);
-    }
-
-    @Test
-    void shouldHandleContentWithOnlyWhitespace() {
-        OllamaResponse ollamaResponse = createOllamaResponse("   ");
-        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(Mono.just(ollamaResponse));
-
-        String result = ollamaCacheableService.getAiResponse(TEST_PROMPT);
-
-        assertEquals("", result);
-    }
 
     private OllamaResponse createOllamaResponse(String content) {
         OllamaResponse.Message message = new OllamaResponse.Message();

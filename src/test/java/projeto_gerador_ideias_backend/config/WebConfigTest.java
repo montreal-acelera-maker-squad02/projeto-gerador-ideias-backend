@@ -2,6 +2,9 @@ package projeto_gerador_ideias_backend.config;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -27,33 +30,11 @@ class WebConfigTest {
         assertNotNull(webClient);
     }
 
-    @Test
-    void shouldThrowExceptionWhenBaseUrlIsNull() {
-        ReflectionTestUtils.setField(webConfig, "ollamaBaseUrl", null);
-        ReflectionTestUtils.setField(webConfig, "ollamaTimeoutSeconds", 60);
-
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-            webConfig.webClient();
-        });
-
-        assertEquals("ollama.base-url não pode ser nulo ou vazio", exception.getMessage());
-    }
-
-    @Test
-    void shouldThrowExceptionWhenBaseUrlIsBlank() {
-        ReflectionTestUtils.setField(webConfig, "ollamaBaseUrl", "   ");
-        ReflectionTestUtils.setField(webConfig, "ollamaTimeoutSeconds", 60);
-
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-            webConfig.webClient();
-        });
-
-        assertEquals("ollama.base-url não pode ser nulo ou vazio", exception.getMessage());
-    }
-
-    @Test
-    void shouldThrowExceptionWhenBaseUrlIsEmpty() {
-        ReflectionTestUtils.setField(webConfig, "ollamaBaseUrl", "");
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\t", "\n"})
+    void shouldThrowExceptionWhenBaseUrlIsInvalid(String invalidBaseUrl) {
+        ReflectionTestUtils.setField(webConfig, "ollamaBaseUrl", invalidBaseUrl);
         ReflectionTestUtils.setField(webConfig, "ollamaTimeoutSeconds", 60);
 
         IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {

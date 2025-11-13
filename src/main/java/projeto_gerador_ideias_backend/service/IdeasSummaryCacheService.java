@@ -1,9 +1,9 @@
 package projeto_gerador_ideias_backend.service;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,7 +12,6 @@ import projeto_gerador_ideias_backend.dto.response.IdeaSummaryResponse;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class IdeasSummaryCacheService {
 
@@ -21,6 +20,18 @@ public class IdeasSummaryCacheService {
     private final CacheManager cacheManager;
     private final projeto_gerador_ideias_backend.repository.IdeaRepository ideaRepository;
     private final projeto_gerador_ideias_backend.service.IdeaSummaryService ideaSummaryService;
+    private final IdeasSummaryCacheService self;
+
+    public IdeasSummaryCacheService(
+            CacheManager cacheManager,
+            projeto_gerador_ideias_backend.repository.IdeaRepository ideaRepository,
+            projeto_gerador_ideias_backend.service.IdeaSummaryService ideaSummaryService,
+            @Lazy IdeasSummaryCacheService self) {
+        this.cacheManager = cacheManager;
+        this.ideaRepository = ideaRepository;
+        this.ideaSummaryService = ideaSummaryService;
+        this.self = self;
+    }
 
     private Cache getCache() {
         Cache cache = cacheManager.getCache(IDEAS_SUMMARY_CACHE_NAME);
@@ -54,16 +65,12 @@ public class IdeasSummaryCacheService {
             return cached;
         }
         
-        // Se não está em cache, carrega e armazena
         List<IdeaSummaryResponse> summaries = loadIdeasSummaryFromDatabase(userId);
         cache.put(cacheKey, summaries);
         log.debug("Resumos de ideias carregados do banco e armazenados em cache para usuário {}", userId);
         return summaries;
     }
     
-    /**
-     * Carrega os resumos diretamente do banco (sem usar ChatService para evitar dependência circular)
-     */
     private List<IdeaSummaryResponse> loadIdeasSummaryFromDatabase(Long userId) {
         List<Object[]> results = ideaRepository.findIdeasSummaryOnlyByUserId(userId);
         
@@ -76,7 +83,6 @@ public class IdeasSummaryCacheService {
             String themeName = row[2] != null ? (String) row[2] : "";
             java.time.LocalDateTime createdAt = (java.time.LocalDateTime) row[3];
             
-            // Se não tem resumo, precisa carregar a ideia completa para gerar
             if (summary == null || summary.isBlank()) {
                 projeto_gerador_ideias_backend.model.Idea idea = ideaRepository.findById(id).orElse(null);
                 if (idea != null) {
@@ -96,16 +102,15 @@ public class IdeasSummaryCacheService {
             ));
         }
         
-        // Salva os resumos gerados em batch (se houver)
         if (!ideasToUpdate.isEmpty()) {
-            saveIdeasSummary(ideasToUpdate);
+            self.saveIdeasInTransaction(ideasToUpdate);
         }
         
         return responses;
     }
-    
+
     @Transactional
-    private void saveIdeasSummary(List<projeto_gerador_ideias_backend.model.Idea> ideas) {
+    public void saveIdeasInTransaction(List<projeto_gerador_ideias_backend.model.Idea> ideas) {
         ideaRepository.saveAll(ideas);
     }
 
@@ -114,7 +119,7 @@ public class IdeasSummaryCacheService {
         getCache().evict(cacheKey);
         log.debug("Cache de resumos invalidado para usuário {}", userId);
         
-        preloadUserIdeasSummary(userId);
+        self.preloadUserIdeasSummary(userId);
     }
 
     private String getCacheKey(Long userId) {

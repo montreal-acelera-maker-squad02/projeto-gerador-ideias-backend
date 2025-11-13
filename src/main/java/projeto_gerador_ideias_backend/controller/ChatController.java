@@ -32,6 +32,9 @@ import java.util.List;
 @Tag(name = "Chat", description = "Endpoints para gerenciamento de chat com IA")
 public class ChatController {
     
+    private static final String UNKNOWN_IP = "unknown";
+    private static final String LOCALHOST_IP = "127.0.0.1";
+    
     private final ChatService chatService;
     private final projeto_gerador_ideias_backend.service.IdeasSummaryCacheService ideasSummaryCacheService;
 
@@ -88,46 +91,69 @@ public class ChatController {
     }
     
     private String getClientIpAddress(jakarta.servlet.http.HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("X-Real-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("Proxy-Client-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("WL-Proxy-Client-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("HTTP_CLIENT_IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("HTTP_X_FORWARDED_FOR");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+        String ip = extractIpFromHeaders(request);
+        
+        if (!isValidIp(ip)) {
             ip = request.getRemoteAddr();
         }
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-        if ("0:0:0:0:0:0:0:1".equals(ip) || "::1".equals(ip)) {
-            ip = "127.0.0.1";
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+        
+        ip = normalizeIp(ip);
+        
+        if (!isValidIp(ip)) {
             String remoteAddr = request.getRemoteAddr();
-            if (remoteAddr != null && !remoteAddr.isEmpty() && !"unknown".equalsIgnoreCase(remoteAddr)) {
+            if (isValidIp(remoteAddr)) {
                 ip = remoteAddr;
             } else {
-                ip = "127.0.0.1";
+                ip = LOCALHOST_IP;
             }
         }
-        String finalIp = ip != null ? ip : "127.0.0.1";
+        
+        String finalIp = ip != null ? ip : LOCALHOST_IP;
         log.debug("IP capturado: {} (X-Forwarded-For: {}, X-Real-IP: {}, RemoteAddr: {})", 
             finalIp, 
             request.getHeader("X-Forwarded-For"),
             request.getHeader("X-Real-IP"),
             request.getRemoteAddr());
         return finalIp;
+    }
+    
+    private String extractIpFromHeaders(jakarta.servlet.http.HttpServletRequest request) {
+        String[] headers = {
+            "X-Forwarded-For",
+            "X-Real-IP",
+            "Proxy-Client-IP",
+            "WL-Proxy-Client-IP",
+            "HTTP_CLIENT_IP",
+            "HTTP_X_FORWARDED_FOR"
+        };
+        
+        for (String header : headers) {
+            String ip = request.getHeader(header);
+            if (isValidIp(ip)) {
+                return ip;
+            }
+        }
+        return null;
+    }
+    
+    private boolean isValidIp(String ip) {
+        return ip != null && !ip.isEmpty() && !UNKNOWN_IP.equalsIgnoreCase(ip);
+    }
+    
+    private String normalizeIp(String ip) {
+        if (ip == null) {
+            return null;
+        }
+        
+        if (ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        
+        if ("0:0:0:0:0:0:0:1".equals(ip) || "::1".equals(ip)) {
+            ip = LOCALHOST_IP;
+        }
+        
+        return ip;
     }
 
     @Operation(

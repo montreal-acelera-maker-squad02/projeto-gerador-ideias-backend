@@ -1,0 +1,60 @@
+warning: in the working copy of 'src/main/java/projeto_gerador_ideias_backend/controller/ChatController.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/projeto_gerador_ideias_backend/dto/request/OllamaRequest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/projeto_gerador_ideias_backend/dto/response/LoginResponse.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/projeto_gerador_ideias_backend/service/ChatService.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/projeto_gerador_ideias_backend/service/ContentModerationService.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/projeto_gerador_ideias_backend/service/IdeasSummaryCacheService.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/projeto_gerador_ideias_backend/service/IpEncryptionService.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/projeto_gerador_ideias_backend/service/JwtService.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/main/java/projeto_gerador_ideias_backend/service/OllamaIntegrationService.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/config/RequestCleanupFilterTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/config/WebConfigTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/controller/ChatControllerTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/security/CustomUserDetailsServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/ChatLimitValidatorTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/ChatMetricsServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/ChatServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/ContentModerationServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/EmailServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/IdeaServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/IdeaSummaryServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/IdeasSummaryCacheServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/IpEncryptionServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/JwtServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/OllamaCacheableServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/OllamaIntegrationServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/PromptSanitizerTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/ThemeServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/TokenBlacklistServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/java/projeto_gerador_ideias_backend/service/TokenCalculationServiceTest.java', LF will be replaced by CRLF the next time Git touches it
+ .../controller/ChatController.java                 |  80 [32m++++[m[31m---[m
+ .../dto/request/OllamaRequest.java                 |  52 [32m++++[m[31m-[m
+ .../dto/response/LoginResponse.java                |  10 [32m+[m[31m-[m
+ .../model/ChatMessage.java                         |   2 [32m+[m[31m-[m
+ .../service/ChatService.java                       |  39 [32m++[m[31m--[m
+ .../service/ContentModerationService.java          |  51 [32m+++[m[31m--[m
+ .../service/IdeasSummaryCacheService.java          |  29 [32m+[m[31m--[m
+ .../service/IpEncryptionService.java               |  44 [32m+++[m[31m-[m
+ .../service/JwtService.java                        |  13 [32m+[m[31m-[m
+ .../service/OllamaIntegrationService.java          |  11 [32m+[m[31m-[m
+ .../config/RequestCleanupFilterTest.java           |   6 [32m+[m[31m-[m
+ .../config/WebConfigTest.java                      |  35 [32m+[m[31m---[m
+ .../controller/ChatControllerTest.java             | 205 [32m+++++++++++++++++[m[31m-[m
+ .../security/CustomUserDetailsServiceTest.java     |  30 [32m+++[m
+ .../service/ChatLimitValidatorTest.java            |   4 [32m+[m[31m-[m
+ .../service/ChatMetricsServiceTest.java            |  91 [32m++++++[m[31m--[m
+ .../service/ChatServiceTest.java                   |  57 [32m+++[m[31m--[m
+ .../service/ContentModerationServiceTest.java      |  85 [32m++[m[31m------[m
+ .../service/EmailServiceTest.java                  |  56 [32m++[m[31m---[m
+ .../service/IdeaServiceTest.java                   |  83 [32m++[m[31m------[m
+ .../service/IdeaSummaryServiceTest.java            |  53 [32m++[m[31m---[m
+ .../service/IdeasSummaryCacheServiceTest.java      |  16 [32m+[m[31m-[m
+ .../service/IpEncryptionServiceTest.java           |  84 [32m++++++[m[31m--[m
+ .../service/JwtServiceTest.java                    |  21 [32m+[m[31m-[m
+ .../service/OllamaCacheableServiceTest.java        |  39 [32m++[m[31m--[m
+ .../service/OllamaIntegrationServiceTest.java      | 203 [32m++++++[m[31m------------[m
+ .../service/PromptSanitizerTest.java               | 232 [32m+++++[m[31m----------------[m
+ .../service/ThemeServiceTest.java                  |   3 [32m+[m[31m-[m
+ .../service/TokenBlacklistServiceTest.java         |  71 [32m++[m[31m-----[m
+ .../service/TokenCalculationServiceTest.java       | 215 [32m++++[m[31m---------------[m
+ 30 files changed, 928 insertions(+), 992 deletions(-)
