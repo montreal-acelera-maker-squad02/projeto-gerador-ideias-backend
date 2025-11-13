@@ -21,7 +21,6 @@ import projeto_gerador_ideias_backend.service.IdeaService;
 
 import java.time.LocalDateTime;
 import java.util.Map;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/ideas")
@@ -163,18 +162,21 @@ public class IdeaController {
             @ApiResponse(responseCode = "404", description = "Usuário não encontrado ou sem ideias favoritadas"),
             @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
     })
-    public ResponseEntity<?> getFavoriteIdeas(
+    public ResponseEntity<Page<IdeaResponse>> getFavoriteIdeas(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "5") int size
     ) {
         try {
             Page<IdeaResponse> favoritas = ideaService.listarIdeiasFavoritadasPaginadas(page, size);
             return ResponseEntity.ok(favoritas);
+
         } catch (ResourceNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Page.empty());
+
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Erro ao buscar ideias favoritadas: " + e.getMessage());
+                    .body(Page.empty());
         }
     }
 

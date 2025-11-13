@@ -544,7 +544,6 @@ class IdeaServiceTest {
         favorites.add(idea2);
         testUser.setFavoriteIdeas(favorites);
 
-        Pageable pageable = PageRequest.of(0, 6);
         Page<IdeaResponse> result = ideaService.listarIdeiasFavoritadasPaginadas(0, 6);
 
         assertNotNull(result);
