@@ -432,7 +432,7 @@ class ChatControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "admin@criaitor.com")
+    @WithMockUser(username = "admin@criaitor.com", roles = "ADMIN")
     void shouldGetAdminChatLogsSuccessfully() throws Exception {
 
         User adminUser = new User();
@@ -468,7 +468,7 @@ class ChatControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "admin@criaitor.com")
+    @WithMockUser(username = "admin@criaitor.com", roles = "ADMIN")
     void shouldGetAdminChatLogsFilteredByUserId() throws Exception {
         User adminUser = new User();
         adminUser.setEmail("admin@criaitor.com");
