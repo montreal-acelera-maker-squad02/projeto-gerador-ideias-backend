@@ -3,6 +3,9 @@ package projeto_gerador_ideias_backend.service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -42,23 +45,11 @@ class TokenBlacklistServiceTest {
         verify(cache, times(1)).put(token, true);
     }
 
-    @Test
-    void shouldNotBlacklistNullToken() {
-        tokenBlacklistService.blacklistToken(null);
-        
-        verify(cache, never()).put(anyString(), any());
-    }
-
-    @Test
-    void shouldNotBlacklistBlankToken() {
-        tokenBlacklistService.blacklistToken("   ");
-        
-        verify(cache, never()).put(anyString(), any());
-    }
-
-    @Test
-    void shouldNotBlacklistEmptyToken() {
-        tokenBlacklistService.blacklistToken("");
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\t", "\n"})
+    void shouldNotBlacklistInvalidToken(String token) {
+        tokenBlacklistService.blacklistToken(token);
         
         verify(cache, never()).put(anyString(), any());
     }
@@ -87,25 +78,11 @@ class TokenBlacklistServiceTest {
         verify(cache, times(1)).get(token);
     }
 
-    @Test
-    void shouldReturnFalseWhenTokenIsNull() {
-        boolean isBlacklisted = tokenBlacklistService.isTokenBlacklisted(null);
-        
-        assertFalse(isBlacklisted);
-        verify(cache, never()).get(anyString());
-    }
-
-    @Test
-    void shouldReturnFalseWhenTokenIsBlank() {
-        boolean isBlacklisted = tokenBlacklistService.isTokenBlacklisted("   ");
-        
-        assertFalse(isBlacklisted);
-        verify(cache, never()).get(anyString());
-    }
-
-    @Test
-    void shouldReturnFalseWhenTokenIsEmpty() {
-        boolean isBlacklisted = tokenBlacklistService.isTokenBlacklisted("");
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\t", "\n"})
+    void shouldReturnFalseWhenTokenIsInvalid(String token) {
+        boolean isBlacklisted = tokenBlacklistService.isTokenBlacklisted(token);
         
         assertFalse(isBlacklisted);
         verify(cache, never()).get(anyString());
@@ -133,23 +110,11 @@ class TokenBlacklistServiceTest {
         verify(cache, times(1)).evict(token);
     }
 
-    @Test
-    void shouldNotRemoveNullTokenFromBlacklist() {
-        tokenBlacklistService.removeFromBlacklist(null);
-        
-        verify(cache, never()).evict(anyString());
-    }
-
-    @Test
-    void shouldNotRemoveBlankTokenFromBlacklist() {
-        tokenBlacklistService.removeFromBlacklist("   ");
-        
-        verify(cache, never()).evict(anyString());
-    }
-
-    @Test
-    void shouldNotRemoveEmptyTokenFromBlacklist() {
-        tokenBlacklistService.removeFromBlacklist("");
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\t", "\n"})
+    void shouldNotRemoveInvalidTokenFromBlacklist(String token) {
+        tokenBlacklistService.removeFromBlacklist(token);
         
         verify(cache, never()).evict(anyString());
     }

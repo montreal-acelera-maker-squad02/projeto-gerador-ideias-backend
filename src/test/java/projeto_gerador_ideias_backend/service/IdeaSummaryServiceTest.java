@@ -2,6 +2,9 @@ package projeto_gerador_ideias_backend.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -14,21 +17,11 @@ class IdeaSummaryServiceTest {
         ideaSummaryService = new IdeaSummaryService();
     }
 
-    @Test
-    void shouldReturnEmptyStringWhenContentIsNull() {
-        String result = ideaSummaryService.summarizeIdeaSimple(null);
-        assertEquals("", result);
-    }
-
-    @Test
-    void shouldReturnEmptyStringWhenContentIsEmpty() {
-        String result = ideaSummaryService.summarizeIdeaSimple("");
-        assertEquals("", result);
-    }
-
-    @Test
-    void shouldReturnEmptyStringWhenContentIsBlank() {
-        String result = ideaSummaryService.summarizeIdeaSimple("   ");
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\t", "\n"})
+    void shouldReturnEmptyStringWhenContentIsNullOrEmptyOrBlank(String content) {
+        String result = ideaSummaryService.summarizeIdeaSimple(content);
         assertEquals("", result);
     }
 
@@ -56,29 +49,13 @@ class IdeaSummaryServiceTest {
         assertTrue(result.split("\\s+").length <= 5);
     }
 
-    @Test
-    void shouldSummarizeByCommaPunctuation() {
-        String content = "Primeira parte, segunda parte, terceira parte, quarta parte, quinta parte, sexta parte, sétima parte, oitava parte, nona parte, décima parte, décima primeira parte";
-        String result = ideaSummaryService.summarizeIdeaSimple(content);
-        
-        assertNotNull(result);
-        assertTrue(result.contains("Primeira parte"));
-        assertTrue(result.split("\\s+").length <= 5);
-    }
-
-    @Test
-    void shouldSummarizeBySemicolonPunctuation() {
-        String content = "Primeira parte; segunda parte; terceira parte; quarta parte; quinta parte; sexta parte; sétima parte; oitava parte; nona parte; décima parte; décima primeira parte";
-        String result = ideaSummaryService.summarizeIdeaSimple(content);
-        
-        assertNotNull(result);
-        assertTrue(result.contains("Primeira parte"));
-        assertTrue(result.split("\\s+").length <= 5);
-    }
-
-    @Test
-    void shouldSummarizeByPeriodPunctuation() {
-        String content = "Primeira parte. Segunda parte. Terceira parte. Quarta parte. Quinta parte. Sexta parte. Sétima parte. Oitava parte. Nona parte. Décima parte. Décima primeira parte.";
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "Primeira parte, segunda parte, terceira parte, quarta parte, quinta parte, sexta parte, sétima parte, oitava parte, nona parte, décima parte, décima primeira parte",
+        "Primeira parte; segunda parte; terceira parte; quarta parte; quinta parte; sexta parte; sétima parte; oitava parte; nona parte; décima parte; décima primeira parte",
+        "Primeira parte. Segunda parte. Terceira parte. Quarta parte. Quinta parte. Sexta parte. Sétima parte. Oitava parte. Nona parte. Décima parte. Décima primeira parte."
+    })
+    void shouldSummarizeByPunctuation(String content) {
         String result = ideaSummaryService.summarizeIdeaSimple(content);
         
         assertNotNull(result);

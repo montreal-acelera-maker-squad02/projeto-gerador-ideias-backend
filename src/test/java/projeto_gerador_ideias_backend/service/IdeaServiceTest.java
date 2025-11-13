@@ -143,18 +143,18 @@ class IdeaServiceTest {
     void generateIdea_ShouldReturnFromPersonalCache_WhenCacheExistsAndSkipCacheIsFalse() {
         setupSecurityContext();
 
-        Theme tecnologiaTheme = new Theme();
-        tecnologiaTheme.setId(1L);
-        tecnologiaTheme.setName("Tecnologia");
+        Theme localTecnologiaTheme = new Theme();
+        localTecnologiaTheme.setId(1L);
+        localTecnologiaTheme.setName("Tecnologia");
 
         IdeaRequest request = new IdeaRequest();
-        request.setTheme(tecnologiaTheme.getId());
+        request.setTheme(localTecnologiaTheme.getId());
         request.setContext("Contexto");
 
-        when(themeService.findByID(tecnologiaTheme.getId())).thenReturn(tecnologiaTheme);
+        when(themeService.findByID(localTecnologiaTheme.getId())).thenReturn(localTecnologiaTheme);
 
         when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
-                testUser, tecnologiaTheme, request.getContext()))
+                testUser, localTecnologiaTheme, request.getContext()))
                 .thenReturn(Optional.of(testIdea));
 
         IdeaResponse response = ideaService.generateIdea(request, false);
@@ -615,9 +615,9 @@ class IdeaServiceTest {
         verify(failureCounterService).resetCounter(testUser.getEmail());
     }
 
-    @Test
-    void cleanUpAiResponse_ShouldRemoveEmboraSejaImpossivel() {
-        String input = "Embora seja impossível\nConteúdo válido";
+    @ParameterizedTest
+    @MethodSource("provideCleanUpAiResponseAdditionalCases")
+    void cleanUpAiResponse_ShouldHandleVariousCleanupScenarios(String input, String expectedOutput) {
         String cleaned = (String) ReflectionTestUtils.invokeMethod(
                 ideaService,
                 "cleanUpAiResponse",
@@ -626,35 +626,17 @@ class IdeaServiceTest {
                 false
         );
 
-        assertEquals("Conteúdo válido", cleaned);
+        assertEquals(expectedOutput, cleaned);
     }
 
-    @Test
-    void cleanUpAiResponse_ShouldHandleSorryICant() {
-        String input = "Sorry, I can't fulfill this request.";
-        String cleaned = (String) ReflectionTestUtils.invokeMethod(
-                ideaService,
-                "cleanUpAiResponse",
-                input,
-                "contexto",
-                false
+    private static Stream<Arguments> provideCleanUpAiResponseAdditionalCases() {
+        return Stream.of(
+                Arguments.of("Embora seja impossível\nConteúdo válido", "Conteúdo válido"),
+                Arguments.of("Sorry, I can't fulfill this request.", "Desculpe, não posso gerar ideias sobre esse tema."),
+                Arguments.of("#### Header\n### Subheader\nConteúdo real", "Conteúdo real"),
+                Arguments.of("\"Conteúdo entre aspas\"", "Conteúdo entre aspas"),
+                Arguments.of("\"\"", "\"\"")
         );
-
-        assertEquals("Desculpe, não posso gerar ideias sobre esse tema.", cleaned);
-    }
-
-    @Test
-    void cleanUpAiResponse_ShouldHandleMultipleHeaders() {
-        String input = "#### Header\n### Subheader\nConteúdo real";
-        String cleaned = (String) ReflectionTestUtils.invokeMethod(
-                ideaService,
-                "cleanUpAiResponse",
-                input,
-                "contexto",
-                false
-        );
-
-        assertEquals("Conteúdo real", cleaned);
     }
 
     @Test
@@ -715,8 +697,10 @@ class IdeaServiceTest {
                     return Collections.emptyList();
                 });
 
+        Long userId = testUser.getId();
+        Long invalidThemeId = 99L;
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), 99L, null, null);
+            ideaService.listarHistoricoIdeiasFiltrado(userId, invalidThemeId, null, null);
         });
 
         assertTrue(exception.getMessage().contains("O tema com ID '99' é inválido."));
@@ -787,33 +771,6 @@ class IdeaServiceTest {
         assertEquals("Usuário não autenticado. Não é possível gerar ideias.", exception.getMessage());
     }
 
-    @Test
-    void cleanUpAiResponse_ShouldHandleQuotesCorrectly() {
-        String input = "\"Conteúdo entre aspas\"";
-        String cleaned = (String) ReflectionTestUtils.invokeMethod(
-                ideaService,
-                "cleanUpAiResponse",
-                input,
-                "contexto",
-                false
-        );
-
-        assertEquals("Conteúdo entre aspas", cleaned);
-    }
-
-    @Test
-    void cleanUpAiResponse_ShouldNotRemoveQuotes_WhenLengthIsTwo() {
-        String input = "\"\"";
-        String cleaned = (String) ReflectionTestUtils.invokeMethod(
-                ideaService,
-                "cleanUpAiResponse",
-                input,
-                "contexto",
-                false
-        );
-
-        assertEquals("\"\"", cleaned);
-    }
 
     @Test
     void cleanUpAiResponse_ShouldFormatSurprise_WithContext() {

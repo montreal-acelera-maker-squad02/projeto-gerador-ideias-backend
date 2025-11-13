@@ -2,6 +2,8 @@ package projeto_gerador_ideias_backend.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import projeto_gerador_ideias_backend.exceptions.ValidationException;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -74,44 +76,20 @@ class ContentModerationServiceTest {
         assertEquals("Desculpe, sua mensagem não está relacionada à ideia desta conversa. Por favor, mantenha o foco no tópico da ideia. Como posso ajudá-lo a desenvolver ou melhorar esta ideia?", result2);
     }
 
-    @Test
-    void shouldDetectDangerousContentWithCaseInsensitive() {
-        String[] dangerousVariations = {
-            "[MODERACAO: PERIGOSO]",
-            "[moderacao: perigoso]",
-            "[Moderacao: Perigoso]",
-            "[MODERACAO:perigoso]",
-            "[moderacao:PERIGOSO]"
-        };
-
-        for (String content : dangerousVariations) {
-            ValidationException exception = assertThrows(ValidationException.class, () -> {
-                contentModerationService.validateModerationResponse(content, true);
-            });
-            assertTrue(exception.getMessage().contains("não posso processar"));
-        }
-    }
-
-    @Test
-    void shouldDetectDangerousContentWithSpaces() {
-        String[] dangerousVariations = {
-            "  [MODERACAO: PERIGOSO]",
-            "[MODERACAO : PERIGOSO]",
-            "[MODERACAO:  PERIGOSO]"
-        };
-
-        for (String content : dangerousVariations) {
-            ValidationException exception = assertThrows(ValidationException.class, () -> {
-                contentModerationService.validateModerationResponse(content, true);
-            });
-            assertTrue(exception.getMessage().contains("não posso processar"));
-        }
-    }
-
-    @Test
-    void shouldDetectDangerousContentWithAccent() {
-        String dangerousContent = "[MODERAÇÃO: PERIGOSO]";
-
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "[MODERACAO: PERIGOSO]",
+        "[moderacao: perigoso]",
+        "[Moderacao: Perigoso]",
+        "[MODERACAO:perigoso]",
+        "[moderacao:PERIGOSO]",
+        "  [MODERACAO: PERIGOSO]",
+        "[MODERACAO : PERIGOSO]",
+        "[MODERACAO:  PERIGOSO]",
+        "[MODERAÇÃO: PERIGOSO]",
+        "[MODERACAO: PERIGOSO] Algum conteúdo adicional"
+    })
+    void shouldDetectDangerousContentVariations(String dangerousContent) {
         ValidationException exception = assertThrows(ValidationException.class, () -> {
             contentModerationService.validateModerationResponse(dangerousContent, true);
         });
@@ -119,30 +97,13 @@ class ContentModerationServiceTest {
         assertTrue(exception.getMessage().contains("não posso processar"));
     }
 
-    @Test
-    void shouldDetectDangerousContentWhenStartsWithModerationTag() {
-        String dangerousContent = "[MODERACAO: PERIGOSO] Algum conteúdo adicional";
-
-        ValidationException exception = assertThrows(ValidationException.class, () -> {
-            contentModerationService.validateModerationResponse(dangerousContent, true);
-        });
-
-        assertTrue(exception.getMessage().contains("não posso processar"));
-    }
-
-    @Test
-    void shouldNotDetectDangerousContentWhenTagIsInMiddle() {
-        String safeContent = "Esta é uma resposta [MODERACAO: PERIGOSO] no meio do texto";
-
-        assertDoesNotThrow(() -> {
-            contentModerationService.validateModerationResponse(safeContent, true);
-        });
-    }
-
-    @Test
-    void shouldNotDetectDangerousContentWhenTagIsAtEnd() {
-        String safeContent = "Esta é uma resposta segura [MODERACAO: PERIGOSO]";
-
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "Esta é uma resposta [MODERACAO: PERIGOSO] no meio do texto",
+        "Esta é uma resposta segura [MODERACAO: PERIGOSO]",
+        "Texto antes [MODERACAO: PERIGOSO] texto depois"
+    })
+    void shouldNotDetectDangerousContentWhenTagIsNotAtStart(String safeContent) {
         assertDoesNotThrow(() -> {
             contentModerationService.validateModerationResponse(safeContent, true);
         });

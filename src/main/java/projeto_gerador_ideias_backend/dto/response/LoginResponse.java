@@ -18,13 +18,19 @@ public class LoginResponse {
     private String accessToken;
     private String refreshToken;
     
-    @Deprecated
+    /**
+     * @deprecated Use {@link #getAccessToken()} instead.
+     */
+    @Deprecated(since = "1.0", forRemoval = true)
     @JsonIgnore
     public String getToken() {
         return accessToken;
     }
     
-    @Deprecated
+    /**
+     * @deprecated Use {@link #setAccessToken(String)} instead.
+     */
+    @Deprecated(since = "1.0", forRemoval = true)
     public void setToken(String token) {
         this.accessToken = token;
     }

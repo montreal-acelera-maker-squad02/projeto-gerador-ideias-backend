@@ -6,6 +6,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -112,17 +114,22 @@ class ChatMetricsServiceTest {
         assertDoesNotThrow(() -> service.recordOllamaError("timeout"));
     }
 
-    @Test
-    void shouldRecordTokenUsage() {
+    @ParameterizedTest
+    @CsvSource({
+        "50, user",
+        "0, user",
+        "100, assistant"
+    })
+    void shouldRecordTokenUsage(int amount, String role) {
         ChatMetricsService service = new ChatMetricsService(simpleMeterRegistry);
         
-        service.recordTokenUsage(50, "user");
+        service.recordTokenUsage(amount, role);
         
         Counter counter = simpleMeterRegistry.find("chat.tokens.used")
-                .tag("role", "user")
+                .tag("role", role)
                 .counter();
         assertNotNull(counter);
-        assertEquals(50.0, counter.count());
+        assertEquals((double) amount, counter.count());
     }
 
     @Test
@@ -206,7 +213,13 @@ class ChatMetricsServiceTest {
     void shouldFallbackToSimpleMeterRegistryWhenGetCounterFails() {
         ChatMetricsService service = new ChatMetricsService(simpleMeterRegistry);
         
-        assertDoesNotThrow(() -> service.recordMessageSent("FREE"));
+        assertDoesNotThrow(() -> service.recordMessageSent("IDEA_BASED"));
+        
+        Counter counter = simpleMeterRegistry.find("chat.messages.sent")
+                .tag("chat_type", "IDEA_BASED")
+                .counter();
+        assertNotNull(counter);
+        assertEquals(1.0, counter.count());
     }
 
     @Test
@@ -284,29 +297,18 @@ class ChatMetricsServiceTest {
         assertEquals(1, timer.count());
     }
 
-    @Test
-    void shouldRecordZeroTokens() {
-        ChatMetricsService service = new ChatMetricsService(simpleMeterRegistry);
-        
-        service.recordTokenUsage(0, "user");
-        
-        Counter counter = simpleMeterRegistry.find("chat.tokens.used")
-                .tag("role", "user")
-                .counter();
-        assertNotNull(counter);
-        assertEquals(0.0, counter.count());
-    }
 
     @Test
     void shouldHandleExceptionInCounterIncrement() {
         ChatMetricsService service = new ChatMetricsService(simpleMeterRegistry);
         
-        service.recordMessageSent("FREE");
+        service.recordMessageSent("IDEA_BASED");
         
         Counter counter = simpleMeterRegistry.find("chat.messages.sent")
-                .tag("chat_type", "FREE")
+                .tag("chat_type", "IDEA_BASED")
                 .counter();
         assertNotNull(counter);
+        assertEquals(1.0, counter.count());
     }
 
     @Test
@@ -323,13 +325,16 @@ class ChatMetricsServiceTest {
     void shouldHandleExceptionInCounterIncrementWithAmount() {
         ChatMetricsService service = new ChatMetricsService(simpleMeterRegistry);
         
-        service.recordTokenUsage(50, "user");
+        service.recordTokenUsage(100, "assistant");
         
         Counter counter = simpleMeterRegistry.find("chat.tokens.used")
-                .tag("role", "user")
+                .tag("role", "assistant")
                 .counter();
         assertNotNull(counter);
-        assertEquals(50.0, counter.count());
+        assertEquals(100.0, counter.count());
+        
+        service.recordTokenUsage(50, "assistant");
+        assertEquals(150.0, counter.count());
     }
 
     @Test
@@ -397,5 +402,45 @@ class ChatMetricsServiceTest {
         assertNotNull(missingFieldCounter);
         assertEquals(2.0, invalidInputCounter.count());
         assertEquals(1.0, missingFieldCounter.count());
+    }
+
+    @Test
+    void shouldHandleExceptionInGetCounter() {
+        io.micrometer.core.instrument.MeterRegistry mockRegistry = org.mockito.Mockito.mock(io.micrometer.core.instrument.MeterRegistry.class);
+        org.mockito.Mockito.when(mockRegistry.counter(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.<java.lang.Iterable<io.micrometer.core.instrument.Tag>>any())).thenThrow(new RuntimeException("Test exception"));
+        
+        ChatMetricsService service = new ChatMetricsService(mockRegistry);
+        
+        assertDoesNotThrow(() -> service.recordMessageSent("FREE"));
+    }
+
+    @Test
+    void shouldHandleExceptionInGetTimer() {
+        io.micrometer.core.instrument.MeterRegistry mockRegistry = org.mockito.Mockito.mock(io.micrometer.core.instrument.MeterRegistry.class);
+        org.mockito.Mockito.when(mockRegistry.timer(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.<java.lang.Iterable<io.micrometer.core.instrument.Tag>>any())).thenThrow(new RuntimeException("Test exception"));
+        
+        ChatMetricsService service = new ChatMetricsService(mockRegistry);
+        
+        assertDoesNotThrow(() -> service.recordOllamaCallTime(100L));
+    }
+
+    @Test
+    void shouldHandleExceptionInGetCounterWithTags() {
+        io.micrometer.core.instrument.MeterRegistry mockRegistry = org.mockito.Mockito.mock(io.micrometer.core.instrument.MeterRegistry.class);
+        org.mockito.Mockito.when(mockRegistry.counter(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.<java.lang.Iterable<io.micrometer.core.instrument.Tag>>any())).thenThrow(new RuntimeException("Test exception"));
+        
+        ChatMetricsService service = new ChatMetricsService(mockRegistry);
+        
+        assertDoesNotThrow(() -> service.recordMessageProcessingTime(100L, "FREE", true));
+    }
+
+    @Test
+    void shouldHandleExceptionInGetTimerWithTags() {
+        io.micrometer.core.instrument.MeterRegistry mockRegistry = org.mockito.Mockito.mock(io.micrometer.core.instrument.MeterRegistry.class);
+        org.mockito.Mockito.when(mockRegistry.timer(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.<java.lang.Iterable<io.micrometer.core.instrument.Tag>>any())).thenThrow(new RuntimeException("Test exception"));
+        
+        ChatMetricsService service = new ChatMetricsService(mockRegistry);
+        
+        assertDoesNotThrow(() -> service.recordMessageProcessingTime(100L, "FREE", false));
     }
 }

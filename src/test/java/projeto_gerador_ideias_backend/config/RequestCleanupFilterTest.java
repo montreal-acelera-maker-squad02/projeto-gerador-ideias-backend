@@ -72,7 +72,11 @@ class RequestCleanupFilterTest {
 
     @Test
     void shouldCallClearRequestCacheInFinallyBlock() throws ServletException, IOException {
-        requestCleanupFilter.doFilterInternal(request, response, filterChain);
+        doThrow(new RuntimeException("Unexpected runtime exception")).when(filterChain).doFilter(request, response);
+
+        assertThrows(RuntimeException.class, () -> {
+            requestCleanupFilter.doFilterInternal(request, response, filterChain);
+        });
 
         verify(filterChain, times(1)).doFilter(request, response);
         verify(userCacheService, times(1)).clearRequestCache();

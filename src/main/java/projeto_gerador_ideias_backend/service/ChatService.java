@@ -1116,11 +1116,6 @@ public class ChatService {
         return result;
     }
 
-    private String buildDefaultSummary(String[] words, int maxWords) {
-        int targetWords = Math.min(maxWords, words.length);
-        return joinWords(Arrays.copyOf(words, targetWords));
-    }
-
     private String removeTrailingPunctuation(String text) {
         String[] trailingPunctuation = {":", ";", ",", "-", "—", "–"};
         String result = text.trim();
@@ -1185,13 +1180,6 @@ public class ChatService {
             }
         }
         return false;
-    }
-
-    private String[] limitWords(String[] words, int maxWords) {
-        if (words.length > maxWords) {
-            return Arrays.copyOf(words, maxWords);
-        }
-        return words;
     }
 
     private String joinWords(String[] words) {
@@ -1382,6 +1370,16 @@ public class ChatService {
         }
     }
 
+    private static class ChatMessages {
+        final ChatMessage userMessage;
+        final ChatMessage assistantMessage;
+
+        ChatMessages(ChatMessage userMessage, ChatMessage assistantMessage) {
+            this.userMessage = userMessage;
+            this.assistantMessage = assistantMessage;
+        }
+    }
+
     private static class TokenSummary {
         private final int totalUserTokens;
         private final int totalAssistantTokens;
@@ -1472,7 +1470,7 @@ public class ChatService {
                 ai.getAssistantMessage(),
                 ai.getMetrics()
             ))
-            .collect(java.util.stream.Collectors.toList());
+            .toList();
         
         LogsSummary summary = calculateSummary(interactionsForSummary);
         
@@ -1538,8 +1536,9 @@ public class ChatService {
             : LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
         
         if (assistantMessage != null) {
+            ChatMessages messages = new ChatMessages(userMessage, assistantMessage);
             return createAdminInteractionWithAssistant(interactionId, userContent, tokensInput, timestamp, 
-                                                     session, user, userMessage, assistantMessage);
+                                                     session, user, messages);
         } else {
             return createAdminInteractionWithoutAssistant(interactionId, userMessage, tokensInput, timestamp, 
                                                         session, user);
@@ -1548,11 +1547,11 @@ public class ChatService {
     
     private AdminInteraction createAdminInteractionWithAssistant(long interactionId, String userMessageContent, 
                                                                  int tokensInput, String timestamp, ChatSession session,
-                                                                 User user, ChatMessage userMessage, ChatMessage assistantMessage) {
-        String assistantContent = assistantMessage.getContent();
-        int tokensOutput = assistantMessage.getTokensUsed();
+                                                                 User user, ChatMessages messages) {
+        String assistantContent = messages.assistantMessage.getContent();
+        int tokensOutput = messages.assistantMessage.getTokensUsed();
         int totalTokens = tokensInput + tokensOutput;
-        Long responseTimeMs = calculateResponseTime(userMessage, assistantMessage);
+        Long responseTimeMs = calculateResponseTime(messages.userMessage, messages.assistantMessage);
         
         InteractionMetrics metrics = new InteractionMetrics(
             tokensInput,
@@ -1561,8 +1560,8 @@ public class ChatService {
             responseTimeMs
         );
         
-        String userIp = userMessage.getIpAddress() != null 
-            ? ipEncryptionService.decryptIp(userMessage.getIpAddress())
+        String userIp = messages.userMessage.getIpAddress() != null 
+            ? ipEncryptionService.decryptIp(messages.userMessage.getIpAddress())
             : "unknown";
         
         return new AdminInteraction(

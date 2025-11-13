@@ -3,6 +3,11 @@ package projeto_gerador_ideias_backend.service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import projeto_gerador_ideias_backend.model.ChatMessage;
@@ -78,23 +83,11 @@ class TokenCalculationServiceTest {
         assertEquals(0, totalTokens);
     }
 
-    @Test
-    void shouldReturnZeroWhenEstimateTokensWithNull() {
-        int tokens = tokenCalculationService.estimateTokens(null);
-
-        assertEquals(0, tokens);
-    }
-
-    @Test
-    void shouldReturnZeroWhenEstimateTokensWithEmptyString() {
-        int tokens = tokenCalculationService.estimateTokens("");
-
-        assertEquals(0, tokens);
-    }
-
-    @Test
-    void shouldReturnZeroWhenEstimateTokensWithWhitespaceOnly() {
-        int tokens = tokenCalculationService.estimateTokens("   ");
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\t", "\n"})
+    void shouldReturnZeroWhenEstimateTokensWithInvalidInput(String text) {
+        int tokens = tokenCalculationService.estimateTokens(text);
 
         assertEquals(0, tokens);
     }
@@ -106,172 +99,38 @@ class TokenCalculationServiceTest {
         assertTrue(tokens >= 1);
     }
 
-    @Test
-    void shouldEstimateTokensForShortText() {
-        String text = "Hello world";
+    @ParameterizedTest
+    @MethodSource("provideEstimateTokensCases")
+    void shouldEstimateTokensForVariousTexts(String text) {
         int tokens = tokenCalculationService.estimateTokens(text);
 
         assertTrue(tokens >= 1);
     }
 
-    @Test
-    void shouldEstimateTokensForLongTextWithManyWords() {
-        String text = "This is a very long text with many words that should trigger the word count based estimation algorithm because it has more than ten words in total";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithManySpecialChars() {
-        String text = "!!!@@@###$$$%%%^^^&&&***((()))";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithSpecialCharsGreaterThan20Percent() {
-        String text = "!!!!!aaaaa";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForNormalText() {
-        String text = "This is a normal text with some words";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithUnicode() {
-        String text = "Hello 世界 🌍";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithMixedContent() {
-        String text = "Hello! This is a test with 123 numbers and @#$ special characters.";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForSingleWord() {
-        String text = "Hello";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithNewlines() {
-        String text = "Line 1\nLine 2\nLine 3";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithTabs() {
-        String text = "Word1\tWord2\tWord3";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithMultipleSpaces() {
-        String text = "Word1    Word2    Word3";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithPunctuation() {
-        String text = "Hello, world! How are you? I'm fine.";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithNumbers() {
-        String text = "The number is 12345 and the price is $99.99";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithExactlyTenWords() {
-        String text = "one two three four five six seven eight nine ten";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithMoreThanTenWords() {
-        String text = "one two three four five six seven eight nine ten eleven twelve";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithLessThanTenWords() {
-        String text = "one two three four five";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithLeadingAndTrailingWhitespace() {
-        String text = "   Hello world   ";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForVeryLongText() {
-        String text = "a".repeat(1000);
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithOnlySpecialChars() {
-        String text = "!@#$%^&*()";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithOnlyLetters() {
-        String text = "abcdefghijklmnopqrstuvwxyz";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
-    }
-
-    @Test
-    void shouldEstimateTokensForTextWithOnlyNumbers() {
-        String text = "1234567890";
-        int tokens = tokenCalculationService.estimateTokens(text);
-
-        assertTrue(tokens >= 1);
+    private static java.util.stream.Stream<Arguments> provideEstimateTokensCases() {
+        return java.util.stream.Stream.of(
+                Arguments.of("Hello world"),
+                Arguments.of("This is a very long text with many words that should trigger the word count based estimation algorithm because it has more than ten words in total"),
+                Arguments.of("!!!@@@###$$$%%%^^^&&&***((()))"),
+                Arguments.of("!!!!!aaaaa"),
+                Arguments.of("This is a normal text with some words"),
+                Arguments.of("Hello 世界 🌍"),
+                Arguments.of("Hello! This is a test with 123 numbers and @#$ special characters."),
+                Arguments.of("Hello"),
+                Arguments.of("Line 1\nLine 2\nLine 3"),
+                Arguments.of("Word1\tWord2\tWord3"),
+                Arguments.of("Word1    Word2    Word3"),
+                Arguments.of("Hello, world! How are you? I'm fine."),
+                Arguments.of("The number is 12345 and the price is $99.99"),
+                Arguments.of("one two three four five six seven eight nine ten"),
+                Arguments.of("one two three four five six seven eight nine ten eleven twelve"),
+                Arguments.of("one two three four five"),
+                Arguments.of("   Hello world   "),
+                Arguments.of("a".repeat(1000)),
+                Arguments.of("!@#$%^&*()"),
+                Arguments.of("abcdefghijklmnopqrstuvwxyz"),
+                Arguments.of("1234567890")
+        );
     }
 
     @Test

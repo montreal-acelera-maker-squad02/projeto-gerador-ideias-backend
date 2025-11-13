@@ -64,15 +64,18 @@ public class OllamaIntegrationService {
         backoff = @Backoff(delay = 1000, multiplier = 2)
     )
     public String callOllamaWithHistory(String systemPrompt, List<OllamaRequest.Message> historyMessages, String userPrompt) {
+        OllamaRequest.OllamaParameters parameters = new OllamaRequest.OllamaParameters(
+            chatProperties.getOllamaNumPredict(),
+            chatProperties.getOllamaTemperature(),
+            chatProperties.getOllamaTopP(),
+            chatProperties.getOllamaNumCtx()
+        );
         OllamaRequest ollamaRequest = new OllamaRequest(
             ollamaModel, 
             systemPrompt, 
             historyMessages, 
             userPrompt,
-            chatProperties.getOllamaNumPredict(),
-            chatProperties.getOllamaTemperature(),
-            chatProperties.getOllamaTopP(),
-            chatProperties.getOllamaNumCtx()
+            parameters
         );
         return executeOllamaCall(ollamaRequest);
     }

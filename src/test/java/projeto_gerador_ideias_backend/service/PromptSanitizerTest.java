@@ -2,6 +2,9 @@ package projeto_gerador_ideias_backend.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -14,189 +17,60 @@ class PromptSanitizerTest {
         promptSanitizer = new PromptSanitizer();
     }
 
-    @Test
-    void shouldReturnEmptyStringWhenContentIsNull() {
-        String result = promptSanitizer.sanitizeForPrompt(null);
-        assertEquals("", result);
+    @ParameterizedTest
+    @MethodSource("provideSanitizeForPromptCases")
+    void shouldSanitizeForPrompt(String input, String expected) {
+        String result = promptSanitizer.sanitizeForPrompt(input);
+        assertEquals(expected, result);
     }
 
-    @Test
-    void shouldReplaceCarriageReturnLineFeedWithLineFeed() {
-        String content = "Line1\r\nLine2";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("Line1\nLine2", result);
+    private static java.util.stream.Stream<Arguments> provideSanitizeForPromptCases() {
+        return java.util.stream.Stream.of(
+                Arguments.of(null, ""),
+                Arguments.of("Line1\r\nLine2", "Line1\nLine2"),
+                Arguments.of("Line1\rLine2", "Line1\nLine2"),
+                Arguments.of("Word1\tWord2", "Word1 Word2"),
+                Arguments.of("Word1    Word2", "Word1 Word2"),
+                Arguments.of("Word1\t\t\tWord2", "Word1 Word2"),
+                Arguments.of("Word1 \t \t Word2", "Word1 Word2"),
+                Arguments.of("Line1\n\n\nLine2", "Line1\n\nLine2"),
+                Arguments.of("Line1\n\n\n\nLine2", "Line1\n\nLine2"),
+                Arguments.of("Line1\n\nLine2", "Line1\n\nLine2"),
+                Arguments.of("  Content  ", "Content"),
+                Arguments.of("  Line1\r\n\t  Line2\r\t\tLine3\n\n\nLine4  ", "Line1\n Line2\n Line3\n\nLine4"),
+                Arguments.of("   \t\t  \n\n  ", ""),
+                Arguments.of("", ""),
+                Arguments.of("\n\n\n", "")
+        );
     }
 
-    @Test
-    void shouldReplaceCarriageReturnWithLineFeed() {
-        String content = "Line1\rLine2";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("Line1\nLine2", result);
+    @ParameterizedTest
+    @MethodSource("provideEscapeForFormatCases")
+    void shouldEscapeForFormat(String input, String expected) {
+        String result = promptSanitizer.escapeForFormat(input);
+        assertEquals(expected, result);
     }
 
-    @Test
-    void shouldReplaceTabWithSpace() {
-        String content = "Word1\tWord2";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("Word1 Word2", result);
-    }
-
-    @Test
-    void shouldReplaceMultipleSpacesWithSingleSpace() {
-        String content = "Word1    Word2";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("Word1 Word2", result);
-    }
-
-    @Test
-    void shouldReplaceMultipleTabsWithSingleSpace() {
-        String content = "Word1\t\t\tWord2";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("Word1 Word2", result);
-    }
-
-    @Test
-    void shouldReplaceMixedSpacesAndTabsWithSingleSpace() {
-        String content = "Word1 \t \t Word2";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("Word1 Word2", result);
-    }
-
-    @Test
-    void shouldReplaceThreeOrMoreNewlinesWithTwoNewlines() {
-        String content = "Line1\n\n\nLine2";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("Line1\n\nLine2", result);
-    }
-
-    @Test
-    void shouldReplaceFourNewlinesWithTwoNewlines() {
-        String content = "Line1\n\n\n\nLine2";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("Line1\n\nLine2", result);
-    }
-
-    @Test
-    void shouldNotReplaceTwoNewlines() {
-        String content = "Line1\n\nLine2";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("Line1\n\nLine2", result);
-    }
-
-    @Test
-    void shouldTrimLeadingAndTrailingWhitespace() {
-        String content = "  Content  ";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("Content", result);
-    }
-
-    @Test
-    void shouldHandleAllTransformationsTogether() {
-        String content = "  Line1\r\n\t  Line2\r\t\tLine3\n\n\nLine4  ";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("Line1\n Line2\n Line3\n\nLine4", result);
-    }
-
-    @Test
-    void shouldReturnEmptyStringWhenContentIsOnlyWhitespace() {
-        String content = "   \t\t  \n\n  ";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("", result);
-    }
-
-    @Test
-    void shouldEscapeForFormatReturnEmptyStringWhenContentIsNull() {
-        String result = promptSanitizer.escapeForFormat(null);
-        assertEquals("", result);
-    }
-
-    @Test
-    void shouldEscapePercentSign() {
-        String content = "50% discount";
-        String result = promptSanitizer.escapeForFormat(content);
-        assertEquals("50%% discount", result);
-    }
-
-    @Test
-    void shouldEscapeMultiplePercentSigns() {
-        String content = "50% off and 25% more";
-        String result = promptSanitizer.escapeForFormat(content);
-        assertEquals("50%% off and 25%% more", result);
-    }
-
-    @Test
-    void shouldEscapeOpeningBrace() {
-        String content = "Value {placeholder}";
-        String result = promptSanitizer.escapeForFormat(content);
-        assertEquals("Value {{placeholder}}", result);
+    private static java.util.stream.Stream<Arguments> provideEscapeForFormatCases() {
+        return java.util.stream.Stream.of(
+                Arguments.of(null, ""),
+                Arguments.of("50% discount", "50%% discount"),
+                Arguments.of("50% off and 25% more", "50%% off and 25%% more"),
+                Arguments.of("Value {placeholder}", "Value {{placeholder}}"),
+                Arguments.of("Price: {value} with 50% discount", "Price: {{value}} with 50%% discount"),
+                Arguments.of("  Line1\r\n\t  Line2  ", "Line1\n Line2"),
+                Arguments.of("  Price: {value} with 50% discount\r\n\t  ", "Price: {{value}} with 50%% discount"),
+                Arguments.of("", ""),
+                Arguments.of("\n\n\n", ""),
+                Arguments.of("50%% discount", "50%%%% discount"),
+                Arguments.of("{{value}}", "{{{{value}}}}")
+        );
     }
 
     @Test
     void shouldEscapeClosingBrace() {
-        String content = "Value {placeholder}";
+        String content = "Value }placeholder{";
         String result = promptSanitizer.escapeForFormat(content);
-        assertEquals("Value {{placeholder}}", result);
-    }
-
-    @Test
-    void shouldEscapeAllFormatCharacters() {
-        String content = "Price: {value} with 50% discount";
-        String result = promptSanitizer.escapeForFormat(content);
-        assertEquals("Price: {{value}} with 50%% discount", result);
-    }
-
-    @Test
-    void shouldEscapeForFormatAlsoSanitizeContent() {
-        String content = "  Line1\r\n\t  Line2  ";
-        String result = promptSanitizer.escapeForFormat(content);
-        assertEquals("Line1\n Line2", result);
-    }
-
-    @Test
-    void shouldEscapeForFormatWithAllTransformations() {
-        String content = "  Price: {value} with 50% discount\r\n\t  ";
-        String result = promptSanitizer.escapeForFormat(content);
-        assertEquals("Price: {{value}} with 50%% discount", result);
-    }
-
-    @Test
-    void shouldHandleEmptyString() {
-        String result = promptSanitizer.sanitizeForPrompt("");
-        assertEquals("", result);
-    }
-
-    @Test
-    void shouldEscapeForFormatHandleEmptyString() {
-        String result = promptSanitizer.escapeForFormat("");
-        assertEquals("", result);
-    }
-
-    @Test
-    void shouldHandleContentWithOnlyNewlines() {
-        String content = "\n\n\n";
-        String result = promptSanitizer.sanitizeForPrompt(content);
-        assertEquals("", result);
-    }
-
-    @Test
-    void shouldEscapeForFormatHandleContentWithOnlyNewlines() {
-        String content = "\n\n\n";
-        String result = promptSanitizer.escapeForFormat(content);
-        assertEquals("", result);
-    }
-
-    @Test
-    void shouldNotEscapeAlreadyEscapedPercent() {
-        String content = "50%% discount";
-        String result = promptSanitizer.escapeForFormat(content);
-        assertEquals("50%%%% discount", result);
-    }
-
-    @Test
-    void shouldNotEscapeAlreadyEscapedBraces() {
-        String content = "{{value}}";
-        String result = promptSanitizer.escapeForFormat(content);
-        assertEquals("{{{{value}}}}", result);
+        assertEquals("Value }}placeholder{{", result);
     }
 }
-

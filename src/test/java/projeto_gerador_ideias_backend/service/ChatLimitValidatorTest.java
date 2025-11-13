@@ -199,10 +199,10 @@ class ChatLimitValidatorTest {
     @Test
     void shouldThrowExceptionWhenValidateChatNotBlockedWithResponseExceedsLimitByOne() {
         when(chatProperties.getMaxTokensPerChat()).thenReturn(10000);
-        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(5000);
+        when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(9999);
 
         assertThrows(TokenLimitExceededException.class, () -> {
-            chatLimitValidator.validateChatNotBlockedWithResponse(chatSession, 3000, 2001);
+            chatLimitValidator.validateChatNotBlockedWithResponse(chatSession, 1, 1);
         });
     }
 

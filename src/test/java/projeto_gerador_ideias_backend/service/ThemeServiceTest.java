@@ -57,8 +57,9 @@ class ThemeServiceTest {
     void deveLancarExcecaoAoBuscarTemaPorIdInexistente() {
         when(themeRepository.findById(99L)).thenReturn(Optional.empty());
 
+        Long invalidId = 99L;
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> themeService.findByID(99L));
+                () -> themeService.findByID(invalidId));
 
         assertEquals("Tema não encontrado.", ex.getMessage());
     }

@@ -43,9 +43,7 @@ class EmailServiceTest {
 
         emailService.sendSystemErrorNotification(userEmail, userName, failureCount);
 
-        await();
-
-        verify(mailSender, times(1)).send(messageCaptor.capture());
+        verify(mailSender, timeout(1000).times(1)).send(messageCaptor.capture());
 
         SimpleMailMessage sentMessage = messageCaptor.getValue();
 
@@ -53,12 +51,13 @@ class EmailServiceTest {
         assertEquals(ADMIN_EMAIL, sentMessage.getTo()[0]);
         assertEquals("[ALERTA] 4 falhas consecutivas na comunicação com a IA", sentMessage.getSubject());
 
-        String expectedText = String.format(
-                "Usuário: %s (%s)\n\n" +
-                        "Verificar possível instabilidade no Sistema.\n\n" +
-                        "- Sistema de Monitoramento CriAItor",
-                userName, userEmail
-        );
+        String expectedText = String.format("""
+                Usuário: %s (%s)
+                
+                Verificar possível instabilidade no Sistema.
+                
+                - Sistema de Monitoramento CriAItor
+                """, userName, userEmail).strip();
         assertEquals(expectedText, sentMessage.getText());
     }
 
@@ -72,9 +71,7 @@ class EmailServiceTest {
 
         emailService.sendSystemErrorNotification(userEmail, userName, failureCount);
 
-        await();
-
-        verify(mailSender, times(1)).send(messageCaptor.capture());
+        verify(mailSender, timeout(1000).times(1)).send(messageCaptor.capture());
 
         SimpleMailMessage sentMessage = messageCaptor.getValue();
         assertEquals("[ALERTA] 8 falhas consecutivas na comunicação com a IA", sentMessage.getSubject());
@@ -90,9 +87,7 @@ class EmailServiceTest {
 
         emailService.sendSystemErrorNotification(userEmail, userName, failureCount);
 
-        await();
-
-        verify(mailSender, times(1)).send(messageCaptor.capture());
+        verify(mailSender, timeout(1000).times(1)).send(messageCaptor.capture());
 
         SimpleMailMessage sentMessage = messageCaptor.getValue();
         assertTrue(sentMessage.getText().contains(userEmail));
@@ -109,9 +104,7 @@ class EmailServiceTest {
 
         emailService.sendSystemErrorNotification(userEmail, userName, failureCount);
 
-        await();
-
-        verify(mailSender, times(1)).send(messageCaptor.capture());
+        verify(mailSender, timeout(1000).times(1)).send(messageCaptor.capture());
 
         SimpleMailMessage sentMessage = messageCaptor.getValue();
         assertTrue(sentMessage.getText().contains("Verificar possível instabilidade no Sistema"));
@@ -131,9 +124,7 @@ class EmailServiceTest {
                 emailService.sendSystemErrorNotification(userEmail, userName, failureCount)
         );
 
-        await();
-
-        verify(mailSender, times(1)).send(any(SimpleMailMessage.class));
+        verify(mailSender, timeout(1000).times(1)).send(any(SimpleMailMessage.class));
     }
 
     @Test
@@ -146,9 +137,7 @@ class EmailServiceTest {
 
         emailService.sendSystemErrorNotification(userEmail, userName, failureCount);
 
-        await();
-
-        verify(mailSender, times(1)).send(messageCaptor.capture());
+        verify(mailSender, timeout(1000).times(1)).send(messageCaptor.capture());
 
         SimpleMailMessage sentMessage = messageCaptor.getValue();
         assertArrayEquals(new String[]{ADMIN_EMAIL}, sentMessage.getTo());
@@ -164,9 +153,7 @@ class EmailServiceTest {
 
         emailService.sendSystemErrorNotification(userEmail, userName, failureCount);
 
-        await();
-
-        verify(mailSender, times(1)).send(messageCaptor.capture());
+        verify(mailSender, timeout(1000).times(1)).send(messageCaptor.capture());
 
         SimpleMailMessage sentMessage = messageCaptor.getValue();
         assertEquals(FROM_EMAIL, sentMessage.getFrom());
@@ -182,9 +169,7 @@ class EmailServiceTest {
 
         emailService.sendSystemErrorNotification(userEmail, userName, failureCount);
 
-        await();
-
-        verify(mailSender, times(1)).send(messageCaptor.capture());
+        verify(mailSender, timeout(1000).times(1)).send(messageCaptor.capture());
 
         SimpleMailMessage sentMessage = messageCaptor.getValue();
         assertTrue(sentMessage.getSubject().contains("12 falhas"));
@@ -200,19 +185,10 @@ class EmailServiceTest {
 
         emailService.sendSystemErrorNotification(userEmail, userName, failureCount);
 
-        await();
-
-        verify(mailSender, times(1)).send(messageCaptor.capture());
+        verify(mailSender, timeout(1000).times(1)).send(messageCaptor.capture());
 
         SimpleMailMessage sentMessage = messageCaptor.getValue();
         assertTrue(sentMessage.getText().contains(userName));
     }
 
-    private void await() {
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
 }

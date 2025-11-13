@@ -17,6 +17,8 @@ import java.util.Date;
 @Service
 public class JwtService {
     
+    private static final String CLAIM_USER_ID = "userId";
+    
     @Value("${jwt.secret:}")
     private String secret;
     
@@ -56,7 +58,7 @@ public class JwtService {
         
         return Jwts.builder()
                 .subject(email)
-                .claim("userId", userId)
+                .claim(CLAIM_USER_ID, userId)
                 .claim("type", "access")
                 .issuedAt(now)
                 .expiration(expiryDate)
@@ -70,7 +72,7 @@ public class JwtService {
         
         return Jwts.builder()
                 .subject(email)
-                .claim("userId", userId)
+                .claim(CLAIM_USER_ID, userId)
                 .claim("type", "refresh")
                 .issuedAt(now)
                 .expiration(expiryDate)
@@ -78,7 +80,10 @@ public class JwtService {
                 .compact();
     }
     
-    @Deprecated
+    /**
+     * @deprecated Use {@link #generateAccessToken(String, Long)} instead.
+     */
+    @Deprecated(since = "1.0", forRemoval = true)
     public String generateToken(String email, Long userId) {
         return generateAccessToken(email, userId);
     }
@@ -90,7 +95,7 @@ public class JwtService {
     
     public Long extractUserId(String token) {
         Claims claims = extractAllClaims(token);
-        return claims.get("userId", Long.class);
+        return claims.get(CLAIM_USER_ID, Long.class);
     }
     
     public boolean validateToken(String token) {

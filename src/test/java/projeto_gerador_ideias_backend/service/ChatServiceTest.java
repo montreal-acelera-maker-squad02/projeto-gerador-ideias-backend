@@ -85,7 +85,6 @@ class ChatServiceTest {
     private User testUser;
     private final String testUserEmail = "chat-service@example.com";
     private Theme tecnologiaTheme;
-    private Theme trabalhoTheme;
 
     @BeforeEach
     void setUpEach() throws IOException {
@@ -98,7 +97,6 @@ class ChatServiceTest {
         testUser.setName("Chat Service User");
 
         tecnologiaTheme = new Theme("TECNOLOGIA");
-        trabalhoTheme = new Theme("TRABALHO");
 
         lenient().when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
         lenient().when(userCacheService.getCurrentAuthenticatedUser()).thenReturn(testUser);
@@ -1973,24 +1971,35 @@ class ChatServiceTest {
 
     @Test
     void shouldGetUserIdeasSummaryWithEmptyContent() {
-        Idea idea = new Idea();
-        idea.setId(1L);
-        idea.setUser(testUser);
-        idea.setTheme(tecnologiaTheme);
-        idea.setContext("Contexto");
-        idea.setGeneratedContent("");
-        idea.setCreatedAt(LocalDateTime.now());
+        Idea idea1 = new Idea();
+        idea1.setId(1L);
+        idea1.setUser(testUser);
+        idea1.setTheme(tecnologiaTheme);
+        idea1.setContext("Contexto 1");
+        idea1.setGeneratedContent("");
+        idea1.setCreatedAt(LocalDateTime.now());
 
-        Object[] row = new Object[]{1L, "", "TECNOLOGIA", LocalDateTime.now()};
-        when(ideaRepository.findIdeasSummaryOnlyByUserId(1L)).thenReturn(Collections.singletonList(row));
-        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea));
-        when(ideaSummaryService.summarizeIdeaSimple("")).thenReturn("");
+        Idea idea2 = new Idea();
+        idea2.setId(2L);
+        idea2.setUser(testUser);
+        idea2.setTheme(tecnologiaTheme);
+        idea2.setContext("Contexto 2");
+        idea2.setGeneratedContent("Conteúdo válido");
+        idea2.setCreatedAt(LocalDateTime.now());
+
+        Object[] row1 = new Object[]{1L, "", "TECNOLOGIA", LocalDateTime.now()};
+        Object[] row2 = new Object[]{2L, "Resumo", "TECNOLOGIA", LocalDateTime.now()};
+        when(ideaRepository.findIdeasSummaryOnlyByUserId(1L)).thenReturn(Arrays.asList(row1, row2));
+        when(ideaRepository.findById(1L)).thenReturn(Optional.of(idea1));
+        when(ideaRepository.findById(2L)).thenReturn(Optional.of(idea2));
+        when(ideaSummaryService.summarizeIdeaSimple("")).thenReturn("Sem resumo");
 
         List<IdeaSummaryResponse> response = chatService.getUserIdeasSummary();
 
         assertNotNull(response);
-        assertEquals(1, response.size());
-        assertEquals("", response.get(0).getSummary());
+        assertEquals(2, response.size());
+        assertEquals("Sem resumo", response.get(0).getSummary());
+        assertEquals("Resumo", response.get(1).getSummary());
     }
 
     @Test
@@ -2155,12 +2164,16 @@ class ChatServiceTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setId(1L);
 
-        ChatMessage assistantMessage = new ChatMessage(session, ChatMessage.MessageRole.ASSISTANT, "Test", 20);
-        assistantMessage.setId(1L);
-        assistantMessage.setCreatedAt(LocalDateTime.now());
+        ChatMessage assistantMessage1 = new ChatMessage(session, ChatMessage.MessageRole.ASSISTANT, "Test 1", 20);
+        assistantMessage1.setId(1L);
+        assistantMessage1.setCreatedAt(LocalDateTime.now());
+        
+        ChatMessage assistantMessage2 = new ChatMessage(session, ChatMessage.MessageRole.ASSISTANT, "Test 2", 30);
+        assistantMessage2.setId(2L);
+        assistantMessage2.setCreatedAt(LocalDateTime.now().plusMinutes(1));
 
         when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
-                .thenReturn(Collections.singletonList(assistantMessage));
+                .thenReturn(Arrays.asList(assistantMessage1, assistantMessage2));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
 
@@ -2221,10 +2234,10 @@ class ChatServiceTest {
 
         ChatMessage userMessage = new ChatMessage(session, ChatMessage.MessageRole.USER, "Test", 10);
         userMessage.setId(1L);
-        userMessage.setCreatedAt(LocalDateTime.now());
+        userMessage.setCreatedAt(null);
         ChatMessage assistantMessage = new ChatMessage(session, ChatMessage.MessageRole.ASSISTANT, "Test", 20);
         assistantMessage.setId(2L);
-        assistantMessage.setCreatedAt(null);
+        assistantMessage.setCreatedAt(LocalDateTime.now());
 
         when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Arrays.asList(userMessage, assistantMessage));

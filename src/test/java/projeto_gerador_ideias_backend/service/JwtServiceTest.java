@@ -268,18 +268,12 @@ class JwtServiceTest {
         JwtService serviceWithShortExpiration = new JwtService();
         ReflectionTestUtils.setField(serviceWithShortExpiration, "secret", TEST_SECRET);
         ReflectionTestUtils.setField(serviceWithShortExpiration, "accessTokenExpiration", TEST_EXPIRATION);
-        ReflectionTestUtils.setField(serviceWithShortExpiration, "refreshTokenExpiration", 1L);
+        ReflectionTestUtils.setField(serviceWithShortExpiration, "refreshTokenExpiration", 0L);
         
         String email = "test@example.com";
         Long userId = 1L;
         
         String token = serviceWithShortExpiration.generateRefreshToken(email, userId);
-        
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
         
         boolean isValid = serviceWithShortExpiration.validateRefreshToken(token);
         assertFalse(isValid);
@@ -344,15 +338,14 @@ class JwtServiceTest {
         String email = "test@example.com";
         Long userId = 1L;
         
-        String token = serviceWithShortExpiration.generateAccessToken(email, userId);
+        JwtService serviceWithVeryShortExpiration = new JwtService();
+        ReflectionTestUtils.setField(serviceWithVeryShortExpiration, "secret", TEST_SECRET);
+        ReflectionTestUtils.setField(serviceWithVeryShortExpiration, "accessTokenExpiration", 0L);
+        ReflectionTestUtils.setField(serviceWithVeryShortExpiration, "refreshTokenExpiration", 604800L);
         
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        String token = serviceWithVeryShortExpiration.generateAccessToken(email, userId);
         
-        boolean isValid = serviceWithShortExpiration.validateToken(token);
+        boolean isValid = serviceWithVeryShortExpiration.validateToken(token);
         assertFalse(isValid);
     }
     
