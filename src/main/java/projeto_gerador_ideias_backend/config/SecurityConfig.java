@@ -3,6 +3,7 @@ package projeto_gerador_ideias_backend.config;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
@@ -37,7 +38,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/h2-console/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                        .requestMatchers("/api/themes/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/themes", "/api/themes/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/themes/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/themes/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/themes/**").hasRole("ADMIN")
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
