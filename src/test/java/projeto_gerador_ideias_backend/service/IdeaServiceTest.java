@@ -10,6 +10,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -259,51 +264,78 @@ class IdeaServiceTest {
 
     @Test
     void listarHistoricoIdeiasFiltrado_NoFilters() {
+        Pageable pageable = PageRequest.of(0, 10);
         List<Idea> allIdeas = List.of(testIdea);
-        when(ideaRepository.findAllByOrderByCreatedAtDesc()).thenReturn(allIdeas);
+        Page<Idea> ideaPage = new PageImpl<>(allIdeas, pageable, allIdeas.size());
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, null, null, null);
+        when(ideaRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(ideaPage);
 
-        assertEquals(1, response.size());
-        verify(ideaRepository, times(1)).findAllByOrderByCreatedAtDesc();
+        Page<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, null, null, null, 0, 10);
+
+        assertNotNull(response);
+        assertEquals(1, response.getTotalElements());
+        assertEquals(testIdea.getGeneratedContent(), response.getContent().get(0).getContent());
+
+        verify(ideaRepository, times(1)).findAll(any(Specification.class), any(Pageable.class));
     }
+
 
     @Test
     void deveListarHistorico_ApenasComTema() {
         List<Idea> filteredIdeas = List.of(testIdea);
-        when(ideaRepository.findByThemeOrderByCreatedAtDesc(tecnologiaTheme)).thenReturn(filteredIdeas);
+        Page<Idea> ideaPage = new PageImpl<>(filteredIdeas);
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, 1L, null, null);
+        when(themeRepository.findById(1L)).thenReturn(Optional.of(tecnologiaTheme));
+        when(ideaRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(ideaPage);
 
-        assertEquals(1, response.size());
-        verify(ideaRepository, times(1)).findByThemeOrderByCreatedAtDesc(tecnologiaTheme);
+        Page<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, 1L, null, null, 0, 10);
+
+        assertEquals(1, response.getTotalElements());
+        verify(ideaRepository, times(1)).findAll(any(Specification.class), any(Pageable.class));
     }
 
     @Test
     void listarHistoricoIdeiasFiltrado_WithDateFilter() {
+        Pageable pageable = PageRequest.of(0, 10);
         List<Idea> filteredIdeas = List.of(testIdea);
+        Page<Idea> ideaPage = new PageImpl<>(filteredIdeas, pageable, filteredIdeas.size());
+
         LocalDateTime start = LocalDateTime.now().minusDays(1);
         LocalDateTime end = LocalDateTime.now().plusDays(1);
-        when(ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(start, end)).thenReturn(filteredIdeas);
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, null, start, end);
+        when(ideaRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(ideaPage);
 
-        assertEquals(1, response.size());
-        verify(ideaRepository, times(1)).findByCreatedAtBetweenOrderByCreatedAtDesc(start, end);
+        Page<IdeaResponse> response =
+                ideaService.listarHistoricoIdeiasFiltrado(null, null, start, end, 0, 10);
+
+        assertEquals(1, response.getTotalElements());
+        verify(ideaRepository, times(1)).findAll(any(Specification.class), any(Pageable.class));
     }
 
     @Test
     void listarHistoricoIdeiasFiltrado_WithAllFilters() {
+        Pageable pageable = PageRequest.of(0, 10);
         List<Idea> filteredIdeas = List.of(testIdea);
+        Page<Idea> ideaPage = new PageImpl<>(filteredIdeas, pageable, filteredIdeas.size());
+
         LocalDateTime start = LocalDateTime.now().minusDays(1);
         LocalDateTime end = LocalDateTime.now().plusDays(1);
-        when(ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(tecnologiaTheme, start, end)).thenReturn(filteredIdeas);
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(null, 1L, start, end);
+        when(themeRepository.findById(1L)).thenReturn(Optional.of(tecnologiaTheme));
 
-        assertEquals(1, response.size());
-        verify(ideaRepository, times(1)).findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(tecnologiaTheme, start, end);
+        when(ideaRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(ideaPage);
+
+        Page<IdeaResponse> response =
+                ideaService.listarHistoricoIdeiasFiltrado(null, 1L, start, end, 0, 10);
+
+        assertEquals(1, response.getTotalElements());
+
+        verify(ideaRepository, times(1)).findAll(any(Specification.class), any(Pageable.class));
     }
+
 
     @Test
     void listarMinhasIdeias_ShouldReturnUserIdeas() {
@@ -663,22 +695,25 @@ class IdeaServiceTest {
         LocalDateTime start = LocalDateTime.now().minusDays(1);
         LocalDateTime end = LocalDateTime.now().plusDays(1);
 
-        when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
-                .thenReturn(List.of(testIdea));
+        Page<Idea> ideaPage = new PageImpl<>(List.of(testIdea));
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), 1L, start, end);
+        when(themeRepository.findById(1L)).thenReturn(Optional.of(tecnologiaTheme));
+        when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class)))
+                .thenReturn(ideaPage);
 
-        assertEquals(1, response.size());
-        verify(ideaRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class));
+        Page<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), 1L, start, end, 0, 10);
+
+        assertEquals(1, response.getTotalElements());
+        verify(ideaRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class));
     }
 
     @Test
     void listarHistoricoIdeiasFiltrado_ShouldThrowException_WhenInvalidTheme() {
         when(themeRepository.findById(99L)).thenReturn(Optional.empty());
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            ideaService.listarHistoricoIdeiasFiltrado(null, 99L, null, null);
-        });
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                ideaService.listarHistoricoIdeiasFiltrado(null, 99L, null, null, 0, 10)
+        );
 
         assertTrue(exception.getMessage().contains("O tema com ID '99' é inválido."));
     }
@@ -686,79 +721,64 @@ class IdeaServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void listarHistoricoIdeiasFiltrado_ShouldThrowException_WhenInvalidThemeWithUserId() {
-        when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
-                .thenAnswer(invocation -> {
-                    org.springframework.data.jpa.domain.Specification<Idea> spec = invocation.getArgument(0);
-                    jakarta.persistence.criteria.Root<Idea> root = mock(jakarta.persistence.criteria.Root.class);
-                    jakarta.persistence.criteria.CriteriaQuery<?> query = mock(jakarta.persistence.criteria.CriteriaQuery.class);
-                    jakarta.persistence.criteria.CriteriaBuilder cb = mock(jakarta.persistence.criteria.CriteriaBuilder.class);
-                    jakarta.persistence.criteria.Path<Object> userPath = mock(jakarta.persistence.criteria.Path.class);
-                    jakarta.persistence.criteria.Path<Object> idPath = mock(jakarta.persistence.criteria.Path.class);
-                    jakarta.persistence.criteria.Path<Object> themePath = mock(jakarta.persistence.criteria.Path.class);
-                    jakarta.persistence.criteria.Path<Object> createdAtPath = mock(jakarta.persistence.criteria.Path.class);
-                    jakarta.persistence.criteria.Predicate predicate = mock(jakarta.persistence.criteria.Predicate.class);
-                    jakarta.persistence.criteria.Order order = mock(jakarta.persistence.criteria.Order.class);
+        when(themeRepository.findById(99L)).thenReturn(Optional.empty());
 
-                    when(root.get("user")).thenReturn(userPath);
-                    when(userPath.get("id")).thenReturn(idPath);
-                    when(root.get("theme")).thenReturn(themePath);
-                    when(root.get("createdAt")).thenReturn(createdAtPath);
-                    when(cb.conjunction()).thenReturn(predicate);
-                    when(cb.equal(any(), any())).thenReturn(predicate);
-                    when(cb.greaterThanOrEqualTo(any(jakarta.persistence.criteria.Expression.class), any(LocalDateTime.class))).thenReturn(predicate);
-                    when(cb.lessThanOrEqualTo(any(jakarta.persistence.criteria.Expression.class), any(LocalDateTime.class))).thenReturn(predicate);
-                    when(cb.and(any(), any())).thenReturn(predicate);
-                    when(cb.desc(any())).thenReturn(order);
-                    when(query.getOrderList()).thenReturn(Collections.emptyList());
-
-                    spec.toPredicate(root, query, cb);
-                    return Collections.emptyList();
-                });
-
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), 99L, null, null);
-        });
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), 99L, null, null, 0, 10)
+        );
 
         assertTrue(exception.getMessage().contains("O tema com ID '99' é inválido."));
     }
 
     @Test
     void listarHistoricoIdeiasFiltrado_ShouldThrowException_WhenEmptyList() {
-        when(ideaRepository.findAllByOrderByCreatedAtDesc()).thenReturn(Collections.emptyList());
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Idea> emptyPage = new PageImpl<>(Collections.emptyList(), pageable, 0);
 
-        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-            ideaService.listarHistoricoIdeiasFiltrado(null, null, null, null);
-        });
+        when(ideaRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(emptyPage);
+
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () ->
+                ideaService.listarHistoricoIdeiasFiltrado(null, null, null, null, 0, 10)
+        );
 
         assertEquals("Nenhuma ideia encontrada no banco de dados para os filtros informados.", exception.getMessage());
     }
 
+
+
+
     @Test
     @SuppressWarnings("unchecked")
     void listarHistoricoIdeiasFiltrado_ShouldFilterByUserIdAndTheme() {
-        when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
-                .thenReturn(List.of(testIdea));
+        Page<Idea> ideaPage = new PageImpl<>(List.of(testIdea));
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), 1L, null, null);
+        when(themeRepository.findById(1L)).thenReturn(Optional.of(tecnologiaTheme));
+        when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class)))
+                .thenReturn(ideaPage);
 
-        assertEquals(1, response.size());
-        verify(ideaRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class));
+        Page<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), 1L, null, null, 0, 10);
+
+        assertEquals(1, response.getTotalElements());
+        verify(ideaRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class));
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void listarHistoricoIdeiasFiltrado_ShouldFilterByUserIdAndDates() {
+        Page<Idea> ideaPage = new PageImpl<>(List.of(testIdea));
         LocalDateTime start = LocalDateTime.now().minusDays(1);
         LocalDateTime end = LocalDateTime.now().plusDays(1);
 
-        when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
-                .thenReturn(List.of(testIdea));
+        when(ideaRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class)))
+                .thenReturn(ideaPage);
 
-        List<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), null, start, end);
+        Page<IdeaResponse> response = ideaService.listarHistoricoIdeiasFiltrado(testUser.getId(), null, start, end, 0, 10);
 
-        assertEquals(1, response.size());
-        verify(ideaRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class));
+        assertEquals(1, response.getTotalElements());
+        verify(ideaRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class));
     }
+
 
     @Test
     void getCurrentAuthenticatedUser_ShouldThrowException_WhenPrincipalNotUserDetails() {

@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -181,43 +183,52 @@ class IdeaControllerTest {
     @Test
     @WithMockUser
     void shouldListIdeasWithoutFilter() throws Exception {
-        List<IdeaResponse> mockList = List.of(mockIdeaResponse, mockIdeaResponse);
-        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), isNull(), isNull(), isNull())).thenReturn(mockList);
+        Page<IdeaResponse> mockPage = new PageImpl<>(List.of(mockIdeaResponse, mockIdeaResponse));
+        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), isNull(), isNull(), isNull(), anyInt(), anyInt()))
+                .thenReturn(mockPage);
 
-        mockMvc.perform(get("/api/ideas/history"))
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("page", "0")
+                        .param("size", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)));
+                .andExpect(jsonPath("$.content", hasSize(2)));
     }
 
     @Test
     @WithMockUser
     void shouldListIdeasWithThemeFilter() throws Exception {
-        List<IdeaResponse> mockList = List.of(mockIdeaResponse);
-        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), eq(3L), isNull(), isNull()))
-                .thenReturn(mockList);
+        Page<IdeaResponse> mockPage = new PageImpl<>(List.of(mockIdeaResponse));
+        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), eq(3L), isNull(), isNull(), anyInt(), anyInt()))
+                .thenReturn(mockPage);
 
         mockMvc.perform(get("/api/ideas/history")
                         .param("theme", "3")
+                        .param("page", "0")
+                        .param("size", "10")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].theme", is("estudos")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].theme", is("estudos")));
     }
+
 
 
     @Test
     @WithMockUser
     void shouldReturnNotFoundWhenNoIdeasFound() throws Exception {
-        when(ideaService.listarHistoricoIdeiasFiltrado(any(), any(), any(), any()))
+        when(ideaService.listarHistoricoIdeiasFiltrado(any(), any(), any(), any(), anyInt(), anyInt()))
                 .thenThrow(new ResourceNotFoundException("Nenhuma ideia encontrada"));
 
         mockMvc.perform(get("/api/ideas/history")
                         .param("theme", "1")
+                        .param("page", "0")
+                        .param("size", "10")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error", is("Recurso não encontrado")))
                 .andExpect(jsonPath("$.message", is("Nenhuma ideia encontrada")));
     }
+
 
     @Test
     @WithMockUser
@@ -225,16 +236,19 @@ class IdeaControllerTest {
         LocalDateTime start = LocalDateTime.parse("2099-01-01T00:00:00");
         LocalDateTime end = LocalDateTime.parse("2099-01-31T23:59:59");
 
-        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), isNull(), eq(start), eq(end)))
+        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), isNull(), eq(start), eq(end), anyInt(), anyInt()))
                 .thenThrow(new ResourceNotFoundException("Nenhuma ideia encontrada no banco de dados para os filtros informados."));
 
         mockMvc.perform(get("/api/ideas/history")
                         .param("startDate", "2099-01-01T00:00:00")
-                        .param("endDate", "2099-01-31T23:59:59"))
+                        .param("endDate", "2099-01-31T23:59:59")
+                        .param("page", "0")
+                        .param("size", "10"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error", is("Recurso não encontrado")))
                 .andExpect(jsonPath("$.message", containsString("Nenhuma ideia encontrada")));
     }
+
 
     @Test
     @WithMockUser(username = testUserEmail)
@@ -465,7 +479,7 @@ class IdeaControllerTest {
     @WithMockUser
     void shouldReturnBadRequestWhenIllegalArgumentExceptionInGetAllIdeas() throws Exception {
         reset(ideaService);
-        when(ideaService.listarHistoricoIdeiasFiltrado(any(), eq(99L), any(), any()))
+        when(ideaService.listarHistoricoIdeiasFiltrado(any(), eq(99L), any(), any(), anyInt(), anyInt()))
                 .thenThrow(new IllegalArgumentException("O tema com ID '99' é inválido."));
 
         mockMvc.perform(get("/api/ideas/history")
@@ -491,9 +505,9 @@ class IdeaControllerTest {
         Idea idea = new Idea(estudosTheme, "Contexto", "Ideia", "modelo", 100L);
         idea.setUser(user);
         idea = ideaRepository.save(idea);
-        
-        when(ideaService.listarHistoricoIdeiasFiltrado(any(), any(), any(), any()))
-                .thenReturn(List.of(new IdeaResponse(idea)));
+
+        when(ideaService.listarHistoricoIdeiasFiltrado(any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(new PageImpl<>(List.of(new IdeaResponse(idea))));
 
         LocalDateTime startDate = LocalDateTime.now().minusDays(1);
         LocalDateTime endDate = LocalDateTime.now().plusDays(1);
@@ -502,8 +516,9 @@ class IdeaControllerTest {
                         .param("startDate", startDate.toString())
                         .param("endDate", endDate.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)));
+                .andExpect(jsonPath("$.content", hasSize(1)));
     }
+
 
     @Test
     @WithMockUser
@@ -523,8 +538,8 @@ class IdeaControllerTest {
         idea = ideaRepository.save(idea);
 
         when(ideaService.listarHistoricoIdeiasFiltrado(
-                any(), eq(tecnologiaTheme.getId()), any(), any()))
-                .thenReturn(List.of(new IdeaResponse(idea)));
+                any(), eq(tecnologiaTheme.getId()), any(), any(), anyInt(), anyInt()))
+                .thenReturn(new PageImpl<>(List.of(new IdeaResponse(idea))));
 
         LocalDateTime startDate = LocalDateTime.now().minusDays(1);
         LocalDateTime endDate = LocalDateTime.now().plusDays(1);
@@ -535,11 +550,12 @@ class IdeaControllerTest {
                         .param("endDate", endDate.toString())
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].theme", is("TECNOLOGIA")))
-                .andExpect(jsonPath("$[0].content", is("Ideia")))
-                .andExpect(jsonPath("$[0].userName", is("user4")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].theme", is("TECNOLOGIA")))
+                .andExpect(jsonPath("$.content[0].content", is("Ideia")))
+                .andExpect(jsonPath("$.content[0].userName", is("user4")));
     }
+
 
     @Test
     @WithMockUser(username = testUserEmail)
