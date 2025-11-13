@@ -598,36 +598,52 @@ class IdeaControllerTest {
     @WithMockUser(username = testUserEmail)
     void shouldGetFavoriteIdeasSuccessfully() throws Exception {
         reset(ideaService);
-        List<IdeaResponse> favoritas = List.of(mockIdeaResponse);
-        when(ideaService.listarIdeiasFavoritadas()).thenReturn(favoritas);
 
-        mockMvc.perform(get("/api/ideas/favorites"))
+        Pageable pageable = PageRequest.of(0, 6);
+        List<IdeaResponse> favoritasList = List.of(mockIdeaResponse);
+        Page<IdeaResponse> favoritasPage = new PageImpl<>(favoritasList, pageable, favoritasList.size());
+
+        when(ideaService.listarIdeiasFavoritadasPaginadas(0, 6)).thenReturn(favoritasPage);
+
+        mockMvc.perform(get("/api/ideas/favorites")
+                        .param("page", "0")
+                        .param("size", "6"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].content", is("Crie pequenos projetos todos os dias.")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].content", is("Crie pequenos projetos todos os dias.")))
+                .andExpect(jsonPath("$.totalElements", is(1)))
+                .andExpect(jsonPath("$.size", is(6)))
+                .andExpect(jsonPath("$.number", is(0)));
     }
 
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturn404WhenResourceNotFoundExceptionInGetFavoriteIdeas() throws Exception {
         reset(ideaService);
-        when(ideaService.listarIdeiasFavoritadas())
+        when(ideaService.listarIdeiasFavoritadasPaginadas(0, 6))
                 .thenThrow(new ResourceNotFoundException("Nenhuma ideia favoritada encontrada"));
 
-        mockMvc.perform(get("/api/ideas/favorites"))
-                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/ideas/favorites")
+                        .param("page", "0")
+                        .param("size", "6"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().string(containsString("Nenhuma ideia favoritada encontrada")));
     }
 
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturn500WhenExceptionInGetFavoriteIdeas() throws Exception {
         reset(ideaService);
-        when(ideaService.listarIdeiasFavoritadas())
+        when(ideaService.listarIdeiasFavoritadasPaginadas(0, 6))
                 .thenThrow(new RuntimeException("Erro inesperado"));
 
-        mockMvc.perform(get("/api/ideas/favorites"))
-                .andExpect(status().isInternalServerError());
+        mockMvc.perform(get("/api/ideas/favorites")
+                        .param("page", "0")
+                        .param("size", "6"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().string(containsString("Erro ao buscar ideias favoritadas")));
     }
+
 
     @Test
     @WithMockUser(username = testUserEmail)

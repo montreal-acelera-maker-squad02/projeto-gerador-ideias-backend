@@ -529,6 +529,7 @@ class IdeaServiceTest {
         idea1.setGeneratedContent("Ideia 1");
         idea1.setExecutionTimeMs(1000L);
         idea1.setUser(testUser);
+        idea1.setCreatedAt(LocalDateTime.now());
 
         Idea idea2 = new Idea();
         idea2.setId(2L);
@@ -536,18 +537,23 @@ class IdeaServiceTest {
         idea2.setGeneratedContent("Ideia 2");
         idea2.setExecutionTimeMs(1000L);
         idea2.setUser(testUser);
+        idea2.setCreatedAt(LocalDateTime.now().minusDays(1));
+
         Set<Idea> favorites = new HashSet<>();
         favorites.add(idea1);
         favorites.add(idea2);
         testUser.setFavoriteIdeas(favorites);
 
-        List<IdeaResponse> result = ideaService.listarIdeiasFavoritadas();
+        Pageable pageable = PageRequest.of(0, 6);
+        Page<IdeaResponse> result = ideaService.listarIdeiasFavoritadasPaginadas(0, 6);
 
-        assertEquals(2, result.size());
-        assertTrue(result.stream().anyMatch(r -> r.getContent().equals("Ideia 1")));
-        assertTrue(result.stream().anyMatch(r -> r.getContent().equals("Ideia 2")));
-        assertEquals("Test User", result.get(0).getUserName());
+        assertNotNull(result);
+        assertEquals(2, result.getTotalElements());
+        assertTrue(result.getContent().stream().anyMatch(r -> r.getContent().equals("Ideia 1")));
+        assertTrue(result.getContent().stream().anyMatch(r -> r.getContent().equals("Ideia 2")));
+        assertEquals("Test User", result.getContent().get(0).getUserName());
     }
+
 
     @Test
     void shouldThrowExceptionWhenNoFavoritedIdeas() {
@@ -555,7 +561,7 @@ class IdeaServiceTest {
         testUser.setFavoriteIdeas(new HashSet<>());
 
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
-                () -> ideaService.listarIdeiasFavoritadas());
+                () -> ideaService.listarIdeiasFavoritadasPaginadas(0, 6));
 
         assertEquals("Nenhuma ideia favoritada encontrada para este usuário.", ex.getMessage());
     }
@@ -563,14 +569,14 @@ class IdeaServiceTest {
     @Test
     void shouldThrowExceptionWhenUserNotFound() {
         setupSecurityContext();
-
         when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.empty());
 
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
-                () -> ideaService.listarIdeiasFavoritadas());
+                () -> ideaService.listarIdeiasFavoritadasPaginadas(0, 6));
 
         assertEquals("Usuário autenticado não encontrado no banco de dados: " + testUserEmail, ex.getMessage());
     }
+
 
     @Test
     void generateIdea_ShouldHandleOllamaServiceException() {
@@ -866,16 +872,17 @@ class IdeaServiceTest {
     }
 
     @Test
-    void listarIdeiasFavoritadas_ShouldThrowException_WhenFavoritesIsNull() {
+    void listarIdeiasFavoritadasPaginadas_ShouldThrowException_WhenFavoritesIsNull() {
         setupSecurityContext();
         testUser.setFavoriteIdeas(null);
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-            ideaService.listarIdeiasFavoritadas();
+            ideaService.listarIdeiasFavoritadasPaginadas(0, 6);
         });
 
         assertEquals("Nenhuma ideia favoritada encontrada para este usuário.", exception.getMessage());
     }
+
 
     @Test
     void desfavoritarIdeia_ShouldThrowException_WhenIdeaNotFound() {
