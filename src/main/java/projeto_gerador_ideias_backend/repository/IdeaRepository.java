@@ -1,5 +1,9 @@
 package projeto_gerador_ideias_backend.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -9,22 +13,18 @@ import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.model.User;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface IdeaRepository extends JpaRepository<Idea, Long>, JpaSpecificationExecutor<Idea> {
 
-    List<Idea> findAllByOrderByCreatedAtDesc();
-
-    List<Idea> findByThemeOrderByCreatedAtDesc(Theme theme);
-
-    List<Idea> findByCreatedAtBetweenOrderByCreatedAtDesc(LocalDateTime start, LocalDateTime end);
-
-    List<Idea> findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(Theme theme, LocalDateTime start, LocalDateTime end);
+    Page<Idea> findByUserId(Long userId, Pageable pageable);
 
     List<Idea> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    @EntityGraph(attributePaths = {"user", "theme"})
+    Page<Idea> findAll(Specification<Idea> spec, Pageable pageable);
     
     @Query("SELECT i FROM Idea i " +
            "LEFT JOIN FETCH i.theme " +

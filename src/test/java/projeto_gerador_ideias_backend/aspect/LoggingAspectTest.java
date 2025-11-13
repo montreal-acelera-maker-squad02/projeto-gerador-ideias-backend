@@ -189,12 +189,12 @@ class LoggingAspectTest {
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldNotLogMethodsThatDoNotMatchPointcut(CapturedOutput output) {
-        User user = userRepository.findByEmail(testUserEmail).get();
+        User user = userRepository.findByEmail(testUserEmail).orElseThrow();
         Idea idea = new Idea(defaultTheme, "contexto", "conteudo", "modelo", 100L);
         idea.setUser(user);
         ideaRepository.save(idea);
 
-        ideaService.listarHistoricoIdeiasFiltrado(null, null, null, null);
+        ideaService.listarHistoricoIdeiasFiltrado(null, null, null, null, 0, 10);
 
         assertThat(output.getAll()).doesNotContain(">> Iniciando: listarHistoricoIdeiasFiltrado()");
     }
