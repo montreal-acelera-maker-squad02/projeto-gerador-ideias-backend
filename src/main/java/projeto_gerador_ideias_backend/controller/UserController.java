@@ -7,8 +7,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import projeto_gerador_ideias_backend.dto.response.RegisterResponse;
 import projeto_gerador_ideias_backend.dto.request.UpdateUserRequest;
+import projeto_gerador_ideias_backend.dto.response.RegisterResponse;
+import projeto_gerador_ideias_backend.dto.response.UserStatsResponse;
 import projeto_gerador_ideias_backend.service.UserService;
 
 @RestController
@@ -47,5 +48,17 @@ public class UserController {
         RegisterResponse response = userService.updateUser(uuid, request);
         return ResponseEntity.ok(response);
     }
-}
 
+    @Operation(
+            summary = "Obter estatísticas do usuário autenticado",
+            description = "Retorna estatísticas do usuário logado, como o total de ideias geradas."
+    )
+    @ApiResponse(responseCode = "200", description = "Estatísticas do usuário retornadas com sucesso")
+    @ApiResponse(responseCode = "401", description = "Usuário não autenticado")
+    @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
+    @GetMapping("/me/stats")
+    public ResponseEntity<UserStatsResponse> getUserStats() {
+        UserStatsResponse stats = userService.getUserStats();
+        return ResponseEntity.ok(stats);
+    }
+}

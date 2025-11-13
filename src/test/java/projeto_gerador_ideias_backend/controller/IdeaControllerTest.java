@@ -2,11 +2,17 @@ package projeto_gerador_ideias_backend.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -22,6 +28,7 @@ import projeto_gerador_ideias_backend.model.User;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
 import projeto_gerador_ideias_backend.repository.ThemeRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
+import projeto_gerador_ideias_backend.config.EmbeddedRedisConfig;
 import projeto_gerador_ideias_backend.service.IdeaService;
 
 import java.time.LocalDateTime;
@@ -30,7 +37,9 @@ import java.util.List;
 
 import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -38,6 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Import(EmbeddedRedisConfig.class)
 class IdeaControllerTest {
 
     @Autowired
@@ -181,43 +191,52 @@ class IdeaControllerTest {
     @Test
     @WithMockUser
     void shouldListIdeasWithoutFilter() throws Exception {
-        List<IdeaResponse> mockList = List.of(mockIdeaResponse, mockIdeaResponse);
-        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), isNull(), isNull(), isNull())).thenReturn(mockList);
+        Page<IdeaResponse> mockPage = new PageImpl<>(List.of(mockIdeaResponse, mockIdeaResponse));
+        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), isNull(), isNull(), isNull(), anyInt(), anyInt()))
+                .thenReturn(mockPage);
 
-        mockMvc.perform(get("/api/ideas/history"))
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("page", "0")
+                        .param("size", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)));
+                .andExpect(jsonPath("$.content", hasSize(2)));
     }
 
     @Test
     @WithMockUser
     void shouldListIdeasWithThemeFilter() throws Exception {
-        List<IdeaResponse> mockList = List.of(mockIdeaResponse);
-        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), eq(3L), isNull(), isNull()))
-                .thenReturn(mockList);
+        Page<IdeaResponse> mockPage = new PageImpl<>(List.of(mockIdeaResponse));
+        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), eq(3L), isNull(), isNull(), anyInt(), anyInt()))
+                .thenReturn(mockPage);
 
         mockMvc.perform(get("/api/ideas/history")
                         .param("theme", "3")
+                        .param("page", "0")
+                        .param("size", "10")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].theme", is("estudos")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].theme", is("estudos")));
     }
+
 
 
     @Test
     @WithMockUser
     void shouldReturnNotFoundWhenNoIdeasFound() throws Exception {
-        when(ideaService.listarHistoricoIdeiasFiltrado(any(), any(), any(), any()))
+        when(ideaService.listarHistoricoIdeiasFiltrado(any(), any(), any(), any(), anyInt(), anyInt()))
                 .thenThrow(new ResourceNotFoundException("Nenhuma ideia encontrada"));
 
         mockMvc.perform(get("/api/ideas/history")
                         .param("theme", "1")
+                        .param("page", "0")
+                        .param("size", "10")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error", is("Recurso não encontrado")))
                 .andExpect(jsonPath("$.message", is("Nenhuma ideia encontrada")));
     }
+
 
     @Test
     @WithMockUser
@@ -225,24 +244,27 @@ class IdeaControllerTest {
         LocalDateTime start = LocalDateTime.parse("2099-01-01T00:00:00");
         LocalDateTime end = LocalDateTime.parse("2099-01-31T23:59:59");
 
-        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), isNull(), eq(start), eq(end)))
+        when(ideaService.listarHistoricoIdeiasFiltrado(isNull(), isNull(), eq(start), eq(end), anyInt(), anyInt()))
                 .thenThrow(new ResourceNotFoundException("Nenhuma ideia encontrada no banco de dados para os filtros informados."));
 
         mockMvc.perform(get("/api/ideas/history")
                         .param("startDate", "2099-01-01T00:00:00")
-                        .param("endDate", "2099-01-31T23:59:59"))
+                        .param("endDate", "2099-01-31T23:59:59")
+                        .param("page", "0")
+                        .param("size", "10"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error", is("Recurso não encontrado")))
                 .andExpect(jsonPath("$.message", containsString("Nenhuma ideia encontrada")));
     }
 
+
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturnNotFoundWhenNoMyIdeasFound() throws Exception {
-        when(ideaService.listarMinhasIdeias())
+        when(ideaService.listarMinhasIdeiasPaginadas(0, 6))
                 .thenThrow(new ResourceNotFoundException("Nenhuma ideia encontrada para o usuário"));
 
-        mockMvc.perform(get("/api/ideas/my-ideas"))
+        mockMvc.perform(get("/api/ideas/my-ideas?page=0&size=6"))
                 .andExpect(status().isNotFound())
                 .andExpect(content().string(containsString("Nenhuma ideia encontrada para o usuário")));
     }
@@ -333,42 +355,44 @@ class IdeaControllerTest {
     @WithMockUser(username = testUserEmail)
     void shouldGetMyIdeasSuccessfully() throws Exception {
         reset(ideaService);
-        
+
         User user = userRepository.findByEmail(testUserEmail).orElseThrow();
-        
         LocalDateTime now = LocalDateTime.now();
-        
+
         Idea idea1 = new Idea(tecnologiaTheme, "Contexto 1", "Ideia 1", "modelo", 100L);
         idea1.setUser(user);
         idea1.setCreatedAt(now.minusSeconds(1));
         ideaRepository.saveAndFlush(idea1);
-        
+
         Idea idea2 = new Idea(estudosTheme, "Contexto 2", "Ideia 2", "modelo", 150L);
         idea2.setUser(user);
         idea2.setCreatedAt(now);
         ideaRepository.saveAndFlush(idea2);
 
-        List<IdeaResponse> expectedIdeas = List.of(
-                new IdeaResponse(idea2),
-                new IdeaResponse(idea1)
-        );
-        when(ideaService.listarMinhasIdeias()).thenReturn(expectedIdeas);
+        Pageable pageable = PageRequest.of(0, 6);
+        List<IdeaResponse> ideaResponses = List.of(new IdeaResponse(idea2), new IdeaResponse(idea1));
+        Page<IdeaResponse> ideaPage = new PageImpl<>(ideaResponses, pageable, ideaResponses.size());
 
-        mockMvc.perform(get("/api/ideas/my-ideas"))
+        when(ideaService.listarMinhasIdeiasPaginadas(0, 6)).thenReturn(ideaPage);
+
+        mockMvc.perform(get("/api/ideas/my-ideas?page=0&size=6"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].content", is("Ideia 2")))
-                .andExpect(jsonPath("$[1].content", is("Ideia 1")));
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].content", is("Ideia 2")))
+                .andExpect(jsonPath("$.content[1].content", is("Ideia 1")))
+                .andExpect(jsonPath("$.totalElements", is(2)))
+                .andExpect(jsonPath("$.pageable.pageNumber", is(0)))
+                .andExpect(jsonPath("$.pageable.pageSize", is(6)));
     }
 
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturn404WhenNoIdeasForUser() throws Exception {
         reset(ideaService);
-        when(ideaService.listarMinhasIdeias())
+        when(ideaService.listarMinhasIdeiasPaginadas(0, 6))
                 .thenThrow(new IllegalArgumentException("Nenhuma ideia encontrada para o usuário: " + testUserEmail));
-        
-        mockMvc.perform(get("/api/ideas/my-ideas"))
+
+        mockMvc.perform(get("/api/ideas/my-ideas?page=0&size=6"))
                 .andExpect(status().isNotFound())
                 .andExpect(content().string(containsString("Nenhuma ideia encontrada")));
     }
@@ -377,13 +401,14 @@ class IdeaControllerTest {
     @WithMockUser(username = "nonexistent@example.com")
     void shouldReturn404WhenUserNotFoundInGetMyIdeas() throws Exception {
         reset(ideaService);
-        when(ideaService.listarMinhasIdeias())
+        when(ideaService.listarMinhasIdeiasPaginadas(0, 6))
                 .thenThrow(new ResourceNotFoundException("Usuário autenticado não encontrado"));
-        
-        mockMvc.perform(get("/api/ideas/my-ideas"))
+
+        mockMvc.perform(get("/api/ideas/my-ideas?page=0&size=6"))
                 .andExpect(status().isNotFound())
                 .andExpect(content().string(containsString("Usuário autenticado não encontrado")));
     }
+
 
 
     @Test
@@ -465,7 +490,7 @@ class IdeaControllerTest {
     @WithMockUser
     void shouldReturnBadRequestWhenIllegalArgumentExceptionInGetAllIdeas() throws Exception {
         reset(ideaService);
-        when(ideaService.listarHistoricoIdeiasFiltrado(any(), eq(99L), any(), any()))
+        when(ideaService.listarHistoricoIdeiasFiltrado(any(), eq(99L), any(), any(), anyInt(), anyInt()))
                 .thenThrow(new IllegalArgumentException("O tema com ID '99' é inválido."));
 
         mockMvc.perform(get("/api/ideas/history")
@@ -491,9 +516,9 @@ class IdeaControllerTest {
         Idea idea = new Idea(estudosTheme, "Contexto", "Ideia", "modelo", 100L);
         idea.setUser(user);
         idea = ideaRepository.save(idea);
-        
-        when(ideaService.listarHistoricoIdeiasFiltrado(any(), any(), any(), any()))
-                .thenReturn(List.of(new IdeaResponse(idea)));
+
+        when(ideaService.listarHistoricoIdeiasFiltrado(any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(new PageImpl<>(List.of(new IdeaResponse(idea))));
 
         LocalDateTime startDate = LocalDateTime.now().minusDays(1);
         LocalDateTime endDate = LocalDateTime.now().plusDays(1);
@@ -502,8 +527,9 @@ class IdeaControllerTest {
                         .param("startDate", startDate.toString())
                         .param("endDate", endDate.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)));
+                .andExpect(jsonPath("$.content", hasSize(1)));
     }
+
 
     @Test
     @WithMockUser
@@ -523,8 +549,8 @@ class IdeaControllerTest {
         idea = ideaRepository.save(idea);
 
         when(ideaService.listarHistoricoIdeiasFiltrado(
-                any(), eq(tecnologiaTheme.getId()), any(), any()))
-                .thenReturn(List.of(new IdeaResponse(idea)));
+                any(), eq(tecnologiaTheme.getId()), any(), any(), anyInt(), anyInt()))
+                .thenReturn(new PageImpl<>(List.of(new IdeaResponse(idea))));
 
         LocalDateTime startDate = LocalDateTime.now().minusDays(1);
         LocalDateTime endDate = LocalDateTime.now().plusDays(1);
@@ -535,11 +561,12 @@ class IdeaControllerTest {
                         .param("endDate", endDate.toString())
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].theme", is("TECNOLOGIA")))
-                .andExpect(jsonPath("$[0].content", is("Ideia")))
-                .andExpect(jsonPath("$[0].userName", is("user4")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].theme", is("TECNOLOGIA")))
+                .andExpect(jsonPath("$.content[0].content", is("Ideia")))
+                .andExpect(jsonPath("$.content[0].userName", is("user4")));
     }
+
 
     @Test
     @WithMockUser(username = testUserEmail)
@@ -565,10 +592,10 @@ class IdeaControllerTest {
     @WithMockUser(username = testUserEmail)
     void shouldReturn500WhenExceptionInGetMyIdeas() throws Exception {
         reset(ideaService);
-        when(ideaService.listarMinhasIdeias())
+        when(ideaService.listarMinhasIdeiasPaginadas(0, 6))
                 .thenThrow(new RuntimeException("Erro inesperado"));
 
-        mockMvc.perform(get("/api/ideas/my-ideas"))
+        mockMvc.perform(get("/api/ideas/my-ideas?page=0&size=6"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(content().string(containsString("Erro ao buscar ideias do usuário")));
     }
@@ -577,36 +604,264 @@ class IdeaControllerTest {
     @WithMockUser(username = testUserEmail)
     void shouldGetFavoriteIdeasSuccessfully() throws Exception {
         reset(ideaService);
-        List<IdeaResponse> favoritas = List.of(mockIdeaResponse);
-        when(ideaService.listarIdeiasFavoritadas()).thenReturn(favoritas);
 
-        mockMvc.perform(get("/api/ideas/favorites"))
+        Pageable pageable = PageRequest.of(0, 6);
+        List<IdeaResponse> favoritasList = List.of(mockIdeaResponse);
+        Page<IdeaResponse> favoritasPage = new PageImpl<>(favoritasList, pageable, favoritasList.size());
+
+        when(ideaService.listarIdeiasFavoritadasPaginadas(0, 6)).thenReturn(favoritasPage);
+
+        mockMvc.perform(get("/api/ideas/favorites")
+                        .param("page", "0")
+                        .param("size", "6"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].content", is("Crie pequenos projetos todos os dias.")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].content", is("Crie pequenos projetos todos os dias.")))
+                .andExpect(jsonPath("$.totalElements", is(1)))
+                .andExpect(jsonPath("$.size", is(6)))
+                .andExpect(jsonPath("$.number", is(0)));
     }
 
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturn404WhenResourceNotFoundExceptionInGetFavoriteIdeas() throws Exception {
         reset(ideaService);
-        when(ideaService.listarIdeiasFavoritadas())
+        when(ideaService.listarIdeiasFavoritadasPaginadas(0, 6))
                 .thenThrow(new ResourceNotFoundException("Nenhuma ideia favoritada encontrada"));
 
-        mockMvc.perform(get("/api/ideas/favorites"))
-                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/ideas/favorites")
+                        .param("page", "0")
+                        .param("size", "6"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.empty").value(true));
     }
 
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturn500WhenExceptionInGetFavoriteIdeas() throws Exception {
         reset(ideaService);
-        when(ideaService.listarIdeiasFavoritadas())
+        when(ideaService.listarIdeiasFavoritadasPaginadas(0, 6))
                 .thenThrow(new RuntimeException("Erro inesperado"));
 
-        mockMvc.perform(get("/api/ideas/favorites"))
-                .andExpect(status().isInternalServerError());
+        mockMvc.perform(get("/api/ideas/favorites")
+                        .param("page", "0")
+                        .param("size", "6"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.empty").value(true));
     }
 
-}
 
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldGetStatsSuccessfully() throws Exception {
+        when(ideaService.getAverageIdeaGenerationTime()).thenReturn(1550.75);
+
+        mockMvc.perform(get("/api/ideas/generation-stats")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.averageGenerationTimeMs", is(1550.75)));
+
+        verify(ideaService, times(1)).getAverageIdeaGenerationTime();
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldGetStatsWithNullAverageTime() throws Exception {
+        when(ideaService.getAverageIdeaGenerationTime()).thenReturn(null);
+
+        mockMvc.perform(get("/api/ideas/generation-stats")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.averageGenerationTimeMs", is(0.0)));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturnZeroWhenServiceReturnsZero() throws Exception {
+        when(ideaService.getAverageIdeaGenerationTime()).thenReturn(0.0);
+
+        mockMvc.perform(get("/api/ideas/generation-stats")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.averageGenerationTimeMs", is(0.0)));
+
+        verify(ideaService, times(1)).getAverageIdeaGenerationTime();
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldHandleLargeDoubleValue() throws Exception {
+        double largeValue = 987654321.12345;
+        when(ideaService.getAverageIdeaGenerationTime()).thenReturn(largeValue);
+
+        mockMvc.perform(get("/api/ideas/generation-stats")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.averageGenerationTimeMs", is(largeValue)));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldHandleSmallFractionalValue() throws Exception {
+        double smallValue = 0.000123;
+        when(ideaService.getAverageIdeaGenerationTime()).thenReturn(smallValue);
+
+        mockMvc.perform(get("/api/ideas/generation-stats")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.averageGenerationTimeMs", is(smallValue)));
+    }
+
+    @Test
+    void shouldReturnUnauthorizedWhenNotAuthenticated() throws Exception {
+        mockMvc.perform(get("/api/ideas/generation-stats")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+
+        verify(ideaService, never()).getAverageIdeaGenerationTime();
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturnCorrectContentType() throws Exception {
+        mockMvc.perform(get("/api/ideas/generation-stats"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    void shouldReturnOkEvenIfServiceThrowsException() throws Exception {
+        when(ideaService.getAverageIdeaGenerationTime()).thenThrow(new RuntimeException("Erro de banco de dados"));
+
+        mockMvc.perform(get("/api/ideas/generation-stats"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error", is("Erro interno do servidor")))
+                .andExpect(jsonPath("$.message", is("Erro de banco de dados")));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    @DisplayName("Deve retornar a contagem de ideias favoritas com sucesso")
+    void shouldGetFavoriteIdeasCountSuccessfully() throws Exception {
+        // Arrange
+        long favoriteCount = 5L;
+        when(ideaService.getFavoriteIdeasCount()).thenReturn(favoriteCount);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/ideas/favorites/count")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count", is(5)));
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden ao buscar contagem de favoritos sem autenticação")
+    void shouldReturnForbiddenWhenGettingFavoritesCountWithoutUser() throws Exception {
+        mockMvc.perform(get("/api/ideas/favorites/count"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden ao gerar ideia sem autenticação")
+    void shouldReturnForbiddenWhenGeneratingIdeaWithoutUser() throws Exception {
+        IdeaRequest request = new IdeaRequest();
+        request.setTheme(estudosTheme.getId());
+        request.setContext("Contexto");
+
+        mockMvc.perform(post("/api/ideas/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden ao gerar ideia surpresa sem autenticação")
+    void shouldReturnForbiddenWhenGeneratingSurpriseIdeaWithoutUser() throws Exception {
+        mockMvc.perform(post("/api/ideas/surprise-me"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden ao listar histórico sem autenticação")
+    void shouldReturnForbiddenWhenListingHistoryWithoutUser() throws Exception {
+        mockMvc.perform(get("/api/ideas/history"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden ao favoritar ideia sem autenticação")
+    void shouldReturnForbiddenWhenFavoritingWithoutUser() throws Exception {
+        mockMvc.perform(post("/api/ideas/1/favorite"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden ao desfavoritar ideia sem autenticação")
+    void shouldReturnForbiddenWhenUnfavoritingWithoutUser() throws Exception {
+        mockMvc.perform(delete("/api/ideas/1/favorite"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    @DisplayName("Deve listar ideias com filtro de usuário")
+    void shouldListIdeasWithUserFilter() throws Exception {
+        Page<IdeaResponse> mockPage = new PageImpl<>(List.of(mockIdeaResponse));
+        when(ideaService.listarHistoricoIdeiasFiltrado(eq(testUser.getId()), isNull(), isNull(), isNull(), anyInt(), anyInt()))
+                .thenReturn(mockPage);
+
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("userId", String.valueOf(testUser.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].userName", is("Controller User")));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    @DisplayName("Deve listar ideias com todos os filtros combinados")
+    void shouldListIdeasWithAllFilters() throws Exception {
+        Page<IdeaResponse> mockPage = new PageImpl<>(List.of(mockIdeaResponse));
+        LocalDateTime startDate = LocalDateTime.now().minusDays(1);
+        LocalDateTime endDate = LocalDateTime.now();
+
+        when(ideaService.listarHistoricoIdeiasFiltrado(eq(testUser.getId()), eq(estudosTheme.getId()), eq(startDate), eq(endDate), anyInt(), anyInt()))
+                .thenReturn(mockPage);
+
+        mockMvc.perform(get("/api/ideas/history")
+                        .param("userId", String.valueOf(testUser.getId()))
+                        .param("theme", String.valueOf(estudosTheme.getId()))
+                        .param("startDate", startDate.toString())
+                        .param("endDate", endDate.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].theme", is("estudos")));
+    }
+
+    @Test
+    @WithMockUser(username = testUserEmail)
+    @DisplayName("Deve retornar 500 em generation-stats quando o serviço falha")
+    void shouldReturn500WhenStatsServiceFails() throws Exception {
+        when(ideaService.getAverageIdeaGenerationTime()).thenThrow(new RuntimeException("Falha no banco de dados"));
+
+        mockMvc.perform(get("/api/ideas/generation-stats"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error", is("Erro interno do servidor")))
+                .andExpect(jsonPath("$.message", is("Falha no banco de dados")));
+    }
+
+    @Test
+    @DisplayName("Deve retornar 403 Forbidden em generation-stats sem autenticação")
+    void shouldReturnForbiddenForStatsWithoutUser() throws Exception {
+        mockMvc.perform(get("/api/ideas/generation-stats"))
+                .andExpect(status().isForbidden());
+    }
+}

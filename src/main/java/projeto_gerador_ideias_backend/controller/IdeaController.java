@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +20,7 @@ import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
 import projeto_gerador_ideias_backend.service.IdeaService;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/ideas")
@@ -66,37 +67,42 @@ public class IdeaController {
 
     @Operation(
             summary = "Listar Histórico de Ideias (com filtro opcional por tema e data)",
-            description = "Retorna as ideias salvas no banco de dados, podendo filtrar por tema e intervalo de datas. Ordenadas da mais recente para a mais antiga."
+            description = "Retorna as ideias salvas no banco de dados, podendo filtrar por tema e intervalo de datas. Ordenadas da mais recente para a mais antiga, com suporte à paginação."
     )
     @ApiResponse(responseCode = "200", description = "Histórico de ideias encontrado com sucesso")
     @ApiResponse(responseCode = "404", description = "Nenhuma ideia encontrada no banco de dados")
     @ApiResponse(responseCode = "400", description = "Erro de validação nos parâmetros de filtro")
     @ApiResponse(responseCode = "500", description = "Erro interno no servidor")
     @GetMapping("/history")
-    public ResponseEntity<List<IdeaResponse>> getAllIdeas(
+    public ResponseEntity<Page<IdeaResponse>> getAllIdeas(
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) Long theme,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "6") int size
     ) {
-        List<IdeaResponse> ideias = ideaService.listarHistoricoIdeiasFiltrado(userId, theme, startDate, endDate);
+        Page<IdeaResponse> ideias = ideaService.listarHistoricoIdeiasFiltrado(userId, theme, startDate, endDate, page, size);
         return ResponseEntity.ok(ideias);
     }
 
     @Operation(
-            summary = "Listar Ideias de um Usuário",
-            description = "Retorna todas as ideias criadas por um usuário específico, ordenadas da mais recente para a mais antiga."
+            summary = "Listar Ideias de um Usuário (Paginado)",
+            description = "Retorna as ideias criadas pelo usuário autenticado, ordenadas da mais recente para a mais antiga, com suporte a paginação."
     )
     @ApiResponse(responseCode = "200", description = "Ideias do usuário encontradas com sucesso")
     @ApiResponse(responseCode = "401", description = "Usuário não autenticado")
     @ApiResponse(responseCode = "404", description = "Nenhuma ideia encontrada para o usuário autenticado")
     @ApiResponse(responseCode = "500", description = "Erro interno no servidor")
     @GetMapping("/my-ideas")
-    public ResponseEntity<Object> getMyIdeas() {
+    public ResponseEntity<Object> getMyIdeas(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size
+    ) {
         try {
-            List<IdeaResponse> ideias = ideaService.listarMinhasIdeias();
+            Page<IdeaResponse> ideias = ideaService.listarMinhasIdeiasPaginadas(page, size);
             return ResponseEntity.ok(ideias);
         } catch (IllegalArgumentException | ResourceNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
@@ -105,6 +111,7 @@ public class IdeaController {
                     .body("Erro ao buscar ideias do usuário: " + e.getMessage());
         }
     }
+
 
     @Operation(summary = "Favoritar uma ideia")
     @ApiResponse(responseCode = "200", description = "Ideia favoritada com sucesso")
@@ -149,21 +156,53 @@ public class IdeaController {
     }
 
     @GetMapping("/favorites")
-    @Operation(summary = "Listar ideias favoritadas do usuário autenticado")
+    @Operation(summary = "Listar ideias favoritadas do usuário autenticado com paginação")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Lista de ideias favoritadas retornada com sucesso"),
             @ApiResponse(responseCode = "404", description = "Usuário não encontrado ou sem ideias favoritadas"),
             @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
     })
-    public ResponseEntity<List<IdeaResponse>> getFavoriteIdeas() {
+    public ResponseEntity<Page<IdeaResponse>> getFavoriteIdeas(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size
+    ) {
         try {
-            List<IdeaResponse> favoritas = ideaService.listarIdeiasFavoritadas();
+            Page<IdeaResponse> favoritas = ideaService.listarIdeiasFavoritadasPaginadas(page, size);
             return ResponseEntity.ok(favoritas);
+
         } catch (ResourceNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Page.empty());
+
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .build();
+                    .body(Page.empty());
         }
+    }
+
+
+    @Operation(
+            summary = "Obter Estatísticas de Geração",
+            description = "Retorna estatísticas agregadas sobre a geração de ideias, como o tempo médio de resposta histórico de todas as ideias já geradas."
+    )
+    @ApiResponse(responseCode = "200", description = "Estatísticas retornadas com sucesso")
+    @GetMapping("/generation-stats")
+    public ResponseEntity<Map<String, Object>> getIdeaStats() {
+        Double averageTime = ideaService.getAverageIdeaGenerationTime();
+        Map<String, Object> stats = Map.of(
+                "averageGenerationTimeMs", averageTime != null ? averageTime : 0.0
+        );
+        return ResponseEntity.ok(stats);
+    }
+
+    @Operation(
+            summary = "Obter contagem de ideias favoritas",
+            description = "Retorna o número total de ideias favoritadas pelo usuário autenticado."
+    )
+    @ApiResponse(responseCode = "200", description = "Contagem retornada com sucesso")
+    @GetMapping("/favorites/count")
+    public ResponseEntity<Map<String, Long>> getFavoriteIdeasCount() {
+        long count = ideaService.getFavoriteIdeasCount();
+        return ResponseEntity.ok(Map.of("count", count));
     }
 }
