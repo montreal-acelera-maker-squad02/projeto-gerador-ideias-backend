@@ -627,7 +627,10 @@ class IdeaControllerTest {
                         .param("page", "0")
                         .param("size", "6"))
                 .andExpect(status().isNotFound())
-                .andExpect(content().string(containsString("Nenhuma ideia favoritada encontrada")));
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.empty").value(true));
     }
 
     @Test
@@ -641,8 +644,12 @@ class IdeaControllerTest {
                         .param("page", "0")
                         .param("size", "6"))
                 .andExpect(status().isInternalServerError())
-                .andExpect(content().string(containsString("Erro ao buscar ideias favoritadas")));
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.empty").value(true));
     }
+
 
 
     @Test
