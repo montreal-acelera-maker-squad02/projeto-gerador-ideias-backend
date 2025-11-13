@@ -152,7 +152,7 @@ class ChatMessageRepositoryTest {
         for (int i = 0; i < 5; i++) {
             ChatMessage msg = new ChatMessage(testSession, ChatMessage.MessageRole.USER, "Mensagem " + i, 10);
             msg.setCreatedAt(LocalDateTime.now().minusMinutes(5 - i));
-            chatMessageRepository.save(msg);
+            chatMessageRepository.saveAndFlush(msg);
         }
 
         Pageable pageable = PageRequest.of(0, 3);
