@@ -157,23 +157,27 @@ public class IdeaController {
     }
 
     @GetMapping("/favorites")
-    @Operation(summary = "Listar ideias favoritadas do usuário autenticado")
+    @Operation(summary = "Listar ideias favoritadas do usuário autenticado com paginação")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Lista de ideias favoritadas retornada com sucesso"),
             @ApiResponse(responseCode = "404", description = "Usuário não encontrado ou sem ideias favoritadas"),
             @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
     })
-    public ResponseEntity<List<IdeaResponse>> getFavoriteIdeas() {
+    public ResponseEntity<?> getFavoriteIdeas(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size
+    ) {
         try {
-            List<IdeaResponse> favoritas = ideaService.listarIdeiasFavoritadas();
+            Page<IdeaResponse> favoritas = ideaService.listarIdeiasFavoritadasPaginadas(page, size);
             return ResponseEntity.ok(favoritas);
         } catch (ResourceNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .build();
+                    .body("Erro ao buscar ideias favoritadas: " + e.getMessage());
         }
     }
+
 
     @Operation(
             summary = "Obter Estatísticas de Geração",

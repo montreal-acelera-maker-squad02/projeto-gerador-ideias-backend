@@ -1,10 +1,7 @@
 package projeto_gerador_ideias_backend.service;
 
 import jakarta.persistence.criteria.Predicate;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -24,10 +21,7 @@ import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 
@@ -365,7 +359,7 @@ public class IdeaService {
     }
 
     @Transactional(readOnly = true)
-    public List<IdeaResponse> listarIdeiasFavoritadas() {
+    public Page<IdeaResponse> listarIdeiasFavoritadasPaginadas(int page, int size) {
         User user = getCurrentAuthenticatedUser();
 
         Set<Idea> favoritas = user.getFavoriteIdeas();
@@ -374,10 +368,26 @@ public class IdeaService {
             throw new ResourceNotFoundException("Nenhuma ideia favoritada encontrada para este usuário.");
         }
 
-        return favoritas.stream()
+        List<Idea> favoritasOrdenadas = favoritas.stream()
+                .sorted(Comparator.comparing(Idea::getCreatedAt).reversed())
+                .toList();
+
+        Pageable pageable = PageRequest.of(page, size);
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), favoritasOrdenadas.size());
+
+        if (start >= favoritasOrdenadas.size()) {
+            throw new ResourceNotFoundException("Página solicitada está vazia.");
+        }
+
+        List<IdeaResponse> pageContent = favoritasOrdenadas.subList(start, end)
+                .stream()
                 .map(IdeaResponse::new)
                 .toList();
+
+        return new PageImpl<>(pageContent, pageable, favoritasOrdenadas.size());
     }
+
 
     @Transactional(readOnly = true)
     public Double getAverageIdeaGenerationTime() {
