@@ -39,6 +39,7 @@ public class SecurityConfig {
                         .requestMatchers("/h2-console/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/themes").authenticated()
                         .requestMatchers("/api/themes/**").hasRole("ADMIN")
+                        .requestMatchers("/api/chat/admin/logs").hasRole("ADMIN")
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
