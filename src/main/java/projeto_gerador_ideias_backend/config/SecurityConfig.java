@@ -33,27 +33,33 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/h2-console/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/themes", "/api/themes/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/themes/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/api/themes/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/themes/**").hasRole("ADMIN")
-                        .requestMatchers("/api/**").authenticated()
-                        .anyRequest().permitAll())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-        
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(authorize -> authorize
+                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/h2-console/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+
+                .requestMatchers(HttpMethod.GET, "/api/themes", "/api/themes/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/themes/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/themes/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/themes/**").hasRole("ADMIN")
+
+                .requestMatchers("/api/chat/admin/logs").hasRole("ADMIN")
+
+                .requestMatchers("/api/**").authenticated()
+                .anyRequest().permitAll()
+            )
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
         if (requestCleanupFilter != null) {
             http.addFilterAfter(requestCleanupFilter, UsernamePasswordAuthenticationFilter.class);
         }
-        
+
         http.headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable));
+
         return http.build();
     }
-    
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();

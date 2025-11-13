@@ -854,5 +854,3 @@ class OllamaIntegrationServiceTest {
         return response;
     }
 }
-
-
