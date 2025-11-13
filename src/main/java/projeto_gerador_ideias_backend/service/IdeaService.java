@@ -1,6 +1,7 @@
 package projeto_gerador_ideias_backend.service;
 
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -20,10 +21,7 @@ import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import projeto_gerador_ideias_backend.model.User;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 
@@ -251,13 +249,13 @@ public class IdeaService {
     }
 
     @Transactional(readOnly = true)
-    public List<IdeaResponse> listarHistoricoIdeiasFiltrado(
+    public Page<IdeaResponse> listarHistoricoIdeiasFiltrado(
             Long userId,
             Long themeId,
             LocalDateTime startDate,
-            LocalDateTime endDate) {
-
-        List<Idea> ideias;
+            LocalDateTime endDate,
+            int page,
+            int size) {
 
         Theme themeEntity = null;
         if (themeId != null) {
@@ -265,68 +263,56 @@ public class IdeaService {
                     .orElseThrow(() -> new IllegalArgumentException("O tema com ID '" + themeId + "' é inválido."));
         }
 
-        if (userId != null) {
-            final Theme finalThemeEntity = themeEntity;
+        final Theme finalThemeEntity = themeEntity;
 
-            Specification<Idea> spec = (root, query, criteriaBuilder) -> {
-                Predicate predicate = criteriaBuilder.conjunction();
+        Specification<Idea> spec = (root, query, cb) -> {
+            Predicate predicate = cb.conjunction();
 
-                predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("user").get("id"), userId));
-
-                if (finalThemeEntity != null) {
-                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("theme"), finalThemeEntity));
-                }
-
-                if (startDate != null) {
-                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), startDate));
-                }
-
-                if (endDate != null) {
-                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), endDate));
-                }
-
-                query.orderBy(criteriaBuilder.desc(root.get("createdAt")));
-                return predicate;
-            };
-
-            ideias = ideaRepository.findAll(spec);
-        }
-
-        else {
-            boolean hasTheme = themeEntity != null;
-            boolean hasStartEnd = startDate != null && endDate != null;
-
-            if (hasTheme && hasStartEnd) {
-                ideias = ideaRepository.findByThemeAndCreatedAtBetweenOrderByCreatedAtDesc(themeEntity, startDate, endDate);
-            } else if (hasTheme) {
-                ideias = ideaRepository.findByThemeOrderByCreatedAtDesc(themeEntity);
-            } else if (hasStartEnd) {
-                ideias = ideaRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
-            } else {
-                ideias = ideaRepository.findAllByOrderByCreatedAtDesc();
+            if (userId != null) {
+                predicate = cb.and(predicate, cb.equal(root.get("user").get("id"), userId));
             }
-        }
+
+            if (finalThemeEntity != null) {
+                predicate = cb.and(predicate, cb.equal(root.get("theme"), finalThemeEntity));
+            }
+
+            if (startDate != null) {
+                predicate = cb.and(predicate, cb.greaterThanOrEqualTo(root.get("createdAt"), startDate));
+            }
+
+            if (endDate != null) {
+                predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.get("createdAt"), endDate));
+            }
+
+            query.orderBy(cb.desc(root.get("createdAt")));
+            return predicate;
+        };
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Page<Idea> ideias = ideaRepository.findAll(spec, pageable);
 
         if (ideias.isEmpty()) {
             throw new ResourceNotFoundException("Nenhuma ideia encontrada no banco de dados para os filtros informados.");
         }
 
-        return ideias.stream().map(IdeaResponse::new).toList();
+        return ideias.map(IdeaResponse::new);
     }
 
+
     @Transactional(readOnly = true)
-    public List<IdeaResponse> listarMinhasIdeias() {
-
+    public Page<IdeaResponse> listarMinhasIdeiasPaginadas(int page, int size) {
         User user = getCurrentAuthenticatedUser();
-        List<Idea> ideias = ideaRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
 
-        if (ideias.isEmpty()) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Idea> ideiasPage = ideaRepository.findByUserId(user.getId(), pageable);
+
+        if (ideiasPage.isEmpty()) {
             throw new IllegalArgumentException("Nenhuma ideia encontrada para o usuário: " + user.getEmail());
         }
 
-
-        return ideias.stream().map(IdeaResponse::new).toList();
+        return ideiasPage.map(IdeaResponse::new);
     }
+
 
     private User getCurrentAuthenticatedUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -373,7 +359,7 @@ public class IdeaService {
     }
 
     @Transactional(readOnly = true)
-    public List<IdeaResponse> listarIdeiasFavoritadas() {
+    public Page<IdeaResponse> listarIdeiasFavoritadasPaginadas(int page, int size) {
         User user = getCurrentAuthenticatedUser();
 
         Set<Idea> favoritas = user.getFavoriteIdeas();
@@ -382,10 +368,26 @@ public class IdeaService {
             throw new ResourceNotFoundException("Nenhuma ideia favoritada encontrada para este usuário.");
         }
 
-        return favoritas.stream()
+        List<Idea> favoritasOrdenadas = favoritas.stream()
+                .sorted(Comparator.comparing(Idea::getCreatedAt).reversed())
+                .toList();
+
+        Pageable pageable = PageRequest.of(page, size);
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), favoritasOrdenadas.size());
+
+        if (start >= favoritasOrdenadas.size()) {
+            throw new ResourceNotFoundException("Página solicitada está vazia.");
+        }
+
+        List<IdeaResponse> pageContent = favoritasOrdenadas.subList(start, end)
+                .stream()
                 .map(IdeaResponse::new)
                 .toList();
+
+        return new PageImpl<>(pageContent, pageable, favoritasOrdenadas.size());
     }
+
 
     @Transactional(readOnly = true)
     public Double getAverageIdeaGenerationTime() {
