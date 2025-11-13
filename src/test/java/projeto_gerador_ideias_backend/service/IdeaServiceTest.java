@@ -10,10 +10,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -338,29 +335,45 @@ class IdeaServiceTest {
 
 
     @Test
-    void listarMinhasIdeias_ShouldReturnUserIdeas() {
+    void listarMinhasIdeiasPaginadas_ShouldReturnUserIdeas() {
         setupSecurityContext();
-        List<Idea> userIdeias = List.of(testIdea, testIdea);
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(testUser.getId())).thenReturn(userIdeias);
 
-        List<IdeaResponse> response = ideaService.listarMinhasIdeias();
+        Pageable pageable = PageRequest.of(0, 6, Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<Idea> userIdeias = List.of(testIdea, testIdea);
+        Page<Idea> ideaPage = new PageImpl<>(userIdeias, pageable, userIdeias.size());
+
+        when(ideaRepository.findByUserId(eq(testUser.getId()), any(Pageable.class)))
+                .thenReturn(ideaPage);
+
+        Page<IdeaResponse> response = ideaService.listarMinhasIdeiasPaginadas(0, 6);
 
         assertNotNull(response);
-        assertEquals(2, response.size());
-        assertEquals(testIdea.getGeneratedContent(), response.get(0).getContent());
+        assertEquals(2, response.getTotalElements());
+        assertEquals(testIdea.getGeneratedContent(), response.getContent().get(0).getContent());
+
+        verify(ideaRepository, times(1)).findByUserId(eq(testUser.getId()), any(Pageable.class));
     }
 
+
+
     @Test
-    void listarMinhasIdeias_ShouldThrowException_WhenNoIdeasFound() {
+    void listarMinhasIdeiasPaginadas_ShouldThrowException_WhenNoIdeasFound() {
         setupSecurityContext();
-        when(ideaRepository.findByUserIdOrderByCreatedAtDesc(testUser.getId())).thenReturn(Collections.emptyList());
+        Pageable pageable = PageRequest.of(0, 6, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Idea> emptyPage = new PageImpl<>(Collections.emptyList(), pageable, 0);
+
+        when(ideaRepository.findByUserId(eq(testUser.getId()), any(Pageable.class)))
+                .thenReturn(emptyPage);
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            ideaService.listarMinhasIdeias();
+            ideaService.listarMinhasIdeiasPaginadas(0, 6);
         });
 
         assertEquals("Nenhuma ideia encontrada para o usuário: " + testUser.getEmail(), exception.getMessage());
+
+        verify(ideaRepository, times(1)).findByUserId(eq(testUser.getId()), any(Pageable.class));
     }
+
 
     @Test
     void generateSurpriseIdea_ShouldGenerateAndSaveSurprise() {
@@ -453,8 +466,10 @@ class IdeaServiceTest {
 
     @Test
     void getCurrentAuthenticatedUser_ShouldThrowException_WhenNotAuthenticated() {
+        SecurityContextHolder.clearContext();
+
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-            ideaService.listarMinhasIdeias();
+            ideaService.listarMinhasIdeiasPaginadas(0, 5);
         });
 
         assertEquals("Usuário não autenticado. Não é possível gerar ideias.", exception.getMessage());
@@ -467,7 +482,7 @@ class IdeaServiceTest {
         when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.empty());
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-            ideaService.listarMinhasIdeias();
+            ideaService.listarMinhasIdeiasPaginadas(0, 5);
         });
 
         assertEquals("Usuário autenticado não encontrado no banco de dados: " + testUserEmail, exception.getMessage());
@@ -790,7 +805,7 @@ class IdeaServiceTest {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-            ideaService.listarMinhasIdeias();
+            ideaService.listarMinhasIdeiasPaginadas(0, 5);
         });
 
         assertEquals("Usuário não autenticado. Não é possível gerar ideias.", exception.getMessage());
@@ -801,7 +816,7 @@ class IdeaServiceTest {
         SecurityContextHolder.clearContext();
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-            ideaService.listarMinhasIdeias();
+            ideaService.listarMinhasIdeiasPaginadas(0, 5);
         });
 
         assertEquals("Usuário não autenticado. Não é possível gerar ideias.", exception.getMessage());

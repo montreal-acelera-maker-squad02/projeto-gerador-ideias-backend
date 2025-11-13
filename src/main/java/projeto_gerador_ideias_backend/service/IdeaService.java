@@ -316,7 +316,6 @@ public class IdeaService {
             throw new IllegalArgumentException("Nenhuma ideia encontrada para o usuário: " + user.getEmail());
         }
 
-        // Mapeia cada entidade Idea para IdeaResponse e retorna a página mapeada
         return ideiasPage.map(IdeaResponse::new);
     }
 

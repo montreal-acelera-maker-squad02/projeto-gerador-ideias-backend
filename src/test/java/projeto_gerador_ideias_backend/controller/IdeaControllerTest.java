@@ -9,6 +9,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -253,10 +255,10 @@ class IdeaControllerTest {
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturnNotFoundWhenNoMyIdeasFound() throws Exception {
-        when(ideaService.listarMinhasIdeias())
+        when(ideaService.listarMinhasIdeiasPaginadas(0, 6))
                 .thenThrow(new ResourceNotFoundException("Nenhuma ideia encontrada para o usuário"));
 
-        mockMvc.perform(get("/api/ideas/my-ideas"))
+        mockMvc.perform(get("/api/ideas/my-ideas?page=0&size=6"))
                 .andExpect(status().isNotFound())
                 .andExpect(content().string(containsString("Nenhuma ideia encontrada para o usuário")));
     }
@@ -347,42 +349,44 @@ class IdeaControllerTest {
     @WithMockUser(username = testUserEmail)
     void shouldGetMyIdeasSuccessfully() throws Exception {
         reset(ideaService);
-        
+
         User user = userRepository.findByEmail(testUserEmail).orElseThrow();
-        
         LocalDateTime now = LocalDateTime.now();
-        
+
         Idea idea1 = new Idea(tecnologiaTheme, "Contexto 1", "Ideia 1", "modelo", 100L);
         idea1.setUser(user);
         idea1.setCreatedAt(now.minusSeconds(1));
         ideaRepository.saveAndFlush(idea1);
-        
+
         Idea idea2 = new Idea(estudosTheme, "Contexto 2", "Ideia 2", "modelo", 150L);
         idea2.setUser(user);
         idea2.setCreatedAt(now);
         ideaRepository.saveAndFlush(idea2);
 
-        List<IdeaResponse> expectedIdeas = List.of(
-                new IdeaResponse(idea2),
-                new IdeaResponse(idea1)
-        );
-        when(ideaService.listarMinhasIdeias()).thenReturn(expectedIdeas);
+        Pageable pageable = PageRequest.of(0, 6);
+        List<IdeaResponse> ideaResponses = List.of(new IdeaResponse(idea2), new IdeaResponse(idea1));
+        Page<IdeaResponse> ideaPage = new PageImpl<>(ideaResponses, pageable, ideaResponses.size());
 
-        mockMvc.perform(get("/api/ideas/my-ideas"))
+        when(ideaService.listarMinhasIdeiasPaginadas(0, 6)).thenReturn(ideaPage);
+
+        mockMvc.perform(get("/api/ideas/my-ideas?page=0&size=6"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].content", is("Ideia 2")))
-                .andExpect(jsonPath("$[1].content", is("Ideia 1")));
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].content", is("Ideia 2")))
+                .andExpect(jsonPath("$.content[1].content", is("Ideia 1")))
+                .andExpect(jsonPath("$.totalElements", is(2)))
+                .andExpect(jsonPath("$.pageable.pageNumber", is(0)))
+                .andExpect(jsonPath("$.pageable.pageSize", is(6)));
     }
 
     @Test
     @WithMockUser(username = testUserEmail)
     void shouldReturn404WhenNoIdeasForUser() throws Exception {
         reset(ideaService);
-        when(ideaService.listarMinhasIdeias())
+        when(ideaService.listarMinhasIdeiasPaginadas(0, 6))
                 .thenThrow(new IllegalArgumentException("Nenhuma ideia encontrada para o usuário: " + testUserEmail));
-        
-        mockMvc.perform(get("/api/ideas/my-ideas"))
+
+        mockMvc.perform(get("/api/ideas/my-ideas?page=0&size=6"))
                 .andExpect(status().isNotFound())
                 .andExpect(content().string(containsString("Nenhuma ideia encontrada")));
     }
@@ -391,13 +395,14 @@ class IdeaControllerTest {
     @WithMockUser(username = "nonexistent@example.com")
     void shouldReturn404WhenUserNotFoundInGetMyIdeas() throws Exception {
         reset(ideaService);
-        when(ideaService.listarMinhasIdeias())
+        when(ideaService.listarMinhasIdeiasPaginadas(0, 6))
                 .thenThrow(new ResourceNotFoundException("Usuário autenticado não encontrado"));
-        
-        mockMvc.perform(get("/api/ideas/my-ideas"))
+
+        mockMvc.perform(get("/api/ideas/my-ideas?page=0&size=6"))
                 .andExpect(status().isNotFound())
                 .andExpect(content().string(containsString("Usuário autenticado não encontrado")));
     }
+
 
 
     @Test
@@ -581,10 +586,10 @@ class IdeaControllerTest {
     @WithMockUser(username = testUserEmail)
     void shouldReturn500WhenExceptionInGetMyIdeas() throws Exception {
         reset(ideaService);
-        when(ideaService.listarMinhasIdeias())
+        when(ideaService.listarMinhasIdeiasPaginadas(0, 6))
                 .thenThrow(new RuntimeException("Erro inesperado"));
 
-        mockMvc.perform(get("/api/ideas/my-ideas"))
+        mockMvc.perform(get("/api/ideas/my-ideas?page=0&size=6"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(content().string(containsString("Erro ao buscar ideias do usuário")));
     }
