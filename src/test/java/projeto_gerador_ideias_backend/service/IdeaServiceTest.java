@@ -641,11 +641,13 @@ class IdeaServiceTest {
                 ideaService,
                 "cleanUpAiResponse",
                 input,
-                "contexto",
-                false
+                "um nome de startup sobre tecnologia",
+                true
         );
 
+        assertNotNull(cleaned);
         assertEquals(expectedOutput, cleaned);
+        assertFalse(cleaned.startsWith("###") || cleaned.startsWith("####"));
     }
 
     private static Stream<Arguments> provideCleanUpAiResponseAdditionalCases() {

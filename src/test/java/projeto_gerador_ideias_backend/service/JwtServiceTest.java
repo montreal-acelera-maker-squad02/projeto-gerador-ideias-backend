@@ -33,7 +33,7 @@ class JwtServiceTest {
         String email = "joao@example.com";
         Long userId = 1L;
         
-        String token = jwtService.generateToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId);
         
         assertNotNull(token);
         assertFalse(token.isEmpty());
@@ -51,7 +51,7 @@ class JwtServiceTest {
         String email = "maria@example.com";
         Long userId = 2L;
         
-        String token = jwtService.generateToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId);
         String extractedEmail = jwtService.extractUsername(token);
         
         assertEquals(email, extractedEmail);
@@ -62,7 +62,7 @@ class JwtServiceTest {
         String email = "pedro@example.com";
         Long userId = 3L;
         
-        String token = jwtService.generateToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId);
         Long extractedUserId = jwtService.extractUserId(token);
         
         assertEquals(userId, extractedUserId);
@@ -73,7 +73,7 @@ class JwtServiceTest {
         String email = "teste@example.com";
         Long userId = 1L;
         
-        String token = jwtService.generateToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId);
         boolean isValid = jwtService.validateToken(token);
         
         assertTrue(isValid);
@@ -84,7 +84,7 @@ class JwtServiceTest {
         String email = "teste@example.com";
         Long userId = 1L;
         
-        String token = jwtService.generateToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId);
         
         JwtService differentService = new JwtService();
         ReflectionTestUtils.setField(differentService, "secret", "different-secret-key-minimum-32-characters");
@@ -123,7 +123,7 @@ class JwtServiceTest {
         String email = "teste@example.com";
         Long userId = 1L;
         
-        String token = jwtService.generateToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId);
         Claims claims = parseToken(token);
         
         Date expiration = claims.getExpiration();
@@ -156,7 +156,7 @@ class JwtServiceTest {
         String email = "teste@example.com";
         Long userId = 1L;
         
-        String token1 = jwtService.generateToken(email, userId);
+        String token1 = jwtService.generateAccessToken(email, userId);
         Claims claims1 = parseToken(token1);
         Date issuedAt1 = claims1.getIssuedAt();
         
@@ -165,7 +165,7 @@ class JwtServiceTest {
         boolean tokensAreDifferent = false;
         
         for (int i = 0; i < 20; i++) {
-            token2 = jwtService.generateToken(email, userId);
+            token2 = jwtService.generateAccessToken(email, userId);
             Claims claims2 = parseToken(token2);
             issuedAt2 = claims2.getIssuedAt();
             

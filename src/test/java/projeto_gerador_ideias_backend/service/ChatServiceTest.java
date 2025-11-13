@@ -1133,7 +1133,6 @@ class ChatServiceTest {
         when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
-        doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1343,7 +1342,6 @@ class ChatServiceTest {
         when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
-        doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1377,7 +1375,6 @@ class ChatServiceTest {
         when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
-        doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
         assertThrows(OllamaServiceException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
@@ -1421,7 +1418,6 @@ class ChatServiceTest {
         when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
                 .thenReturn(Collections.singletonList(previousAssistant));
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(30);
-        doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1459,7 +1455,6 @@ class ChatServiceTest {
         when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
                 .thenReturn(Collections.singletonList(previousAssistant));
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(10);
-        doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1493,7 +1488,6 @@ class ChatServiceTest {
         when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
-        doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1608,7 +1602,6 @@ class ChatServiceTest {
         when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
-        doNothing().when(contentModerationService).validateModerationResponse(anyString(), anyBoolean());
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 

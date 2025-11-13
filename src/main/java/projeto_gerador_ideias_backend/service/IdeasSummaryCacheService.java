@@ -103,7 +103,7 @@ public class IdeasSummaryCacheService {
         }
         
         if (!ideasToUpdate.isEmpty()) {
-            saveIdeasInTransaction(ideasToUpdate);
+            self.saveIdeasInTransaction(ideasToUpdate);
         }
         
         return responses;

@@ -4,7 +4,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import projeto_gerador_ideias_backend.exceptions.ValidationException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -18,38 +17,32 @@ class ContentModerationServiceTest {
     }
 
     @Test
-    void shouldThrowExceptionForFreeChatWhenContentIsDangerous() {
+    void shouldNormalizeDangerousContentForFreeChat() {
         String dangerousContent = "[MODERACAO: PERIGOSO]";
 
-        ValidationException exception = assertThrows(ValidationException.class, () -> {
-            contentModerationService.validateModerationResponse(dangerousContent, true);
-        });
+        String result = contentModerationService.validateAndNormalizeResponse(dangerousContent, true);
 
-        assertEquals("Desculpe, não posso processar essa mensagem devido ao conteúdo.", exception.getMessage());
+        assertEquals("Desculpe, não posso processar essa mensagem devido ao conteúdo. Posso ajudá-lo com outras questões?", result);
     }
 
     @Test
-    void shouldThrowExceptionForIdeaBasedChatWhenContentIsDangerous() {
+    void shouldNormalizeDangerousContentForIdeaBasedChat() {
         String dangerousContent = "[MODERACAO: PERIGOSO]";
 
-        ValidationException exception = assertThrows(ValidationException.class, () -> {
-            contentModerationService.validateModerationResponse(dangerousContent, false);
-        });
+        String result = contentModerationService.validateAndNormalizeResponse(dangerousContent, false);
 
-        assertEquals("Desculpe, sua mensagem não está relacionada à ideia desta conversa. Por favor, mantenha o foco no tópico da ideia.", exception.getMessage());
+        assertEquals("Desculpe, sua mensagem não está relacionada à ideia desta conversa. Por favor, mantenha o foco no tópico da ideia. Como posso ajudá-lo a desenvolver ou melhorar esta ideia?", result);
     }
 
     @Test
-    void shouldNotThrowExceptionWhenContentIsSafe() {
+    void shouldReturnSafeContentAsIs() {
         String safeContent = "Esta é uma resposta segura e útil.";
 
-        assertDoesNotThrow(() -> {
-            contentModerationService.validateModerationResponse(safeContent, true);
-        });
+        String result1 = contentModerationService.validateAndNormalizeResponse(safeContent, true);
+        String result2 = contentModerationService.validateAndNormalizeResponse(safeContent, false);
 
-        assertDoesNotThrow(() -> {
-            contentModerationService.validateModerationResponse(safeContent, false);
-        });
+        assertEquals(safeContent, result1);
+        assertEquals(safeContent, result2);
     }
 
     @Test
@@ -90,11 +83,9 @@ class ContentModerationServiceTest {
         "[MODERACAO: PERIGOSO] Algum conteúdo adicional"
     })
     void shouldDetectDangerousContentVariations(String dangerousContent) {
-        ValidationException exception = assertThrows(ValidationException.class, () -> {
-            contentModerationService.validateModerationResponse(dangerousContent, true);
-        });
+        String result = contentModerationService.validateAndNormalizeResponse(dangerousContent, true);
 
-        assertTrue(exception.getMessage().contains("não posso processar"));
+        assertTrue(result.contains("não posso processar"));
     }
 
     @ParameterizedTest
@@ -104,83 +95,52 @@ class ContentModerationServiceTest {
         "Texto antes [MODERACAO: PERIGOSO] texto depois"
     })
     void shouldNotDetectDangerousContentWhenTagIsNotAtStart(String safeContent) {
-        assertDoesNotThrow(() -> {
-            contentModerationService.validateModerationResponse(safeContent, true);
-        });
+        String result = contentModerationService.validateAndNormalizeResponse(safeContent, true);
+
+        assertEquals(safeContent, result);
     }
 
     @Test
     void shouldHandleDifferentFreeChatScenarios() {
         String dangerousContent = "[MODERACAO: PERIGOSO]";
 
-        ValidationException exception1 = assertThrows(ValidationException.class, () -> {
-            contentModerationService.validateModerationResponse(dangerousContent, true);
-        });
+        String result1 = contentModerationService.validateAndNormalizeResponse(dangerousContent, true);
+        String result2 = contentModerationService.validateAndNormalizeResponse(dangerousContent, true);
 
-        ValidationException exception2 = assertThrows(ValidationException.class, () -> {
-            contentModerationService.validateModerationResponse(dangerousContent, true);
-        });
-
-        assertEquals(exception1.getMessage(), exception2.getMessage());
-        assertTrue(exception1.getMessage().contains("não posso processar"));
+        assertEquals(result1, result2);
+        assertTrue(result1.contains("não posso processar"));
     }
 
     @Test
     void shouldHandleDifferentIdeaBasedChatScenarios() {
         String dangerousContent = "[MODERACAO: PERIGOSO]";
 
-        ValidationException exception1 = assertThrows(ValidationException.class, () -> {
-            contentModerationService.validateModerationResponse(dangerousContent, false);
-        });
+        String result1 = contentModerationService.validateAndNormalizeResponse(dangerousContent, false);
+        String result2 = contentModerationService.validateAndNormalizeResponse(dangerousContent, false);
 
-        ValidationException exception2 = assertThrows(ValidationException.class, () -> {
-            contentModerationService.validateModerationResponse(dangerousContent, false);
-        });
-
-        assertEquals(exception1.getMessage(), exception2.getMessage());
-        assertTrue(exception1.getMessage().contains("não está relacionada à ideia"));
+        assertEquals(result1, result2);
+        assertTrue(result1.contains("não está relacionada à ideia"));
     }
 
     @Test
     void shouldNotDetectSafeModerationTag() {
         String safeContent = "[MODERACAO: SEGURA] Esta é uma resposta segura";
 
-        assertDoesNotThrow(() -> {
-            contentModerationService.validateModerationResponse(safeContent, true);
-        });
+        String result = contentModerationService.validateAndNormalizeResponse(safeContent, true);
+
+        assertEquals(safeContent, result);
     }
 
-    @Test
-    void shouldHandleContentWithOnlyModerationTag() {
-        String dangerousContent = "[MODERACAO: PERIGOSO]";
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "[MODERACAO: PERIGOSO]",
+        "   [MODERACAO: PERIGOSO]",
+        "[MODERACAO: PERIGOSO]   "
+    })
+    void shouldHandleContentWithModerationTagAndWhitespace(String dangerousContent) {
+        String result = contentModerationService.validateAndNormalizeResponse(dangerousContent, true);
 
-        ValidationException exception = assertThrows(ValidationException.class, () -> {
-            contentModerationService.validateModerationResponse(dangerousContent, true);
-        });
-
-        assertTrue(exception.getMessage().contains("não posso processar"));
-    }
-
-    @Test
-    void shouldHandleContentWithLeadingWhitespace() {
-        String dangerousContent = "   [MODERACAO: PERIGOSO]";
-
-        ValidationException exception = assertThrows(ValidationException.class, () -> {
-            contentModerationService.validateModerationResponse(dangerousContent, true);
-        });
-
-        assertTrue(exception.getMessage().contains("não posso processar"));
-    }
-
-    @Test
-    void shouldHandleContentWithTrailingWhitespace() {
-        String dangerousContent = "[MODERACAO: PERIGOSO]   ";
-
-        ValidationException exception = assertThrows(ValidationException.class, () -> {
-            contentModerationService.validateModerationResponse(dangerousContent, true);
-        });
-
-        assertTrue(exception.getMessage().contains("não posso processar"));
+        assertTrue(result.contains("não posso processar"));
     }
 }
 

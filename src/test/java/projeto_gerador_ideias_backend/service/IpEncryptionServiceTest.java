@@ -53,15 +53,11 @@ class IpEncryptionServiceTest {
         assertNull(encrypted);
     }
 
-    @Test
-    void shouldReturnUnknownWhenDecryptingNull() {
-        String decrypted = ipEncryptionService.decryptIp(null);
-        assertEquals("unknown", decrypted);
-    }
-
-    @Test
-    void shouldReturnUnknownWhenDecryptingBlank() {
-        String decrypted = ipEncryptionService.decryptIp("");
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   "})
+    void shouldReturnUnknownWhenDecryptingInvalidInput(String invalidInput) {
+        String decrypted = ipEncryptionService.decryptIp(invalidInput);
         assertEquals("unknown", decrypted);
     }
 
@@ -87,10 +83,12 @@ class IpEncryptionServiceTest {
 
     @Test
     void shouldDecryptIpv6Localhost() {
-        String ip = "192.168.1.1";
-        String encrypted = ipEncryptionService.encryptIp(ip);
+        String ipv6Localhost = "::1";
+        String encrypted = ipEncryptionService.encryptIp(ipv6Localhost);
+        assertNotNull(encrypted);
         String decrypted = ipEncryptionService.decryptIp(encrypted);
-        assertEquals(ip, decrypted);
+        assertEquals("127.0.0.1", decrypted);
+        assertNotEquals(ipv6Localhost, decrypted);
     }
 
     @Test

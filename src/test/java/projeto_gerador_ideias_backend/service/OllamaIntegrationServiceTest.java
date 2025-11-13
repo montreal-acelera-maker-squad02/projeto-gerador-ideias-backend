@@ -472,9 +472,15 @@ class OllamaIntegrationServiceTest {
                 .timeout(Duration.ofSeconds(TEST_TIMEOUT));
         when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
 
-        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
+        String result = ollamaIntegrationService.callOllamaWithHistory("System", List.of(), "User");
 
         assertEquals(expected, result);
+        assertNotNull(result);
+        assertFalse(result.contains("[MODERACAO"));
+        if (!expected.isEmpty()) {
+            assertFalse(result.startsWith(" ") || result.endsWith(" "));
+        }
+        verify(chatMetricsService).recordOllamaCallTime(anyLong());
     }
 
     private static java.util.stream.Stream<Arguments> provideTrimResponseContentCases() {
@@ -692,9 +698,9 @@ class OllamaIntegrationServiceTest {
     }
 
 
-    @Test
-    void shouldHandleResponseWithModerationTagAtEnd() {
-        String content = "Resposta[MODERACAO: SEGURA]";
+    @ParameterizedTest
+    @MethodSource("provideModerationTagPositionCases")
+    void shouldHandleResponseWithModerationTagAtDifferentPositions(String content, String expected) {
         OllamaResponse ollamaResponse = createMockResponse(content);
         Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
                 .timeout(Duration.ofSeconds(TEST_TIMEOUT));
@@ -702,46 +708,18 @@ class OllamaIntegrationServiceTest {
 
         String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
 
-        assertEquals("Resposta", result);
+        assertEquals(expected, result);
+        assertFalse(result.contains("[MODERACAO"));
     }
 
-    @Test
-    void shouldHandleResponseWithMultipleModerationTagsInSequence() {
-        String content = "[MODERACAO: SEGURA][MODERACAO: PERIGOSO][MODERACAO: SEGURA]Resposta";
-        OllamaResponse ollamaResponse = createMockResponse(content);
-        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
-                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
-        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
-
-        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
-
-        assertEquals("Resposta", result);
-    }
-
-    @Test
-    void shouldHandleResponseWithModerationTagPatternAtStart() {
-        String content = "[MODERACAO: SEGURA]Resto";
-        OllamaResponse ollamaResponse = createMockResponse(content);
-        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
-                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
-        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
-
-        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
-
-        assertEquals("Resto", result);
-    }
-
-    @Test
-    void shouldHandleResponseWithCaseInsensitiveModerationTags() {
-        String content = "[moderacao: segura]Resposta";
-        OllamaResponse ollamaResponse = createMockResponse(content);
-        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
-                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
-        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
-
-        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
-
-        assertEquals("Resposta", result);
+    private static java.util.stream.Stream<Arguments> provideModerationTagPositionCases() {
+        return java.util.stream.Stream.of(
+                Arguments.of("Resposta[MODERACAO: SEGURA]", "Resposta"),
+                Arguments.of("[MODERACAO: SEGURA][MODERACAO: PERIGOSO][MODERACAO: SEGURA]Resposta", "Resposta"),
+                Arguments.of("[MODERACAO: SEGURA]Resto", "Resto"),
+                Arguments.of("[moderacao: segura]Resposta", "Resposta"),
+                Arguments.of("[MODERACAO: SEGURA]Resto do texto aqui", "Resto do texto aqui")
+        );
     }
 
     @Test
@@ -776,18 +754,6 @@ class OllamaIntegrationServiceTest {
         assertNotNull(result);
     }
 
-    @Test
-    void shouldHandleResponseWithModerationTagAndSubstringExtraction() {
-        String content = "[MODERACAO: SEGURA]Resto do texto aqui";
-        OllamaResponse ollamaResponse = createMockResponse(content);
-        Mono<OllamaResponse> responseMono = Mono.just(ollamaResponse)
-                .timeout(Duration.ofSeconds(TEST_TIMEOUT));
-        when(responseSpec.bodyToMono(OllamaResponse.class)).thenReturn(responseMono);
-
-        String result = ollamaIntegrationService.callOllamaWithSystemPrompt("System", "User");
-
-        assertEquals("Resto do texto aqui", result);
-    }
 
     @Test
     void shouldHandleResponseWithTrimmedWhitespace() {
