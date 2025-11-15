@@ -366,7 +366,7 @@ public class ChatService {
                 LOG_KEY_SESSION_ID, sessionId,
                 "historySize", historyMessages.size(),
                 "historyRoles", historyMessages.stream()
-                    .map(m -> m.getRole())
+                    .map(projeto_gerador_ideias_backend.dto.request.OllamaRequest.Message::getRole)
                     .collect(java.util.stream.Collectors.joining(", "))
             ));
         }
