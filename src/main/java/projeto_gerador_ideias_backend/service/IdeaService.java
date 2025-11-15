@@ -11,6 +11,7 @@ import projeto_gerador_ideias_backend.dto.response.IdeaResponse;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
+import projeto_gerador_ideias_backend.repository.UserFavoriteRepository;
 import projeto_gerador_ideias_backend.repository.ThemeRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 import org.springframework.security.core.Authentication;
@@ -35,6 +36,7 @@ public class IdeaService {
     private final FailureCounterService failureCounterService;
     private final ThemeRepository themeRepository;
     private final IdeaSummaryService ideaSummaryService;
+    private final UserFavoriteRepository userFavoriteRepository;
     private final IdeasSummaryCacheService ideasSummaryCacheService;
     @Value("${ollama.model}")
     private String ollamaModel;
@@ -84,7 +86,8 @@ public class IdeaService {
                        OllamaCacheableService ollamaService, 
                        FailureCounterService failureCounterService, 
                        ThemeRepository themeRepository,
-                       IdeaSummaryService ideaSummaryService,
+                       IdeaSummaryService ideaSummaryService, 
+                       UserFavoriteRepository userFavoriteRepository,
                        IdeasSummaryCacheService ideasSummaryCacheService) {
         this.ideaRepository = ideaRepository;
         this.userRepository = userRepository;
@@ -92,6 +95,7 @@ public class IdeaService {
         this.failureCounterService = failureCounterService;
         this.themeRepository = themeRepository;
         this.ideaSummaryService = ideaSummaryService;
+        this.userFavoriteRepository = userFavoriteRepository;
         this.ideasSummaryCacheService = ideasSummaryCacheService;
     }
 
@@ -337,11 +341,10 @@ public class IdeaService {
         User user = getCurrentAuthenticatedUser();
         Idea idea = ideaRepository.findById(ideaId)
                 .orElseThrow(() -> new IllegalArgumentException("Ideia não encontrada."));
-        if (user.getFavoriteIdeas().contains(idea)) {
+        if (userFavoriteRepository.existsByUserIdAndIdeaId(user.getId(), ideaId)) {
             throw new IllegalArgumentException("Ideia já está favoritada.");
         }
-        user.getFavoriteIdeas().add(idea);
-        userRepository.saveAndFlush(user);
+        userFavoriteRepository.addFavorite(user.getId(), idea.getId());
     }
 
     @Transactional
@@ -349,49 +352,32 @@ public class IdeaService {
         User user = getCurrentAuthenticatedUser();
         Idea idea = ideaRepository.findById(ideaId)
                 .orElseThrow(() -> new IllegalArgumentException("Ideia não encontrada."));
-        if (!user.getFavoriteIdeas().contains(idea)) {
+        if (!userFavoriteRepository.existsByUserIdAndIdeaId(user.getId(), ideaId)) {
             throw new IllegalArgumentException("Ideia não está favoritada.");
         }
 
-        user.getFavoriteIdeas().remove(idea);
-
-        userRepository.saveAndFlush(user);
+        userFavoriteRepository.deleteById(new projeto_gerador_ideias_backend.model.UserFavorite.UserFavoriteId(user.getId(), idea.getId()));
     }
 
     @Transactional(readOnly = true)
     public Page<IdeaResponse> listarIdeiasFavoritadasPaginadas(int page, int size) {
         User user = getCurrentAuthenticatedUser();
 
-        Set<Idea> favoritas = user.getFavoriteIdeas();
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Idea> favoritasPage = ideaRepository.findFavoriteIdeasByUserId(user.getId(), pageable);
 
-        if (favoritas == null || favoritas.isEmpty()) {
+        if (favoritasPage.isEmpty()) {
             throw new ResourceNotFoundException("Nenhuma ideia favoritada encontrada para este usuário.");
         }
 
-        List<Idea> favoritasOrdenadas = favoritas.stream()
-                .sorted(Comparator.comparing(Idea::getCreatedAt).reversed())
-                .toList();
-
-        Pageable pageable = PageRequest.of(page, size);
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), favoritasOrdenadas.size());
-
-        if (start >= favoritasOrdenadas.size()) {
-            throw new ResourceNotFoundException("Página solicitada está vazia.");
-        }
-
-        List<IdeaResponse> pageContent = favoritasOrdenadas.subList(start, end)
-                .stream()
-                .map(IdeaResponse::new)
-                .toList();
-
-        return new PageImpl<>(pageContent, pageable, favoritasOrdenadas.size());
+        return favoritasPage.map(IdeaResponse::new);
     }
 
 
     @Transactional(readOnly = true)
     public Double getAverageIdeaGenerationTime() {
-        return ideaRepository.getAverageExecutionTime();
+        User user = getCurrentAuthenticatedUser();
+        return ideaRepository.getAverageExecutionTimeForUser(user.getId());
     }
 
     @Transactional(readOnly = true)

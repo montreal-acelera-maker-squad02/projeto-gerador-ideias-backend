@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.EqualsAndHashCode;
@@ -19,6 +20,8 @@ import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 import jakarta.persistence.Index;
 
@@ -66,6 +69,9 @@ public class Idea {
 
     @Column(length = 200)
     private String summary;
+
+    @ManyToMany(mappedBy = "favoriteIdeas")
+    private Set<User> favoritedByUsers = new HashSet<>();
 
     public Idea(Theme theme, String context, String generatedContent, String modelUsed, Long executionTimeMs) {
         this.theme = theme;
