@@ -11,9 +11,6 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import jakarta.persistence.OptimisticLockException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-import java.util.HashMap;
-import java.util.Map;
-
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -37,7 +34,7 @@ public class GlobalExceptionHandler {
         StringBuilder messages = new StringBuilder();
         ex.getBindingResult().getAllErrors().forEach(error -> {
             String errorMessage = error.getDefaultMessage();
-            if (messages.length() > 0) {
+            if (!messages.isEmpty()) {
                 messages.append("; ");
             }
             messages.append(errorMessage);

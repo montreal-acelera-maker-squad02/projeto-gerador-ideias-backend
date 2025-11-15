@@ -9,7 +9,7 @@ import lombok.Data;
 public class RefreshTokenRequest {
     
     @NotBlank(message = "Refresh token é obrigatório")
-    @Schema(description = "Refresh token para renovar o access token", example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...", required = true)
+    @Schema(description = "Refresh token para renovar o access token", example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
     private String refreshToken;
 }
 

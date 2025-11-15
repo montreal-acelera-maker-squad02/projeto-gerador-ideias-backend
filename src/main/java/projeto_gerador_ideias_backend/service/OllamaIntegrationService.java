@@ -41,7 +41,7 @@ public class OllamaIntegrationService {
     private static final String LOG_KEY_STATUS_CODE = "statusCode";
 
     @Retryable(
-        value = {OllamaServiceException.class},
+        retryFor = {OllamaServiceException.class},
         maxAttempts = 3,
         backoff = @Backoff(delay = 1000, multiplier = 2)
     )
@@ -59,7 +59,7 @@ public class OllamaIntegrationService {
     }
 
     @Retryable(
-        value = {OllamaServiceException.class},
+        retryFor = {OllamaServiceException.class},
         maxAttempts = 3,
         backoff = @Backoff(delay = 1000, multiplier = 2)
     )

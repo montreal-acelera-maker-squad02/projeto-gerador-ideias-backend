@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Dados para iniciar uma sessão de chat")
 public class StartChatRequest {
     @Positive(message = "O ID da ideia deve ser um número positivo")
-    @Schema(description = "ID da ideia para iniciar chat baseado em ideia. Se null, inicia chat livre", example = "10", required = false)
+    @Schema(description = "ID da ideia para iniciar chat baseado em ideia. Se null, inicia chat livre", example = "10")
     private Long ideaId;
 }
 

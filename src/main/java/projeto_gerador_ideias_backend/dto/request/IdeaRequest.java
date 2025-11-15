@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
-import projeto_gerador_ideias_backend.model.Theme;
 
 @Data
 @Schema(description = "Dados de entrada para gerar uma nova ideia")

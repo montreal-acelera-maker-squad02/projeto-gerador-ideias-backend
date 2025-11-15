@@ -1448,7 +1448,7 @@ public class ChatService {
             .replaceAll("(?i)\\[MODERACAO[\\s]*:[\\s]*PERIGOSO[\\s]*\\]", "")
             .trim();
         
-        if (cleaned.length() > 0 && cleaned.charAt(0) == '[') {
+        if (!cleaned.isEmpty() && cleaned.charAt(0) == '[') {
             int endIndex = cleaned.indexOf("]");
             if (endIndex != -1) {
                 String prefix = cleaned.substring(0, Math.min(endIndex + 1, cleaned.length())).toUpperCase();

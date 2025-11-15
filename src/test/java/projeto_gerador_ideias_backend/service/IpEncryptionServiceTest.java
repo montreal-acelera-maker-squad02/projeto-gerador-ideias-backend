@@ -33,7 +33,7 @@ class IpEncryptionServiceTest {
         
         assertNotNull(encrypted);
         assertNotEquals(ip, encrypted);
-        assertTrue(encrypted.length() > 0);
+        assertFalse(encrypted.isEmpty());
     }
 
     @Test

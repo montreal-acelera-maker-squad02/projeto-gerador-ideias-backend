@@ -24,7 +24,6 @@ import projeto_gerador_ideias_backend.exceptions.WrongPasswordException;
 import projeto_gerador_ideias_backend.model.User;
 import projeto_gerador_ideias_backend.model.RefreshToken;
 import projeto_gerador_ideias_backend.repository.UserRepository;
-import projeto_gerador_ideias_backend.service.TokenBlacklistService;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;

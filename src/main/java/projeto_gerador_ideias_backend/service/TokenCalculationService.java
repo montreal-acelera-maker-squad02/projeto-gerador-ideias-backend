@@ -58,9 +58,7 @@ public class TokenCalculationService {
             estimatedTokens = (tokensByWords * 0.6) + (tokensByChars * 0.3) + (tokensBySpecialChars * 0.1);
         }
         
-        int result = Math.max(1, (int) Math.ceil(estimatedTokens));
-        
-        return result;
+        return Math.max(1, (int) Math.ceil(estimatedTokens));
     }
     
     private int countWords(String text) {
@@ -81,13 +79,9 @@ public class TokenCalculationService {
     private int countSpecialChars(String text) {
         int count = 0;
         for (char c : text.toCharArray()) {
-            if (Character.isLetterOrDigit(c)) {
-                continue;
+            if (!Character.isLetterOrDigit(c) && !Character.isWhitespace(c)) {
+                count++;
             }
-            if (Character.isWhitespace(c)) {
-                continue;
-            }
-            count++;
         }
         return count;
     }

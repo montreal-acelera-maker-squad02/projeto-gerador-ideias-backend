@@ -1,6 +1,5 @@
 package projeto_gerador_ideias_backend.service;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
