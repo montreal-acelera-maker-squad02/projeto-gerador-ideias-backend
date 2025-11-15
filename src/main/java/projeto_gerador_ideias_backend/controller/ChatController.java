@@ -66,7 +66,7 @@ public class ChatController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     @PostMapping("/sessions/{sessionId}/messages")
     public ResponseEntity<ChatMessageResponse> sendMessage(
-            @Parameter(description = "ID da sessão de chat", required = true, example = "85")
+            @Parameter(description = "ID da sessão de chat", example = "85")
             @PathVariable Long sessionId,
             @Valid @RequestBody ChatMessageRequest request,
             jakarta.servlet.http.HttpServletRequest httpRequest) {
@@ -182,7 +182,7 @@ public class ChatController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     @GetMapping("/sessions/{sessionId}")
     public ResponseEntity<ChatSessionResponse> getSession(
-            @Parameter(description = "ID da sessão de chat", required = true, example = "85")
+            @Parameter(description = "ID da sessão de chat", example = "85")
             @PathVariable Long sessionId) {
         ChatSessionResponse response = chatService.getSession(sessionId);
         return ResponseEntity.ok(response);
@@ -200,9 +200,9 @@ public class ChatController {
             @Parameter(description = "Data no formato YYYY-MM-DD (padrão: hoje)", example = "2025-11-08")
             @RequestParam(required = false) String date,
             @Parameter(description = "Número da página (padrão: 1)", example = "1")
-            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "1") Integer page,
             @Parameter(description = "Tamanho da página (padrão: 10, máximo: 100)", example = "10")
-            @RequestParam(required = false, defaultValue = "10") Integer size) {
+            @RequestParam(defaultValue = "10") Integer size) {
         ChatLogsResponse response = chatService.getChatLogs(date, page, size);
         return ResponseEntity.ok(response);
     }
@@ -222,9 +222,9 @@ public class ChatController {
             @Parameter(description = "ID do usuário para filtrar (opcional, null para todos)", example = "1")
             @RequestParam(required = false) Long userId,
             @Parameter(description = "Número da página (padrão: 1)", example = "1")
-            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "1") Integer page,
             @Parameter(description = "Tamanho da página (padrão: 10, máximo: 100)", example = "10")
-            @RequestParam(required = false, defaultValue = "10") Integer size) {
+            @RequestParam(defaultValue = "10") Integer size) {
         AdminChatLogsResponse response = chatService.getAdminChatLogs(date, userId, page, size);
         return ResponseEntity.ok(response);
     }
@@ -241,12 +241,12 @@ public class ChatController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     @GetMapping("/sessions/{sessionId}/messages")
     public ResponseEntity<OlderMessagesResponse> getOlderMessages(
-            @Parameter(description = "ID da sessão de chat", required = true, example = "85")
+            @Parameter(description = "ID da sessão de chat", example = "85")
             @PathVariable Long sessionId,
-            @Parameter(description = "Timestamp ISO 8601 para buscar mensagens anteriores", required = true, example = "2025-11-08T13:00:00")
+            @Parameter(description = "Timestamp ISO 8601 para buscar mensagens anteriores", example = "2025-11-08T13:00:00")
             @RequestParam String before,
             @Parameter(description = "Limite de mensagens (padrão: 20, máximo: 50)", example = "20")
-            @RequestParam(required = false, defaultValue = "20") Integer limit) {
+            @RequestParam(defaultValue = "20") Integer limit) {
         OlderMessagesResponse response = chatService.getOlderMessages(sessionId, before, limit);
         return ResponseEntity.ok(response);
     }

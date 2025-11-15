@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -44,7 +43,7 @@ public class IdeaController {
     public ResponseEntity<IdeaResponse> generateIdea(
             @Valid @RequestBody IdeaRequest request,
             @Parameter(description = "Se 'true', ignora todos os caches (pessoal e técnico) e força uma nova chamada à IA.")
-            @RequestParam(required = false, defaultValue = "false") boolean skipCache
+            @RequestParam(defaultValue = "false") boolean skipCache
     ) {
         IdeaResponse response = ideaService.generateIdea(request, skipCache);
         return ResponseEntity.ok(response);
@@ -157,11 +156,9 @@ public class IdeaController {
 
     @GetMapping("/favorites")
     @Operation(summary = "Listar ideias favoritadas do usuário autenticado com paginação")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Lista de ideias favoritadas retornada com sucesso"),
-            @ApiResponse(responseCode = "404", description = "Usuário não encontrado ou sem ideias favoritadas"),
-            @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
-    })
+    @ApiResponse(responseCode = "200", description = "Lista de ideias favoritadas retornada com sucesso")
+    @ApiResponse(responseCode = "404", description = "Usuário não encontrado ou sem ideias favoritadas")
+    @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
     public ResponseEntity<Page<IdeaResponse>> getFavoriteIdeas(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "5") int size
