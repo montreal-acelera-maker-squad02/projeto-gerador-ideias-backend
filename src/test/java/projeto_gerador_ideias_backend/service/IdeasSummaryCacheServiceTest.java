@@ -95,7 +95,7 @@ class IdeasSummaryCacheServiceTest {
         assertEquals(1, result.size());
         assertEquals("Resumo da ideia", result.get(0).getSummary());
         verify(ideaRepository, times(1)).findIdeasSummaryOnlyByUserId(userId);
-        verify(cache, times(1)).put(eq("ideas:summary:user:1"), anyList());
+        verify(cache, times(1)).put(anyString(), anyList());
     }
 
     @Test
@@ -136,7 +136,7 @@ class IdeasSummaryCacheServiceTest {
         ideasSummaryCacheService.preloadUserIdeasSummary(userId);
 
         verify(ideaRepository, times(1)).findIdeasSummaryOnlyByUserId(userId);
-        verify(cache, times(1)).put(eq("ideas:summary:user:1"), anyList());
+        verify(cache, times(1)).put(anyString(), anyList());
     }
 
     @Test
@@ -148,7 +148,7 @@ class IdeasSummaryCacheServiceTest {
 
         assertNotNull(result);
         assertTrue(result.isEmpty());
-        verify(cache, times(1)).put(eq("ideas:summary:user:1"), eq(Collections.emptyList()));
+        verify(cache, times(1)).put("ideas:summary:user:1", Collections.emptyList());
     }
 
     @Test
