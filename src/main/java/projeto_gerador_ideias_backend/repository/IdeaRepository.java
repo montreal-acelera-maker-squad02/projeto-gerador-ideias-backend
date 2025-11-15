@@ -44,4 +44,7 @@ public interface IdeaRepository extends JpaRepository<Idea, Long>, JpaSpecificat
 
     @Query("SELECT COUNT(i) FROM User u JOIN u.favoriteIdeas i WHERE u.id = :userId")
     long countFavoriteIdeasByUserId(@Param("userId") Long userId);
+
+    @Query("SELECT i FROM Idea i JOIN i.favoritedByUsers u WHERE u.id = :userId")
+    Page<Idea> findFavoriteIdeasByUserId(@Param("userId") Long userId, Pageable pageable);
 }

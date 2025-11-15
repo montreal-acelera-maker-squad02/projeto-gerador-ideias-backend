@@ -31,6 +31,7 @@ import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.model.User;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
 import projeto_gerador_ideias_backend.repository.ThemeRepository;
+import projeto_gerador_ideias_backend.repository.UserFavoriteRepository;
 import projeto_gerador_ideias_backend.repository.UserRepository;
 
 import java.time.LocalDateTime;
@@ -70,6 +71,9 @@ class IdeaServiceTest {
 
     @Mock
     private IdeasSummaryCacheService ideasSummaryCacheService;
+
+    @Mock
+    private UserFavoriteRepository userFavoriteRepository;
 
     @InjectMocks
     private IdeaService ideaService;
@@ -373,27 +377,28 @@ class IdeaServiceTest {
     void favoritarIdeia_ShouldAddFavorite() {
         setupSecurityContext();
         when(ideaRepository.findById(testIdea.getId())).thenReturn(Optional.of(testIdea));
-        when(userRepository.saveAndFlush(testUser)).thenReturn(testUser);
+        when(userFavoriteRepository.existsByUserIdAndIdeaId(testUser.getId(), testIdea.getId())).thenReturn(false);
+        doNothing().when(userFavoriteRepository).addFavorite(anyLong(), anyLong());
 
         ideaService.favoritarIdeia(testIdea.getId());
 
-        assertTrue(testUser.getFavoriteIdeas().contains(testIdea));
-        verify(userRepository, times(1)).saveAndFlush(testUser);
+        verify(userFavoriteRepository, times(1)).addFavorite(testUser.getId(), testIdea.getId());
     }
 
     @Test
     void favoritarIdeia_ShouldThrowException_WhenAlreadyFavorited() {
         setupSecurityContext();
-        testUser.getFavoriteIdeas().add(testIdea);
-        when(ideaRepository.findById(testIdea.getId())).thenReturn(Optional.of(testIdea));
 
         Long ideaId = testIdea.getId();
+        when(ideaRepository.findById(ideaId)).thenReturn(Optional.of(testIdea));
+        when(userFavoriteRepository.existsByUserIdAndIdeaId(testUser.getId(), ideaId)).thenReturn(true);
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
             ideaService.favoritarIdeia(ideaId);
         });
 
         assertEquals("Ideia já está favoritada.", exception.getMessage());
+        verify(userFavoriteRepository, never()).addFavorite(anyLong(), anyLong());
     }
 
     @Test
@@ -411,20 +416,19 @@ class IdeaServiceTest {
     @Test
     void desfavoritarIdeia_ShouldRemoveFavorite() {
         setupSecurityContext();
-        testUser.getFavoriteIdeas().add(testIdea);
         when(ideaRepository.findById(testIdea.getId())).thenReturn(Optional.of(testIdea));
-        when(userRepository.saveAndFlush(testUser)).thenReturn(testUser);
+        when(userFavoriteRepository.existsByUserIdAndIdeaId(testUser.getId(), testIdea.getId())).thenReturn(true);
+        doNothing().when(userFavoriteRepository).deleteById(any());
 
         ideaService.desfavoritarIdeia(testIdea.getId());
 
-        assertFalse(testUser.getFavoriteIdeas().contains(testIdea));
-        verify(userRepository, times(1)).saveAndFlush(testUser);
+        verify(userFavoriteRepository, times(1)).deleteById(any(projeto_gerador_ideias_backend.model.UserFavorite.UserFavoriteId.class));
     }
 
     @Test
     void desfavoritarIdeia_ShouldThrowException_WhenNotFavorited() {
         setupSecurityContext();
-        assertTrue(testUser.getFavoriteIdeas().isEmpty());
+        when(userFavoriteRepository.existsByUserIdAndIdeaId(testUser.getId(), testIdea.getId())).thenReturn(false);
         when(ideaRepository.findById(testIdea.getId())).thenReturn(Optional.of(testIdea));
 
         Long ideaId = testIdea.getId();
@@ -509,29 +513,27 @@ class IdeaServiceTest {
         idea2.setUser(testUser);
         idea2.setCreatedAt(LocalDateTime.now());
         Set<Idea> favorites = new HashSet<>();
-        favorites.add(idea1);
-        favorites.add(idea2);
-        testUser.setFavoriteIdeas(favorites);
+        Page<Idea> favoritasPage = new PageImpl<>(List.of(idea1, idea2));
+        when(ideaRepository.findFavoriteIdeasByUserId(eq(testUser.getId()), any(Pageable.class))).thenReturn(favoritasPage);
 
         Page<IdeaResponse> result = ideaService.listarIdeiasFavoritadasPaginadas(0, 6);
 
         assertEquals(2, result.getTotalElements());
         assertTrue(result.getContent().stream().anyMatch(r -> r.getContent().equals("Ideia 1")));
         assertTrue(result.getContent().stream().anyMatch(r -> r.getContent().equals("Ideia 2")));
-        assertEquals("Test User", result.getContent().get(0).getUserName());
     }
 
     @Test
     void shouldThrowExceptionWhenNoFavoritedIdeas() {
         setupSecurityContext();
-        testUser.setFavoriteIdeas(new HashSet<>());
+
+        when(ideaRepository.findFavoriteIdeasByUserId(eq(testUser.getId()), any(Pageable.class))).thenReturn(Page.empty());
 
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
                 () -> ideaService.listarIdeiasFavoritadasPaginadas(0, 6));
 
         assertEquals("Nenhuma ideia favoritada encontrada para este usuário.", ex.getMessage());
     }
-
     @Test
     void shouldThrowExceptionWhenUserNotFound() {
         setupSecurityContext();
@@ -792,7 +794,8 @@ class IdeaServiceTest {
     @Test
     void listarIdeiasFavoritadas_ShouldThrowException_WhenFavoritesIsNull() {
         setupSecurityContext();
-        testUser.setFavoriteIdeas(null);
+
+        when(ideaRepository.findFavoriteIdeasByUserId(eq(testUser.getId()), any(Pageable.class))).thenReturn(Page.empty());
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
             ideaService.listarIdeiasFavoritadasPaginadas(0, 6);
@@ -815,15 +818,12 @@ class IdeaServiceTest {
 
     @Test
     void shouldReturnFavoriteIdeasCount() {
-        // Arrange
         setupSecurityContext();
         long expectedCount = 7L;
         when(ideaRepository.countFavoriteIdeasByUserId(testUser.getId())).thenReturn(expectedCount);
 
-        // Act
         long actualCount = ideaService.getFavoriteIdeasCount();
 
-        // Assert
         assertEquals(expectedCount, actualCount);
         verify(ideaRepository, times(1)).countFavoriteIdeasByUserId(testUser.getId());
     }

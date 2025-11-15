@@ -149,9 +149,11 @@ class ChatMessageRepositoryTest {
 
     @Test
     void shouldFindLastMessagesBySessionId() {
+        LocalDateTime baseTime = LocalDateTime.now();
+
         for (int i = 0; i < 5; i++) {
             ChatMessage msg = new ChatMessage(testSession, ChatMessage.MessageRole.USER, "Mensagem " + i, 10);
-            msg.setCreatedAt(LocalDateTime.now().minusMinutes(5 - i));
+            msg.setCreatedAt(baseTime.plusSeconds(i));
             chatMessageRepository.saveAndFlush(msg);
         }
 
@@ -305,4 +307,3 @@ class ChatMessageRepositoryTest {
         assertEquals(1, userMessages.size());
     }
 }
-
