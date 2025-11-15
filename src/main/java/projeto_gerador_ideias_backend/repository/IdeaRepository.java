@@ -39,8 +39,8 @@ public interface IdeaRepository extends JpaRepository<Idea, Long>, JpaSpecificat
 
     Optional<Idea> findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(User user, Theme theme, String context);
 
-    @Query("SELECT AVG(i.executionTimeMs) FROM Idea i")
-    Double getAverageExecutionTime();
+    @Query("SELECT AVG(i.executionTimeMs) FROM Idea i WHERE i.user.id = :userId")
+    Double getAverageExecutionTimeForUser(@Param("userId") Long userId);
 
     @Query("SELECT COUNT(i) FROM User u JOIN u.favoriteIdeas i WHERE u.id = :userId")
     long countFavoriteIdeasByUserId(@Param("userId") Long userId);

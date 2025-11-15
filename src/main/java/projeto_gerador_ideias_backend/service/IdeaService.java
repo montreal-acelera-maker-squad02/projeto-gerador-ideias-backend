@@ -376,7 +376,8 @@ public class IdeaService {
 
     @Transactional(readOnly = true)
     public Double getAverageIdeaGenerationTime() {
-        return ideaRepository.getAverageExecutionTime();
+        User user = getCurrentAuthenticatedUser();
+        return ideaRepository.getAverageExecutionTimeForUser(user.getId());
     }
 
     @Transactional(readOnly = true)
