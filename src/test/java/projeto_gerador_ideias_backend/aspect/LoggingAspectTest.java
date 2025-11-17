@@ -169,7 +169,7 @@ class LoggingAspectTest {
 
     @Test
     @WithMockUser(username = testUserEmail)
-    void shouldLogCorrectlyWhenModerationRejects(CapturedOutput output) throws Exception {
+    void shouldLogAsErrorWhenModerationRejects(CapturedOutput output) throws Exception {
         IdeaRequest request = new IdeaRequest();
         request.setTheme(defaultTheme.getId());
         request.setContext("Um contexto perigoso");
@@ -177,16 +177,18 @@ class LoggingAspectTest {
         mockWebServer.enqueue(new MockResponse()
                 .setBody(createMockOllamaResponse("PERIGOSO"))
                 .addHeader("Content-Type", "application/json"));
-
-        assertDoesNotThrow(() -> {
+        assertThrows(projeto_gerador_ideias_backend.exceptions.ValidationException.class, () -> {
             ideaService.generateIdea(request, false);
         });
 
         String logs = output.getAll();
         assertThat(logs)
                 .contains(">> Iniciando: generateIdea() | Contexto: 'Um contexto perigoso'")
-                .contains("<< Finalizado com sucesso: generateIdea() | Tempo de Execução Total:")
-                .contains("ms");
+                .contains("<< Finalizado com erro: generateIdea() | Tempo de Execução Total:")
+                .contains("Desculpe, não posso gerar ideias sobre esse tema.");
+
+        assertThat(logs)
+                .doesNotContain("<< Finalizado com sucesso: generateIdea()");
     }
 
     @Test
@@ -229,7 +231,7 @@ class LoggingAspectTest {
 
     @Test
     @WithMockUser(username = testUserEmail)
-    void shouldNotIncrementCounterButRecordTimeOnModerationRejection() throws Exception {
+    void shouldNotIncrementCounterAndRecordFailureTimeOnModerationRejection() throws Exception {
         IdeaRequest request = new IdeaRequest();
         request.setTheme(defaultTheme.getId());
         request.setContext("Contexto perigoso para métricas");
@@ -237,18 +239,24 @@ class LoggingAspectTest {
         mockWebServer.enqueue(new MockResponse()
                 .setBody(createMockOllamaResponse("PERIGOSO"))
                 .addHeader("Content-Type", "application/json"));
+        MetricState successState = getMetricState("generateIdea", "success");
+        MetricState failureState = getMetricState("generateIdea", "failure");
+        double initialGeneratedCount = getIdeasGeneratedCount();
 
-        MetricState initialState = getMetricState("generateIdea", "success");
-
-        assertDoesNotThrow(() -> {
+        assertThrows(projeto_gerador_ideias_backend.exceptions.ValidationException.class, () -> {
             ideaService.generateIdea(request, false);
         });
+        assertThat(getIdeasGeneratedCount()).isEqualTo(initialGeneratedCount);
 
-        assertThat(getIdeasGeneratedCount()).isEqualTo(initialState.counterValue());
         assertThat(getTimerCount("generateIdea", "success"))
-                .isEqualTo(initialState.timerCount() + 1L);
+                .isEqualTo(successState.timerCount());
         assertThat(getTimerTotalTime("generateIdea", "success"))
-                .isGreaterThan(initialState.totalTime());
+                .isEqualTo(successState.totalTime());
+
+        assertThat(getTimerCount("generateIdea", "failure"))
+                .isEqualTo(failureState.timerCount() + 1L);
+        assertThat(getTimerTotalTime("generateIdea", "failure"))
+                .isGreaterThan(failureState.totalTime());
     }
 
     @Test

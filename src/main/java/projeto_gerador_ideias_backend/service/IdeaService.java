@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import projeto_gerador_ideias_backend.dto.request.IdeaRequest;
 import projeto_gerador_ideias_backend.dto.response.IdeaResponse;
+import projeto_gerador_ideias_backend.exceptions.ValidationException;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.repository.IdeaRepository;
@@ -129,6 +130,11 @@ public class IdeaService {
         }
 
         long executionTime = System.currentTimeMillis() - startTime;
+
+        if (REJEICAO_SEGURANCA.equals(aiGeneratedContent)) {
+            log.warn("Ideia rejeitada pela moderação. Contexto: {}", request.getContext());
+            throw new ValidationException(REJEICAO_SEGURANCA);
+        }
 
         Idea newIdea = new Idea(
                 theme,
