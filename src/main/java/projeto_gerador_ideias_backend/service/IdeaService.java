@@ -42,6 +42,7 @@ public class IdeaService {
     private String ollamaModel;
 
     private static final String REJEICAO_SEGURANCA = "Desculpe, não posso gerar ideias sobre esse tema.";
+    private static final String FIELD_CREATED_AT = "createdAt";
 
     private static final Pattern HEADER_CLEANUP_PATTERN = Pattern.compile("(?s)#{2,}.*?(\\R|$)");
 
@@ -120,7 +121,7 @@ public class IdeaService {
 
         String aiGeneratedContent;
         try {
-            aiGeneratedContent = getCachedAiResponse(theme, request.getContext(), skipCache, currentUser);
+            aiGeneratedContent = getCachedAiResponse(theme, request.getContext(), skipCache);
             failureCounterService.resetCounter(currentUser.getEmail());
         } catch (OllamaServiceException e) {
             failureCounterService.handleFailure(currentUser.getEmail(), currentUser.getName());
@@ -147,11 +148,7 @@ public class IdeaService {
         return new IdeaResponse(savedIdea);
     }
 
-
-    /**
-     * Este método decide se deve usar o cache técnico ou ir direto para a IA.
-     */
-    public String getCachedAiResponse(Theme theme, String context, boolean skipCache, User user) {
+    public String getCachedAiResponse(Theme theme, String context, boolean skipCache) {
 
         String moderationPrompt = String.format(PROMPT_MODERACAO, context);
         String moderationResult;
@@ -179,7 +176,7 @@ public class IdeaService {
             generatedContent = ollamaService.getAiResponse(generationPrompt);
         }
 
-        return cleanUpAiResponse(generatedContent, context, false);
+        return cleanUpAiResponse(generatedContent);
     }
 
     @Transactional
@@ -207,7 +204,7 @@ public class IdeaService {
             throw e;
         }
 
-        String finalContent = cleanUpAiResponse(aiContent, userContext, true);
+        String finalContent = cleanUpAiResponse(aiContent);
         long executionTime = System.currentTimeMillis() - startTime;
 
         Idea newIdea = new Idea(
@@ -229,7 +226,7 @@ public class IdeaService {
         return new IdeaResponse(savedIdea);
     }
 
-    private String cleanUpAiResponse(String generatedContent, String context, boolean isSurprise) {
+    private String cleanUpAiResponse(String generatedContent) {
         generatedContent = HEADER_CLEANUP_PATTERN.matcher(generatedContent).replaceAll("").trim();
 
         if (generatedContent.startsWith("Embora seja impossível")) {
@@ -281,17 +278,17 @@ public class IdeaService {
             }
 
             if (startDate != null) {
-                predicate = cb.and(predicate, cb.greaterThanOrEqualTo(root.get("createdAt"), startDate));
+                predicate = cb.and(predicate, cb.greaterThanOrEqualTo(root.get(FIELD_CREATED_AT), startDate));
             }
 
             if (endDate != null) {
-                predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.get("createdAt"), endDate));
+                predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.get(FIELD_CREATED_AT), endDate));
             }
 
-            query.orderBy(cb.desc(root.get("createdAt")));
+            query.orderBy(cb.desc(root.get(FIELD_CREATED_AT)));
             return predicate;
         };
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, FIELD_CREATED_AT));
 
         Page<Idea> ideias = ideaRepository.findAll(spec, pageable);
 
@@ -307,7 +304,7 @@ public class IdeaService {
     public Page<IdeaResponse> listarMinhasIdeiasPaginadas(int page, int size) {
         User user = getCurrentAuthenticatedUser();
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, FIELD_CREATED_AT));
         Page<Idea> ideiasPage = ideaRepository.findByUserId(user.getId(), pageable);
 
         if (ideiasPage.isEmpty()) {

@@ -30,10 +30,12 @@ public class EmailService {
             message.setTo(adminEmail);
             message.setSubject(String.format("[ALERTA] %d falhas consecutivas na comunicação com a IA", failureCount));
 
-            String text = String.format(
-                "Usuário: %s (%s)\n\n" +
-                "Verificar possível instabilidade no Sistema.\n\n" +
-                "- Sistema de Monitoramento CriAItor",
+            String text = String.format("""
+                Usuário: %s (%s)
+                
+                Verificar possível instabilidade no Sistema.
+                
+                - Sistema de Monitoramento CriAItor""",
                 userName, userEmail
             );
             message.setText(text);

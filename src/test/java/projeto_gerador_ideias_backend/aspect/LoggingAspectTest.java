@@ -126,9 +126,10 @@ class LoggingAspectTest {
         ideaService.generateIdea(request, false);
 
         String logs = output.getAll();
-        assertThat(logs).contains(">> Iniciando: generateIdea() | Contexto: 'Como aprender AOP'");
-        assertThat(logs).contains("<< Finalizado com sucesso: generateIdea() | Tempo de Execução Total:");
-        assertThat(logs).contains("ms");
+        assertThat(logs)
+                .contains(">> Iniciando: generateIdea() | Contexto: 'Como aprender AOP'")
+                .contains("<< Finalizado com sucesso: generateIdea() | Tempo de Execução Total:")
+                .contains("ms");
     }
 
     @Test
@@ -141,14 +142,15 @@ class LoggingAspectTest {
         ideaService.generateSurpriseIdea();
 
         String logs = output.getAll();
-        assertThat(logs).contains(">> Iniciando: generateSurpriseIdea() | Contexto: 'Surprise Me!'");
-        assertThat(logs).contains("<< Finalizado com sucesso: generateSurpriseIdea() | Tempo de Execução Total:");
-        assertThat(logs).contains("ms");
+        assertThat(logs)
+                .contains(">> Iniciando: generateSurpriseIdea() | Contexto: 'Surprise Me!'")
+                .contains("<< Finalizado com sucesso: generateSurpriseIdea() | Tempo de Execução Total:")
+                .contains("ms");
     }
 
     @Test
     @WithMockUser(username = testUserEmail)
-    void shouldLogStartButNotEndWhenExceptionIsThrown(CapturedOutput output) throws Exception {
+    void shouldLogStartButNotEndWhenExceptionIsThrown(CapturedOutput output) {
 
         IdeaRequest request = new IdeaRequest();
         request.setTheme(defaultTheme.getId());
@@ -181,9 +183,10 @@ class LoggingAspectTest {
         });
 
         String logs = output.getAll();
-        assertThat(logs).contains(">> Iniciando: generateIdea() | Contexto: 'Um contexto perigoso'");
-        assertThat(logs).contains("<< Finalizado com sucesso: generateIdea() | Tempo de Execução Total:");
-        assertThat(logs).contains("ms");
+        assertThat(logs)
+                .contains(">> Iniciando: generateIdea() | Contexto: 'Um contexto perigoso'")
+                .contains("<< Finalizado com sucesso: generateIdea() | Tempo de Execução Total:")
+                .contains("ms");
     }
 
     @Test
@@ -218,8 +221,10 @@ class LoggingAspectTest {
         ideaService.generateIdea(request, false);
 
         assertThat(getIdeasGeneratedCount()).isEqualTo(initialState.counterValue() + 1.0);
-        assertThat(getTimerCount("generateIdea", "success")).isEqualTo(initialState.timerCount() + 1L);
-        assertThat(getTimerTotalTime("generateIdea", "success")).isGreaterThan(initialState.totalTime());
+        assertThat(getTimerCount("generateIdea", "success"))
+                .isEqualTo(initialState.timerCount() + 1L);
+        assertThat(getTimerTotalTime("generateIdea", "success"))
+                .isGreaterThan(initialState.totalTime());
     }
 
     @Test
@@ -240,9 +245,10 @@ class LoggingAspectTest {
         });
 
         assertThat(getIdeasGeneratedCount()).isEqualTo(initialState.counterValue());
-
-        assertThat(getTimerCount("generateIdea", "success")).isEqualTo(initialState.timerCount() + 1L);
-        assertThat(getTimerTotalTime("generateIdea", "success")).isGreaterThan(initialState.totalTime());
+        assertThat(getTimerCount("generateIdea", "success"))
+                .isEqualTo(initialState.timerCount() + 1L);
+        assertThat(getTimerTotalTime("generateIdea", "success"))
+                .isGreaterThan(initialState.totalTime());
     }
 
     @Test
@@ -257,13 +263,15 @@ class LoggingAspectTest {
         ideaService.generateSurpriseIdea();
 
         assertThat(getIdeasGeneratedCount()).isEqualTo(initialState.counterValue() + 1.0);
-        assertThat(getTimerCount("generateSurpriseIdea", "success")).isEqualTo(initialState.timerCount() + 1L);
-        assertThat(getTimerTotalTime("generateSurpriseIdea", "success")).isGreaterThan(initialState.totalTime());
+        assertThat(getTimerCount("generateSurpriseIdea", "success"))
+                .isEqualTo(initialState.timerCount() + 1L);
+        assertThat(getTimerTotalTime("generateSurpriseIdea", "success"))
+                .isGreaterThan(initialState.totalTime());
     }
 
     @Test
     @WithMockUser(username = testUserEmail)
-    void shouldRecordTimeAsFailureWhenExceptionIsThrown() throws Exception {
+    void shouldRecordTimeAsFailureWhenExceptionIsThrown() {
         IdeaRequest request = new IdeaRequest();
         request.setTheme(defaultTheme.getId());
         request.setContext("Contexto que causa erro para métricas");
@@ -276,8 +284,10 @@ class LoggingAspectTest {
             ideaService.generateIdea(request, false);
         });
 
-        assertThat(getTimerCount("generateIdea", "failure")).isEqualTo(initialState.timerCount() + 1L);
-        assertThat(getTimerTotalTime("generateIdea", "failure")).isGreaterThan(initialState.totalTime());
+        assertThat(getTimerCount("generateIdea", "failure"))
+                .isEqualTo(initialState.timerCount() + 1L);
+        assertThat(getTimerTotalTime("generateIdea", "failure"))
+                .isGreaterThan(initialState.totalTime());
     }
 
     @Test
@@ -291,8 +301,10 @@ class LoggingAspectTest {
             ideaService.generateSurpriseIdea();
         });
 
-        assertThat(getTimerCount("generateSurpriseIdea", "failure")).isEqualTo(initialState.timerCount() + 1L);
-        assertThat(getTimerTotalTime("generateSurpriseIdea", "failure")).isGreaterThan(initialState.totalTime());
+        assertThat(getTimerCount("generateSurpriseIdea", "failure"))
+                .isEqualTo(initialState.timerCount() + 1L);
+        assertThat(getTimerTotalTime("generateSurpriseIdea", "failure"))
+                .isGreaterThan(initialState.totalTime());
     }
 
     private record MetricState(double counterValue, long timerCount, double totalTime) {}

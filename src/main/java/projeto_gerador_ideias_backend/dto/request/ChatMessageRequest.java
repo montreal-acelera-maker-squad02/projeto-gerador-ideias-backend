@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 public class ChatMessageRequest {
     @NotBlank(message = "A mensagem não pode estar vazia")
     @Size(max = 1000, message = "A mensagem não pode ter mais de 1000 caracteres")
-    @Schema(description = "Mensagem do usuário", example = "Qual é a melhor forma de aprender programação?", required = true)
+    @Schema(description = "Mensagem do usuário", example = "Qual é a melhor forma de aprender programação?")
     private String message;
 }
 

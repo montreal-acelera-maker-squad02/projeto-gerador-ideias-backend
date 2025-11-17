@@ -133,14 +133,18 @@ class ContentModerationServiceTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-        "[MODERACAO: PERIGOSO]",
         "   [MODERACAO: PERIGOSO]",
-        "[MODERACAO: PERIGOSO]   "
+        "[MODERACAO: PERIGOSO]   ",
+        "  [MODERACAO: PERIGOSO]  ",
+        "\t[MODERACAO: PERIGOSO]\t",
+        "\n[MODERACAO: PERIGOSO]\n"
     })
     void shouldHandleContentWithModerationTagAndWhitespace(String dangerousContent) {
-        String result = contentModerationService.validateAndNormalizeResponse(dangerousContent, true);
+        String resultFreeChat = contentModerationService.validateAndNormalizeResponse(dangerousContent, true);
+        String resultIdeaChat = contentModerationService.validateAndNormalizeResponse(dangerousContent, false);
 
-        assertTrue(result.contains("não posso processar"));
+        assertTrue(resultFreeChat.contains("não posso processar"));
+        assertTrue(resultIdeaChat.contains("não está relacionada à ideia"));
     }
 }
 

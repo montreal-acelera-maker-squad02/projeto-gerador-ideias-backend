@@ -12,7 +12,7 @@ import java.util.List;
 @AllArgsConstructor
 @Schema(description = "Resposta paginada de mensagens antigas")
 public class OlderMessagesResponse {
-    @Schema(description = "Lista de mensagens antigas", required = true)
+    @Schema(description = "Lista de mensagens antigas")
     private List<ChatMessageResponse> messages;
     
     @Schema(description = "Indica se há mais mensagens anteriores disponíveis", example = "true")

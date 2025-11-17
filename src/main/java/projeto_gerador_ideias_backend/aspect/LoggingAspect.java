@@ -44,8 +44,8 @@ public class LoggingAspect {
         Object[] args = joinPoint.getArgs();
         String context = "N/A";
 
-        if (args.length > 0 && args[0] instanceof IdeaRequest) {
-            context = ((IdeaRequest) args[0]).getContext();
+        if (args.length > 0 && args[0] instanceof IdeaRequest ideaRequest) {
+            context = ideaRequest.getContext();
         } else if (methodName.equals("generateSurpriseIdea")) {
             context = "Surprise Me!";
         }
@@ -59,15 +59,13 @@ public class LoggingAspect {
         try {
             result = joinPoint.proceed();
 
-            if (result instanceof IdeaResponse response) {
-                if (!response.getContent().contains("Desculpe, não posso gerar ideias")) {
-                    this.ideasGeneratedCounter.increment();
+            if (result instanceof IdeaResponse response && !response.getContent().contains("Desculpe, não posso gerar ideias")) {
+                this.ideasGeneratedCounter.increment();
 
-                    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-                    if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
-                        String userEmail = auth.getName();
-                        userStatisticsService.incrementUserIdeaCount(userEmail);
-                    }
+                Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
+                    String userEmail = auth.getName();
+                    userStatisticsService.incrementUserIdeaCount(userEmail);
                 }
             }
             return result;

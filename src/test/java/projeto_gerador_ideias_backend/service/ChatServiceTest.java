@@ -398,7 +398,6 @@ class ChatServiceTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setId(1L);
         session.setLastResetAt(LocalDateTime.now());
-        session.setTokensUsed(1000);
 
         ChatMessageRequest messageRequest = new ChatMessageRequest();
         messageRequest.setMessage("Teste");
@@ -408,7 +407,7 @@ class ChatServiceTest {
         when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt())).thenReturn(Collections.emptyList());
         when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10000);
         doThrow(new TokenLimitExceededException("Este chat atingiu o limite"))
-                .when(chatLimitValidator).validateChatNotBlocked(eq(session), anyInt());
+                .when(chatLimitValidator).validateChatNotBlocked(any(), anyInt());
 
         assertThrows(TokenLimitExceededException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
@@ -435,7 +434,6 @@ class ChatServiceTest {
         ChatSession existingSession = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         existingSession.setId(1L);
         existingSession.setLastResetAt(LocalDateTime.now());
-        existingSession.setTokensUsed(100);
 
         StartChatRequest request = new StartChatRequest();
         request.setIdeaId(null);
@@ -458,7 +456,6 @@ class ChatServiceTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setId(1L);
         session.setLastResetAt(LocalDateTime.now().minusHours(10));
-        session.setTokensUsed(1000);
 
         StartChatRequest request = new StartChatRequest();
         request.setIdeaId(null);
@@ -491,7 +488,6 @@ class ChatServiceTest {
         ChatSession existingSession = new ChatSession(testUser, ChatSession.ChatType.IDEA_BASED, idea);
         existingSession.setId(1L);
         existingSession.setLastResetAt(LocalDateTime.now());
-        existingSession.setTokensUsed(1000);
 
         StartChatRequest request = new StartChatRequest();
         request.setIdeaId(1L);
@@ -517,7 +513,6 @@ class ChatServiceTest {
         ChatSession blockedSession = new ChatSession(testUser, ChatSession.ChatType.IDEA_BASED, idea);
         blockedSession.setId(2L);
         blockedSession.setLastResetAt(LocalDateTime.now().minusHours(12));
-        blockedSession.setTokensUsed(1000);
 
         StartChatRequest request = new StartChatRequest();
         request.setIdeaId(1L);
@@ -543,7 +538,6 @@ class ChatServiceTest {
         ChatSession existingSession = new ChatSession(testUser, ChatSession.ChatType.IDEA_BASED, idea);
         existingSession.setId(1L);
         existingSession.setLastResetAt(LocalDateTime.now());
-        existingSession.setTokensUsed(100);
 
         StartChatRequest request = new StartChatRequest();
         request.setIdeaId(1L);
@@ -655,7 +649,6 @@ class ChatServiceTest {
         ChatSession session = new ChatSession(testUser, ChatSession.ChatType.FREE, null);
         session.setId(1L);
         session.setLastResetAt(LocalDateTime.now());
-        session.setTokensUsed(0);
 
         Idea idea = new Idea();
         idea.setId(1L);
@@ -667,7 +660,6 @@ class ChatServiceTest {
         ChatSession otherSession = new ChatSession(testUser, ChatSession.ChatType.IDEA_BASED, idea);
         otherSession.setId(2L);
         otherSession.setLastResetAt(LocalDateTime.now());
-        otherSession.setTokensUsed(999);
 
         ChatMessageRequest messageRequest = new ChatMessageRequest();
         messageRequest.setMessage("Mensagem muito longa que vai consumir muitos tokens para teste de limite com contexto e tudo mais");
@@ -681,7 +673,7 @@ class ChatServiceTest {
         when(chatMessageRepository.findRecentMessagesOptimized(any(), anyInt())).thenReturn(Collections.emptyList());
         when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10000);
         doThrow(new TokenLimitExceededException("Este chat atingiu o limite"))
-                .when(chatLimitValidator).validateChatNotBlocked(eq(session), anyInt());
+                .when(chatLimitValidator).validateChatNotBlocked(any(), anyInt());
 
         assertThrows(TokenLimitExceededException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
@@ -793,10 +785,10 @@ class ChatServiceTest {
         reset(chatMessageRepository);
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L)).thenReturn(Collections.singletonList(message));
-        when(chatMessageRepository.findRecentMessagesOptimized(eq(1L), anyInt())).thenReturn(Collections.singletonList(message));
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), eq(ChatMessage.MessageRole.USER))).thenReturn(10);
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT))).thenReturn(0);
-        when(chatMessageRepository.findLastMessagesBySessionIdAndRole(eq(1L), any(), any())).thenReturn(org.springframework.data.domain.Page.empty());
+        when(chatMessageRepository.findRecentMessagesOptimized(anyLong(), anyInt())).thenReturn(Collections.singletonList(message));
+        when(chatMessageRepository.getTotalUserTokensBySessionId(1L, ChatMessage.MessageRole.USER)).thenReturn(10);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(1L, ChatMessage.MessageRole.ASSISTANT)).thenReturn(0);
+        when(chatMessageRepository.findLastMessagesBySessionIdAndRole(anyLong(), any(), any())).thenReturn(org.springframework.data.domain.Page.empty());
         when(chatMessageRepository.countBySessionId(any())).thenReturn(0L);
         when(tokenCalculationService.getTotalUserTokensInChat(1L)).thenReturn(10);
         when(tokenCalculationService.getTotalTokensUsedByUser(1L)).thenReturn(10);
@@ -879,7 +871,7 @@ class ChatServiceTest {
         oldMessage2.setTokensRemaining(9970);
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+        when(chatMessageRepository.findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any()))
                 .thenReturn(Arrays.asList(oldMessage2, oldMessage1));
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
                 .thenReturn(Arrays.asList(oldMessage1, oldMessage2));
@@ -890,7 +882,7 @@ class ChatServiceTest {
         assertNotNull(response);
         assertNotNull(response.getMessages());
         assertEquals(2, response.getMessages().size());
-        verify(chatMessageRepository).findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any());
+        verify(chatMessageRepository).findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any());
     }
 
     @Test
@@ -927,7 +919,7 @@ class ChatServiceTest {
         session.setLastResetAt(LocalDateTime.now());
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+        when(chatMessageRepository.findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any()))
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
                 .thenReturn(Collections.emptyList());
@@ -937,7 +929,7 @@ class ChatServiceTest {
 
         assertNotNull(response);
         assertNotNull(response.getMessages());
-        verify(chatMessageRepository).findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any());
+        verify(chatMessageRepository).findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any());
     }
 
     @Test
@@ -947,7 +939,7 @@ class ChatServiceTest {
         session.setLastResetAt(LocalDateTime.now());
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+        when(chatMessageRepository.findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any()))
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
                 .thenReturn(Collections.emptyList());
@@ -957,7 +949,7 @@ class ChatServiceTest {
 
         assertNotNull(response);
         assertNotNull(response.getMessages());
-        verify(chatMessageRepository).findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any());
+        verify(chatMessageRepository).findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any());
     }
 
     @Test
@@ -973,7 +965,7 @@ class ChatServiceTest {
         assistantMessage.setId(2L);
         assistantMessage.setCreatedAt(LocalDateTime.now().plusSeconds(1));
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Arrays.asList(userMessage, assistantMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -994,7 +986,7 @@ class ChatServiceTest {
         userMessage.setId(1L);
         userMessage.setCreatedAt(LocalDateTime.now());
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.singletonList(userMessage));
 
         ChatLogsResponse response = chatService.getChatLogs("2025-11-08", 1, 10);
@@ -1027,7 +1019,7 @@ class ChatServiceTest {
             messages.add(assistantMsg);
         }
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(messages);
 
         ChatLogsResponse response = chatService.getChatLogs(null, 2, 10);
@@ -1057,7 +1049,7 @@ class ChatServiceTest {
         assistantMessage.setId(2L);
         assistantMessage.setCreatedAt(LocalDateTime.now().plusSeconds(1));
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Arrays.asList(userMessage, assistantMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -1130,9 +1122,9 @@ class ChatServiceTest {
             msg.setCreatedAt(LocalDateTime.now());
             return msg;
         });
-        when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
+        when(chatMessageRepository.findUserMessagesBySessionId(anyLong(), any()))
                 .thenReturn(Collections.emptyList());
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(0);
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1162,9 +1154,9 @@ class ChatServiceTest {
             msg.setCreatedAt(LocalDateTime.now());
             return msg;
         });
-        when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
+        when(chatMessageRepository.findUserMessagesBySessionId(anyLong(), any()))
                 .thenReturn(Collections.emptyList());
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(0);
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1196,9 +1188,9 @@ class ChatServiceTest {
                 .thenReturn(Optional.of(session))
                 .thenThrow(new jakarta.persistence.OptimisticLockException());
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
+        when(chatMessageRepository.findUserMessagesBySessionId(anyLong(), any()))
                 .thenReturn(Collections.emptyList());
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(0);
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1306,9 +1298,9 @@ class ChatServiceTest {
             msg.setCreatedAt(LocalDateTime.now());
             return msg;
         });
-        when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
+        when(chatMessageRepository.findUserMessagesBySessionId(anyLong(), any()))
                 .thenReturn(Collections.emptyList());
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(0);
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1339,9 +1331,9 @@ class ChatServiceTest {
             msg.setCreatedAt(LocalDateTime.now());
             return msg;
         });
-        when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
+        when(chatMessageRepository.findUserMessagesBySessionId(anyLong(), any()))
                 .thenReturn(Collections.emptyList());
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(0);
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1372,9 +1364,9 @@ class ChatServiceTest {
             msg.setCreatedAt(LocalDateTime.now());
             return msg;
         });
-        when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
+        when(chatMessageRepository.findUserMessagesBySessionId(anyLong(), any()))
                 .thenReturn(Collections.emptyList());
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(0);
 
         assertThrows(OllamaServiceException.class, () -> chatService.sendMessage(1L, messageRequest, "127.0.0.1"));
     }
@@ -1415,9 +1407,9 @@ class ChatServiceTest {
             msg.setCreatedAt(LocalDateTime.now());
             return msg;
         });
-        when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
+        when(chatMessageRepository.findUserMessagesBySessionId(anyLong(), any()))
                 .thenReturn(Collections.singletonList(previousAssistant));
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(30);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(30);
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1452,9 +1444,9 @@ class ChatServiceTest {
             msg.setCreatedAt(LocalDateTime.now());
             return msg;
         });
-        when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
+        when(chatMessageRepository.findUserMessagesBySessionId(anyLong(), any()))
                 .thenReturn(Collections.singletonList(previousAssistant));
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(10);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(10);
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1485,9 +1477,9 @@ class ChatServiceTest {
             msg.setCreatedAt(LocalDateTime.now());
             return msg;
         });
-        when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
+        when(chatMessageRepository.findUserMessagesBySessionId(anyLong(), any()))
                 .thenReturn(Collections.emptyList());
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(0);
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1556,10 +1548,10 @@ class ChatServiceTest {
         }
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findRecentMessagesOptimized(eq(1L), anyInt())).thenReturn(messages);
+        when(chatMessageRepository.findRecentMessagesOptimized(anyLong(), anyInt())).thenReturn(messages);
         when(chatProperties.getMaxInitialMessages()).thenReturn(10);
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
-        when(chatMessageRepository.findLastMessagesBySessionIdAndRole(eq(1L), any(), any()))
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(0);
+        when(chatMessageRepository.findLastMessagesBySessionIdAndRole(anyLong(), any(), any()))
                 .thenReturn(org.springframework.data.domain.Page.empty());
 
         ChatSessionResponse response = chatService.getSession(1L);
@@ -1586,7 +1578,7 @@ class ChatServiceTest {
         }
 
         when(chatSessionRepository.findByIdWithLock(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findRecentMessagesOptimized(eq(1L), anyInt())).thenReturn(historyMessages);
+        when(chatMessageRepository.findRecentMessagesOptimized(anyLong(), anyInt())).thenReturn(historyMessages);
         when(chatProperties.getMaxHistoryMessages()).thenReturn(5);
         when(chatLimitValidator.validateMessageLimitsAndGetTokens(anyString())).thenReturn(5);
         when(promptBuilderService.buildMessageHistory(anyList())).thenReturn(Collections.emptyList());
@@ -1599,9 +1591,9 @@ class ChatServiceTest {
             msg.setCreatedAt(LocalDateTime.now());
             return msg;
         });
-        when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
+        when(chatMessageRepository.findUserMessagesBySessionId(anyLong(), any()))
                 .thenReturn(Collections.emptyList());
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(0);
 
         ChatMessageResponse response = chatService.sendMessage(1L, messageRequest, "127.0.0.1");
 
@@ -1631,12 +1623,12 @@ class ChatServiceTest {
         assistantMessage.setCreatedAt(LocalDateTime.now().plusSeconds(1));
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findRecentMessagesOptimized(eq(1L), anyInt()))
+        when(chatMessageRepository.findRecentMessagesOptimized(anyLong(), anyInt()))
                 .thenReturn(Arrays.asList(userMessage, assistantMessage));
         when(chatProperties.getMaxInitialMessages()).thenReturn(10);
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), eq(ChatMessage.MessageRole.USER))).thenReturn(10);
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT))).thenReturn(20);
-        when(chatMessageRepository.findLastMessagesBySessionIdAndRole(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT), any()))
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(10);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(20);
+        when(chatMessageRepository.findLastMessagesBySessionIdAndRole(anyLong(), any(), any()))
                 .thenReturn(org.springframework.data.domain.Page.empty());
         when(chatProperties.getMaxTokensPerChat()).thenReturn(10000);
         when(ideaSummaryService.summarizeIdeaSimple("Ideia completa para resumo")).thenReturn("Resumo da Ideia");
@@ -1660,9 +1652,9 @@ class ChatServiceTest {
         session.setLastResetAt(LocalDateTime.now());
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findRecentMessagesOptimized(eq(1L), anyInt())).thenReturn(Collections.emptyList());
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
-        when(chatMessageRepository.findLastMessagesBySessionIdAndRole(eq(1L), any(), any()))
+        when(chatMessageRepository.findRecentMessagesOptimized(anyLong(), anyInt())).thenReturn(Collections.emptyList());
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(0);
+        when(chatMessageRepository.findLastMessagesBySessionIdAndRole(anyLong(), any(), any()))
                 .thenReturn(org.springframework.data.domain.Page.empty());
         when(chatProperties.getMaxTokensPerChat()).thenReturn(10000);
 
@@ -1743,7 +1735,7 @@ class ChatServiceTest {
         assistantMessage.setCreatedAt(LocalDateTime.now().minusHours(1).plusSeconds(1));
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+        when(chatMessageRepository.findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any()))
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
                 .thenReturn(Arrays.asList(userMessage, assistantMessage));
@@ -1766,7 +1758,7 @@ class ChatServiceTest {
         assistantMessage.setCreatedAt(LocalDateTime.now().minusHours(1));
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+        when(chatMessageRepository.findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any()))
                 .thenReturn(Collections.singletonList(assistantMessage));
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
                 .thenReturn(Collections.singletonList(assistantMessage));
@@ -1787,7 +1779,7 @@ class ChatServiceTest {
         session.setId(1L);
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+        when(chatMessageRepository.findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any()))
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
                 .thenReturn(Collections.emptyList());
@@ -1797,7 +1789,7 @@ class ChatServiceTest {
 
         assertNotNull(response);
         assertNotNull(response.getMessages());
-        verify(chatMessageRepository).findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), argThat(pageable -> 
+        verify(chatMessageRepository).findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), argThat(pageable -> 
             pageable.getPageSize() == 51));
     }
 
@@ -1817,7 +1809,7 @@ class ChatServiceTest {
         msg3.setCreatedAt(LocalDateTime.now().minusMinutes(30));
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+        when(chatMessageRepository.findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any()))
                 .thenReturn(Arrays.asList(msg1, msg2, msg3));
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
                 .thenReturn(Arrays.asList(msg1, msg2, msg3));
@@ -1840,7 +1832,7 @@ class ChatServiceTest {
         msg1.setCreatedAt(LocalDateTime.now().minusHours(2));
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+        when(chatMessageRepository.findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any()))
                 .thenReturn(Collections.singletonList(msg1));
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
                 .thenReturn(Collections.singletonList(msg1));
@@ -1855,7 +1847,7 @@ class ChatServiceTest {
 
     @Test
     void shouldGetChatLogsWithEmptyMessages() {
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.emptyList());
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -1875,13 +1867,13 @@ class ChatServiceTest {
         userMessage.setId(1L);
         userMessage.setCreatedAt(LocalDateTime.now());
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.singletonList(userMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 200);
 
         assertNotNull(response);
-        verify(chatMessageRepository).findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class));
+        verify(chatMessageRepository).findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class));
     }
 
     @Test
@@ -1893,7 +1885,7 @@ class ChatServiceTest {
         userMessage.setId(1L);
         userMessage.setCreatedAt(LocalDateTime.now());
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.singletonList(userMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 0, 10);
@@ -1911,7 +1903,7 @@ class ChatServiceTest {
         userMessage.setId(1L);
         userMessage.setCreatedAt(LocalDateTime.now());
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.singletonList(userMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, null, null);
@@ -1929,7 +1921,7 @@ class ChatServiceTest {
         userMessage.setId(1L);
         userMessage.setCreatedAt(LocalDateTime.now());
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.singletonList(userMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -1953,7 +1945,7 @@ class ChatServiceTest {
         msg2.setId(2L);
         msg2.setCreatedAt(LocalDateTime.now().plusSeconds(1));
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Arrays.asList(msg1, msg2));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -2078,7 +2070,7 @@ class ChatServiceTest {
         session.setId(1L);
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+        when(chatMessageRepository.findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any()))
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
                 .thenReturn(Collections.emptyList());
@@ -2096,7 +2088,7 @@ class ChatServiceTest {
         session.setId(1L);
 
         when(chatSessionRepository.findByIdWithIdea(1L)).thenReturn(Optional.of(session));
-        when(chatMessageRepository.findMessagesBeforeTimestamp(eq(1L), any(LocalDateTime.class), any()))
+        when(chatMessageRepository.findMessagesBeforeTimestamp(anyLong(), any(LocalDateTime.class), any()))
                 .thenReturn(Collections.emptyList());
         when(chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(1L))
                 .thenReturn(Collections.emptyList());
@@ -2117,7 +2109,7 @@ class ChatServiceTest {
         assistantMessage.setId(1L);
         assistantMessage.setCreatedAt(LocalDateTime.now());
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.singletonList(assistantMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -2132,7 +2124,7 @@ class ChatServiceTest {
         userMessage.setId(1L);
         userMessage.setCreatedAt(LocalDateTime.now());
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.singletonList(userMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -2143,7 +2135,7 @@ class ChatServiceTest {
 
     @Test
     void shouldGetChatLogsWithNullMessage() {
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.singletonList(null));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -2165,7 +2157,7 @@ class ChatServiceTest {
         assistantMessage2.setId(2L);
         assistantMessage2.setCreatedAt(LocalDateTime.now().plusMinutes(1));
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Arrays.asList(assistantMessage1, assistantMessage2));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -2188,7 +2180,7 @@ class ChatServiceTest {
         assistantMessage.setId(2L);
         assistantMessage.setCreatedAt(LocalDateTime.now().plusSeconds(1));
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Arrays.asList(userMessage, assistantMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -2210,7 +2202,7 @@ class ChatServiceTest {
         assistantMessage.setId(2L);
         assistantMessage.setCreatedAt(null);
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Arrays.asList(userMessage, assistantMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -2232,7 +2224,7 @@ class ChatServiceTest {
         assistantMessage.setId(2L);
         assistantMessage.setCreatedAt(LocalDateTime.now());
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Arrays.asList(userMessage, assistantMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -2244,7 +2236,7 @@ class ChatServiceTest {
 
     @Test
     void shouldGetChatLogsWithEmptyInteractionsSummary() {
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.emptyList());
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -2266,7 +2258,7 @@ class ChatServiceTest {
         userMessage.setId(1L);
         userMessage.setCreatedAt(LocalDateTime.now());
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.singletonList(userMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -2290,7 +2282,7 @@ class ChatServiceTest {
         assistantMessage.setId(2L);
         assistantMessage.setCreatedAt(userTime.plusSeconds(2));
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Arrays.asList(userMessage, assistantMessage));
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -2320,7 +2312,7 @@ class ChatServiceTest {
             messages.add(assistantMsg);
         }
 
-        when(chatMessageRepository.findByUserIdAndDateRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(chatMessageRepository.findByUserIdAndDateRange(anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(messages);
 
         ChatLogsResponse response = chatService.getChatLogs(null, 1, 10);
@@ -2435,9 +2427,9 @@ class ChatServiceTest {
             msg.setCreatedAt(LocalDateTime.now());
             return msg;
         });
-        when(chatMessageRepository.findUserMessagesBySessionId(eq(1L), eq(ChatMessage.MessageRole.ASSISTANT)))
+        when(chatMessageRepository.findUserMessagesBySessionId(anyLong(), any()))
                 .thenReturn(Collections.emptyList());
-        when(chatMessageRepository.getTotalUserTokensBySessionId(eq(1L), any())).thenReturn(0);
+        when(chatMessageRepository.getTotalUserTokensBySessionId(anyLong(), any())).thenReturn(0);
 
         ChatMessageRequest request = new ChatMessageRequest();
         request.setMessage("Test");

@@ -468,9 +468,7 @@ class IdeaServiceTest {
         String cleaned = (String) ReflectionTestUtils.invokeMethod(
                 ideaService,
                 "cleanUpAiResponse",
-                input,
-                "contexto",
-                false
+                input
         );
 
         assertEquals(expectedOutput, cleaned);
@@ -488,8 +486,7 @@ class IdeaServiceTest {
     @Test
     void cleanUpAiResponse_ShouldFormatSurprise() {
         String input = "Ideia surpresa gerada";
-        String context = "Tipo: Tema";
-        String cleaned = (String) ReflectionTestUtils.invokeMethod(ideaService, "cleanUpAiResponse", input, context, true);
+        String cleaned = (String) ReflectionTestUtils.invokeMethod(ideaService, "cleanUpAiResponse", input);
         assertEquals("Ideia surpresa gerada", cleaned);
     }
 
@@ -642,9 +639,7 @@ class IdeaServiceTest {
         String cleaned = (String) ReflectionTestUtils.invokeMethod(
                 ideaService,
                 "cleanUpAiResponse",
-                input,
-                "um nome de startup sobre tecnologia",
-                true
+                input
         );
 
         assertNotNull(cleaned);
@@ -779,13 +774,10 @@ class IdeaServiceTest {
     @Test
     void cleanUpAiResponse_ShouldFormatSurprise_WithContext() {
         String input = "Ideia surpresa";
-        String context = "um nome de startup sobre tecnologia";
         String cleaned = (String) ReflectionTestUtils.invokeMethod(
                 ideaService,
                 "cleanUpAiResponse",
-                input,
-                context,
-                true
+                input
         );
 
         assertEquals("Ideia surpresa", cleaned);

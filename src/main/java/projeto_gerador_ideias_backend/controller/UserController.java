@@ -42,7 +42,7 @@ public class UserController {
     )
     @PutMapping("/{uuid}")
     public ResponseEntity<RegisterResponse> updateUser(
-            @Parameter(description = "UUID único do usuário", required = true, example = "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+            @Parameter(description = "UUID único do usuário", example = "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
             @PathVariable String uuid,
             @RequestBody UpdateUserRequest request) {
         RegisterResponse response = userService.updateUser(uuid, request);

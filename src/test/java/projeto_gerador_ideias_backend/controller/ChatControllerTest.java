@@ -441,7 +441,7 @@ class ChatControllerTest {
         adminUser.setPassword(passwordEncoder.encode("password"));
         adminUser.setEnabled(true);
         adminUser.setRole(projeto_gerador_ideias_backend.model.Role.ADMIN);
-        adminUser = userRepository.save(adminUser);
+        userRepository.save(adminUser);
         userRepository.flush();
         
         User regularUser = new User();
@@ -454,7 +454,7 @@ class ChatControllerTest {
         
         ChatSession session = new ChatSession(regularUser, ChatSession.ChatType.FREE, null);
         session.setLastResetAt(LocalDateTime.now());
-        session = chatSessionRepository.save(session);
+        chatSessionRepository.save(session);
         chatSessionRepository.flush();
         
         String today = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
@@ -476,7 +476,7 @@ class ChatControllerTest {
         adminUser.setPassword(passwordEncoder.encode("password"));
         adminUser.setEnabled(true);
         adminUser.setRole(projeto_gerador_ideias_backend.model.Role.ADMIN);
-        adminUser = userRepository.save(adminUser);
+        userRepository.save(adminUser);
         userRepository.flush();
         
         User regularUser = new User();

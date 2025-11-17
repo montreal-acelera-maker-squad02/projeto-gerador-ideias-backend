@@ -1,7 +1,6 @@
 package projeto_gerador_ideias_backend.service;
 
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -109,8 +108,6 @@ public class JwtService {
                 return false;
             }
             return claims.getExpiration().after(new Date());
-        } catch (ExpiredJwtException e) {
-            return false;
         } catch (Exception e) {
             return false;
         }
@@ -127,8 +124,6 @@ public class JwtService {
                 return false;
             }
             return claims.getExpiration().after(new Date());
-        } catch (ExpiredJwtException e) {
-            return false;
         } catch (Exception e) {
             return false;
         }

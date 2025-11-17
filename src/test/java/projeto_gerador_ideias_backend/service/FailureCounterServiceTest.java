@@ -180,9 +180,9 @@ class FailureCounterServiceTest {
         failureCounterService.handleFailure(USER_EMAIL, USER_NAME);
 
         verify(emailService).sendSystemErrorNotification(
-                eq(USER_EMAIL),
-                eq(USER_NAME),
-                eq(4)
+                USER_EMAIL,
+                USER_NAME,
+                4
         );
     }
 

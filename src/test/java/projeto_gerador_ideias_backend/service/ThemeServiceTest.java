@@ -124,8 +124,9 @@ class ThemeServiceTest {
     void deveLancarExcecaoAoAtualizarTemaInexistente() {
         when(themeRepository.findById(1L)).thenReturn(Optional.empty());
 
+        Theme novoTema = new Theme("Outro");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> themeService.updateTheme(1L, new Theme("Outro")));
+                () -> themeService.updateTheme(1L, novoTema));
 
         assertEquals("Tema não encontrado.", ex.getMessage());
     }

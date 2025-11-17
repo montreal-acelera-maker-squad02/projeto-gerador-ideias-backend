@@ -18,6 +18,9 @@ import projeto_gerador_ideias_backend.security.JwtAuthenticationFilter;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    private static final String THEMES_API_PATH = "/api/themes/**";
+    private static final String ROLE_ADMIN = "ADMIN";
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private RequestCleanupFilter requestCleanupFilter;
 
@@ -39,12 +42,12 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/h2-console/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
-                .requestMatchers(HttpMethod.GET, "/api/themes", "/api/themes/**").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/themes/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/themes/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/api/themes/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/themes", THEMES_API_PATH).permitAll()
+                .requestMatchers(HttpMethod.POST, THEMES_API_PATH).hasRole(ROLE_ADMIN)
+                .requestMatchers(HttpMethod.PUT, THEMES_API_PATH).hasRole(ROLE_ADMIN)
+                .requestMatchers(HttpMethod.DELETE, THEMES_API_PATH).hasRole(ROLE_ADMIN)
 
-                .requestMatchers("/api/chat/admin/logs").hasRole("ADMIN")
+                .requestMatchers("/api/chat/admin/logs").hasRole(ROLE_ADMIN)
 
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()

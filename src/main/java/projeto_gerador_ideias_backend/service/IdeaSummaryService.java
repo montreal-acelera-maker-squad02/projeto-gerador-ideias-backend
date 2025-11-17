@@ -57,7 +57,7 @@ public class IdeaSummaryService {
     }
 
     private boolean endsWithAnyPunctuation(String word, String... punctuation) {
-        if (word == null || word.length() == 0) {
+        if (word == null || word.isEmpty()) {
             return false;
         }
         for (String p : punctuation) {
@@ -92,7 +92,7 @@ public class IdeaSummaryService {
     private String removeTrailingPunctuation(String text) {
         String[] trailingPunctuation = {":", ";", ",", "-", "—", "–"};
         String result = text.trim();
-        while (result.length() > 0 && endsWithAnyPunctuation(result, trailingPunctuation)) {
+        while (!result.isEmpty() && endsWithAnyPunctuation(result, trailingPunctuation)) {
             result = result.substring(0, result.length() - 1).trim();
         }
         return result;
@@ -103,7 +103,7 @@ public class IdeaSummaryService {
             return text;
         }
         String result = text;
-        while (result.length() > 0) {
+        while (!result.isEmpty()) {
             char lastChar = result.charAt(result.length() - 1);
             if (lastChar == ',' || lastChar == ';') {
                 result = result.substring(0, result.length() - 1);
@@ -135,7 +135,7 @@ public class IdeaSummaryService {
             return text;
         }
         String result = text;
-        while (result.length() > 0) {
+        while (!result.isEmpty()) {
             char lastChar = result.charAt(result.length() - 1);
             if (lastChar == ':' || lastChar == ';' || lastChar == ',' || lastChar == '.' || lastChar == '!' || lastChar == '?') {
                 result = result.substring(0, result.length() - 1);
