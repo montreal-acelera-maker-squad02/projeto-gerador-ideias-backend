@@ -26,6 +26,7 @@ import projeto_gerador_ideias_backend.dto.request.IdeaRequest;
 import projeto_gerador_ideias_backend.dto.response.IdeaResponse;
 import projeto_gerador_ideias_backend.exceptions.OllamaServiceException;
 import projeto_gerador_ideias_backend.exceptions.ResourceNotFoundException;
+import projeto_gerador_ideias_backend.exceptions.ValidationException;
 import projeto_gerador_ideias_backend.model.Idea;
 import projeto_gerador_ideias_backend.model.Theme;
 import projeto_gerador_ideias_backend.model.User;
@@ -241,14 +242,14 @@ class IdeaServiceTest {
     }
 
     @Test
-    void generateIdea_ShouldReturnRejection_WhenModerationFails() {
+    void generateIdea_ShouldThrowValidationException_WhenModerationFails() {
         setupSecurityContext();
 
         IdeaRequest request = new IdeaRequest();
         request.setTheme(tecnologiaTheme.getId());
         request.setContext("Contexto Perigoso");
 
-        when(themeService.findByID(tecnologiaTheme.getId())).thenReturn(tecnologiaTheme);
+        when(themeRepository.findById(tecnologiaTheme.getId())).thenReturn(Optional.of(tecnologiaTheme));
 
         when(ideaRepository.findFirstByUserAndThemeAndContextOrderByCreatedAtDesc(
                 testUser, tecnologiaTheme, request.getContext()))
@@ -256,15 +257,19 @@ class IdeaServiceTest {
 
         when(ollamaService.getAiResponse(contains("Analise o 'Tópico'"))).thenReturn("PERIGOSO");
 
-        when(ideaRepository.save(any(Idea.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        ValidationException exception = assertThrows(
+                ValidationException.class,
+                () -> {
+                    ideaService.generateIdea(request, false);
+                }
+        );
 
-        IdeaResponse response = ideaService.generateIdea(request, false);
-
-        assertNotNull(response);
-        assertEquals("Desculpe, não posso gerar ideias sobre esse tema.", response.getContent());
-        verify(ollamaService, times(1)).getAiResponse(anyString());
+        assertEquals("Desculpe, não posso gerar ideias sobre esse tema.", exception.getMessage());
+        verify(ollamaService, times(1)).getAiResponse(contains("Analise o 'Tópico'"));
         verify(ollamaService, never()).getAiResponse(contains("Gere uma ideia concisa"));
-        verify(ideaRepository, times(1)).save(any(Idea.class));
+        verify(ideaRepository, never()).save(any(Idea.class));
+        verify(failureCounterService, times(1)).resetCounter(testUser.getEmail());
+        verify(ideasSummaryCacheService, never()).invalidateUserCache(anyLong());
     }
 
     @Test
