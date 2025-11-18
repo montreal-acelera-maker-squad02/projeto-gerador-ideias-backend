@@ -87,30 +87,6 @@ public class IdeaController {
         return ResponseEntity.ok(ideias);
     }
 
-    @Operation(
-            summary = "Listar Ideias de um Usuário (Paginado)",
-            description = "Retorna as ideias criadas pelo usuário autenticado, ordenadas da mais recente para a mais antiga, com suporte a paginação."
-    )
-    @ApiResponse(responseCode = "200", description = "Ideias do usuário encontradas com sucesso")
-    @ApiResponse(responseCode = "401", description = "Usuário não autenticado")
-    @ApiResponse(responseCode = "404", description = "Nenhuma ideia encontrada para o usuário autenticado")
-    @ApiResponse(responseCode = "500", description = "Erro interno no servidor")
-    @GetMapping("/my-ideas")
-    public ResponseEntity<Object> getMyIdeas(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "5") int size
-    ) {
-        try {
-            Page<IdeaResponse> ideias = ideaService.listarMinhasIdeiasPaginadas(page, size);
-            return ResponseEntity.ok(ideias);
-        } catch (IllegalArgumentException | ResourceNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Erro ao buscar ideias do usuário: " + e.getMessage());
-        }
-    }
-
 
     @Operation(summary = "Favoritar uma ideia")
     @ApiResponse(responseCode = "200", description = "Ideia favoritada com sucesso")
@@ -154,29 +130,48 @@ public class IdeaController {
         }
     }
 
-    @GetMapping("/favorites")
-    @Operation(summary = "Listar ideias favoritadas do usuário autenticado com paginação")
-    @ApiResponse(responseCode = "200", description = "Lista de ideias favoritadas retornada com sucesso")
-    @ApiResponse(responseCode = "404", description = "Usuário não encontrado ou sem ideias favoritadas")
-    @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
-    public ResponseEntity<Page<IdeaResponse>> getFavoriteIdeas(
+    @Operation(
+            summary = "Listar Ideias de um Usuário (Paginado, com filtro opcional)",
+            description = "Retorna as ideias criadas pelo usuário autenticado, podendo filtrar por tema e intervalo de datas. Ordenadas da mais recente para a mais antiga, com suporte a paginação."
+    )
+    @ApiResponse(responseCode = "200", description = "Ideias do usuário encontradas com sucesso")
+    @ApiResponse(responseCode = "401", description = "Usuário não autenticado")
+    @ApiResponse(responseCode = "404", description = "Nenhuma ideia encontrada para o usuário autenticado com os filtros aplicados")
+    @ApiResponse(responseCode = "500", description = "Erro interno no servidor")
+    @GetMapping("/my-ideas")
+    public ResponseEntity<Page<IdeaResponse>> getMyIdeas(
+            @RequestParam(required = false) Long theme,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "5") int size
     ) {
-        try {
-            Page<IdeaResponse> favoritas = ideaService.listarIdeiasFavoritadasPaginadas(page, size);
-            return ResponseEntity.ok(favoritas);
-
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Page.empty());
-
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Page.empty());
-        }
+        Page<IdeaResponse> ideias = ideaService.listarMinhasIdeiasPaginadas(theme, startDate, endDate, page, size);
+        return ResponseEntity.ok(ideias);
     }
 
+    @GetMapping("/favorites")
+    @Operation(
+            summary = "Listar ideias favoritadas do usuário autenticado (com filtro opcional)",
+            description = "Retorna as ideias favoritadas pelo usuário autenticado, podendo filtrar por tema e intervalo de datas. Com suporte a paginação."
+    )
+    @ApiResponse(responseCode = "200", description = "Lista de ideias favoritadas retornada com sucesso")
+    @ApiResponse(responseCode = "404", description = "Usuário não encontrado ou sem ideias favoritadas com os filtros aplicados")
+    @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
+    public ResponseEntity<Page<IdeaResponse>> getFavoriteIdeas(
+            @RequestParam(required = false) Long theme,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size
+    ) {
+        Page<IdeaResponse> favoritas = ideaService.listarIdeiasFavoritadasPaginadas(theme, startDate, endDate, page, size);
+        return ResponseEntity.ok(favoritas);
+    }
 
     @Operation(
             summary = "Obter Estatísticas de Geração",

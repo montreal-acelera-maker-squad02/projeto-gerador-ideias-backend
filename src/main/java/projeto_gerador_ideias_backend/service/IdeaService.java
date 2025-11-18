@@ -1,5 +1,6 @@
 package projeto_gerador_ideias_backend.service;
 
+import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
@@ -307,14 +308,26 @@ public class IdeaService {
 
 
     @Transactional(readOnly = true)
-    public Page<IdeaResponse> listarMinhasIdeiasPaginadas(int page, int size) {
+    public Page<IdeaResponse> listarMinhasIdeiasPaginadas(
+            Long theme,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            int page,
+            int size
+    ) {
         User user = getCurrentAuthenticatedUser();
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, FIELD_CREATED_AT));
-        Page<Idea> ideiasPage = ideaRepository.findByUserId(user.getId(), pageable);
+        Specification<Idea> spec = (root, query, criteriaBuilder) ->
+                criteriaBuilder.equal(root.get("user").get("id"), user.getId());
+
+        spec = spec.and(buildIdeaFiltersSpecification(theme, startDate, endDate));
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Page<Idea> ideiasPage = ideaRepository.findAll(spec, pageable);
 
         if (ideiasPage.isEmpty()) {
-            throw new IllegalArgumentException("Nenhuma ideia encontrada para o usuário: " + user.getEmail());
+            throw new IllegalArgumentException("Nenhuma ideia encontrada para o usuário: " + user.getEmail() + " com os filtros aplicados.");
         }
 
         return ideiasPage.map(IdeaResponse::new);
@@ -363,14 +376,28 @@ public class IdeaService {
     }
 
     @Transactional(readOnly = true)
-    public Page<IdeaResponse> listarIdeiasFavoritadasPaginadas(int page, int size) {
+    public Page<IdeaResponse> listarIdeiasFavoritadasPaginadas(
+            Long theme,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            int page,
+            int size
+    ) {
         User user = getCurrentAuthenticatedUser();
 
+        Specification<Idea> spec = (root, query, criteriaBuilder) -> {
+            Join<Idea, User> users = root.join("favoritedByUsers");
+
+            return criteriaBuilder.equal(users.get("id"), user.getId());
+        };
+
+        spec = spec.and(buildIdeaFiltersSpecification(theme, startDate, endDate));
+
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Idea> favoritasPage = ideaRepository.findFavoriteIdeasByUserId(user.getId(), pageable);
+        Page<Idea> favoritasPage = ideaRepository.findAll(spec, pageable);
 
         if (favoritasPage.isEmpty()) {
-            throw new ResourceNotFoundException("Nenhuma ideia favoritada encontrada para este usuário.");
+            throw new ResourceNotFoundException("Nenhuma ideia favoritada encontrada para este usuário com os filtros aplicados.");
         }
 
         return favoritasPage.map(IdeaResponse::new);
@@ -387,5 +414,26 @@ public class IdeaService {
     public long getFavoriteIdeasCount() {
         User user = getCurrentAuthenticatedUser();
         return ideaRepository.countFavoriteIdeasByUserId(user.getId());
+    }
+
+    private Specification<Idea> buildIdeaFiltersSpecification(Long theme, LocalDateTime startDate, LocalDateTime endDate) {
+        Specification<Idea> spec = Specification.where(null);
+
+        if (theme != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.equal(root.get("theme").get("id"), theme));
+        }
+        if (startDate != null && endDate != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.between(root.get("createdAt"), startDate, endDate));
+        } else if (startDate != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), startDate));
+        } else if (endDate != null) {
+
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), endDate));
+        }
+        return spec;
     }
 }
