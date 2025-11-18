@@ -332,14 +332,22 @@ class IdeaServiceTest {
     void listarMinhasIdeias_ShouldReturnUserIdeas() {
         setupSecurityContext();
         Pageable pageable = PageRequest.of(0, 6, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Idea> userIdeiasPage = new PageImpl<>(List.of(testIdea, testIdea), pageable, 2);
-        when(ideaRepository.findByUserId(testUser.getId(), pageable)).thenReturn(userIdeiasPage);
 
-        Page<IdeaResponse> response = ideaService.listarMinhasIdeiasPaginadas(0, 6);
+        Page<Idea> userIdeiasPage = new PageImpl<>(List.of(testIdea, testIdea), pageable, 2);
+        when(ideaRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(userIdeiasPage);
+
+        Page<IdeaResponse> response = ideaService.listarMinhasIdeiasPaginadas(
+                null,
+                null,
+                null,
+                0,
+                6
+        );
 
         assertNotNull(response);
         assertEquals(2, response.getTotalElements());
         assertEquals(testIdea.getGeneratedContent(), response.getContent().get(0).getContent());
+        verify(ideaRepository, times(1)).findAll(any(Specification.class), eq(pageable));
     }
 
     @Test
@@ -347,13 +355,21 @@ class IdeaServiceTest {
         setupSecurityContext();
         Pageable pageable = PageRequest.of(0, 6, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Idea> emptyPage = new PageImpl<>(Collections.emptyList(), pageable, 0);
-        when(ideaRepository.findByUserId(testUser.getId(), pageable)).thenReturn(emptyPage);
+
+        when(ideaRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(emptyPage);
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            ideaService.listarMinhasIdeiasPaginadas(0, 6);
+            ideaService.listarMinhasIdeiasPaginadas(
+                    null,
+                    null,
+                    null,
+                    0,
+                    6
+            );
         });
 
-        assertEquals("Nenhuma ideia encontrada para o usuário: " + testUser.getEmail(), exception.getMessage());
+        assertEquals("Nenhuma ideia encontrada para o usuário: " + testUser.getEmail() + " com os filtros aplicados.", exception.getMessage());
+        verify(ideaRepository, times(1)).findAll(any(Specification.class), eq(pageable));
     }
 
     @Test
@@ -447,11 +463,21 @@ class IdeaServiceTest {
 
     @Test
     void getCurrentAuthenticatedUser_ShouldThrowException_WhenNotAuthenticated() {
+
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-            ideaService.listarMinhasIdeiasPaginadas(0, 6);
+            ideaService.listarMinhasIdeiasPaginadas(
+                    null,
+                    null,
+                    null,
+                    0,
+                    6
+            );
         });
 
         assertEquals("Usuário não autenticado. Não é possível gerar ideias.", exception.getMessage());
+
+        verify(userRepository, never()).findByEmail(anyString());
+        verify(ideaRepository, never()).findAll(any(Specification.class), any(Pageable.class));
     }
 
     @Test
@@ -461,10 +487,18 @@ class IdeaServiceTest {
         when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.empty());
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-            ideaService.listarMinhasIdeiasPaginadas(0, 6);
+            ideaService.listarMinhasIdeiasPaginadas(
+                    null,
+                    null,
+                    null,
+                    0,
+                    6
+            );
         });
 
         assertEquals("Usuário autenticado não encontrado no banco de dados: " + testUserEmail, exception.getMessage());
+
+        verify(ideaRepository, never()).findAll(any(Specification.class), any(Pageable.class));
     }
 
     @ParameterizedTest
@@ -514,28 +548,77 @@ class IdeaServiceTest {
         idea2.setExecutionTimeMs(1000L);
         idea2.setUser(testUser);
         idea2.setCreatedAt(LocalDateTime.now());
-        Set<Idea> favorites = new HashSet<>();
-        Page<Idea> favoritasPage = new PageImpl<>(List.of(idea1, idea2));
-        when(ideaRepository.findFavoriteIdeasByUserId(eq(testUser.getId()), any(Pageable.class))).thenReturn(favoritasPage);
 
-        Page<IdeaResponse> result = ideaService.listarIdeiasFavoritadasPaginadas(0, 6);
+        Page<Idea> favoritasPage = new PageImpl<>(List.of(idea1, idea2));
+
+        when(ideaRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(favoritasPage);
+
+        Page<IdeaResponse> result = ideaService.listarIdeiasFavoritadasPaginadas(
+                null,
+                null,
+                null,
+                0,
+                6
+        );
 
         assertEquals(2, result.getTotalElements());
         assertTrue(result.getContent().stream().anyMatch(r -> r.getContent().equals("Ideia 1")));
         assertTrue(result.getContent().stream().anyMatch(r -> r.getContent().equals("Ideia 2")));
+        verify(ideaRepository, times(1)).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void shouldListFavoritedIdeasWithFiltersSuccessfully() {
+        setupSecurityContext();
+
+        Long themeId = 1L;
+        LocalDateTime startDate = LocalDateTime.now().minusDays(5);
+        LocalDateTime endDate = LocalDateTime.now();
+
+        Idea idea1 = new Idea();
+        idea1.setId(1L);
+        idea1.setTheme(tecnologiaTheme);
+        idea1.setGeneratedContent("Ideia Filtrada");
+        idea1.setExecutionTimeMs(1000L);
+        idea1.setUser(testUser);
+        idea1.setCreatedAt(LocalDateTime.now().minusHours(1));
+
+        Page<Idea> filteredPage = new PageImpl<>(List.of(idea1));
+
+        when(ideaRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(filteredPage);
+
+        Page<IdeaResponse> result = ideaService.listarIdeiasFavoritadasPaginadas(
+                themeId,
+                startDate,
+                endDate,
+                0,
+                6
+        );
+
+        assertEquals(1, result.getTotalElements());
+        verify(ideaRepository, times(1)).findAll(any(Specification.class), any(Pageable.class));
     }
 
     @Test
     void shouldThrowExceptionWhenNoFavoritedIdeas() {
         setupSecurityContext();
 
-        when(ideaRepository.findFavoriteIdeasByUserId(eq(testUser.getId()), any(Pageable.class))).thenReturn(Page.empty());
+        when(ideaRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(Page.empty());
 
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
-                () -> ideaService.listarIdeiasFavoritadasPaginadas(0, 6));
+                () -> ideaService.listarIdeiasFavoritadasPaginadas(
+                        null,
+                        null,
+                        null,
+                        0,
+                        6
+                ));
 
-        assertEquals("Nenhuma ideia favoritada encontrada para este usuário.", ex.getMessage());
+        assertEquals("Nenhuma ideia favoritada encontrada para este usuário com os filtros aplicados.", ex.getMessage());
+        verify(ideaRepository, times(1)).findAll(any(Specification.class), any(Pageable.class));
     }
+
+
     @Test
     void shouldThrowExceptionWhenUserNotFound() {
         setupSecurityContext();
@@ -543,9 +626,16 @@ class IdeaServiceTest {
         when(userRepository.findByEmail(testUserEmail)).thenReturn(Optional.empty());
 
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
-                () -> ideaService.listarIdeiasFavoritadasPaginadas(0, 6));
+                () -> ideaService.listarIdeiasFavoritadasPaginadas(
+                        null,
+                        null,
+                        null,
+                        0,
+                        6
+                ));
 
         assertEquals("Usuário autenticado não encontrado no banco de dados: " + testUserEmail, ex.getMessage());
+        verify(ideaRepository, never()).findAll(any(Specification.class), any(Pageable.class));
     }
 
     @Test
@@ -758,7 +848,13 @@ class IdeaServiceTest {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-            ideaService.listarMinhasIdeiasPaginadas(0, 6);
+            ideaService.listarMinhasIdeiasPaginadas(
+                    null,
+                    null,
+                    null,
+                    0,
+                    6
+            );
         });
 
         assertEquals("Usuário não autenticado. Não é possível gerar ideias.", exception.getMessage());
@@ -769,7 +865,13 @@ class IdeaServiceTest {
         SecurityContextHolder.clearContext();
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-            ideaService.listarMinhasIdeiasPaginadas(0, 6);
+            ideaService.listarMinhasIdeiasPaginadas(
+                    null,
+                    null,
+                    null,
+                    0,
+                    6
+            );
         });
 
         assertEquals("Usuário não autenticado. Não é possível gerar ideias.", exception.getMessage());
@@ -792,13 +894,21 @@ class IdeaServiceTest {
     void listarIdeiasFavoritadas_ShouldThrowException_WhenFavoritesIsNull() {
         setupSecurityContext();
 
-        when(ideaRepository.findFavoriteIdeasByUserId(eq(testUser.getId()), any(Pageable.class))).thenReturn(Page.empty());
+        when(ideaRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(Page.empty());
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-            ideaService.listarIdeiasFavoritadasPaginadas(0, 6);
+            ideaService.listarIdeiasFavoritadasPaginadas(
+                    null,
+                    null,
+                    null,
+                    0,
+                    6
+            );
         });
 
-        assertEquals("Nenhuma ideia favoritada encontrada para este usuário.", exception.getMessage());
+        assertEquals("Nenhuma ideia favoritada encontrada para este usuário com os filtros aplicados.", exception.getMessage());
+
+        verify(ideaRepository, times(1)).findAll(any(Specification.class), any(Pageable.class));
     }
 
     @Test
