@@ -19,16 +19,20 @@ jobs:
 
       - name: Deploy Local PM2 Reload
         run: |
-          echo "Deploying to local VM runner..."
+          echo "Deploying Frontend to VM..."
+          
+          $FRONTEND_DIR = "E:/Criaitor/projeto-gerador-ideias-frontend"
+          $BACKEND_DIR = "E:/Criaitor/projeto-gerador-ideias-backend"
           $PM2_PATH = "C:\Users\marco.filho\AppData\Roaming\npm\pm2.ps1" 
           
-          cp target/gerador-ideias-backend-0.0.1-SNAPSHOT.jar E:/Criaitor/projeto-gerador-ideias-backend/target/
+          echo "Removendo pasta 'dist' antiga..."
+          Remove-Item -Path "$FRONTEND_DIR/dist" -Recurse -Force -ErrorAction SilentlyContinue
           
-          cp ecosystem.config.js E:/Criaitor/projeto-gerador-ideias-backend/
+          cp -r dist $FRONTEND_DIR/
           
-          cd E:/Criaitor/projeto-gerador-ideias-backend 
+          cd $BACKEND_DIR
           
-          & $PM2_PATH restart CriaitorBackend --update-env 
+          & $PM2_PATH startOrRestart ecosystem.config.js --only CriaitorFrontend
           & $PM2_PATH save
           
-          echo "Deployment successful. Backend restarted."
+          echo "Frontend Deployment successful."
