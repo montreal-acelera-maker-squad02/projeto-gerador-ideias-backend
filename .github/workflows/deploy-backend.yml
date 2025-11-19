@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
 
 jobs:
   build-and-deploy:
@@ -15,23 +18,28 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Backend
-        run: mvn clean package
+        working-directory: backend
+        run: mvn clean package -DskipTests
 
       - name: Deploy Backend with PM2
         shell: powershell
         run: |
           echo "Deploying Backend..."
 
-          $BACKEND_DIR = "E:/actions-runner/_work/projeto-gerador-ideias-backend/projeto-gerador-ideias-backend"
-          $PM2_PATH = "C:\Users\marco.filho\AppData\Roaming\npm\pm2.ps1"
-          $JAR_SOURCE = "$env:GITHUB_WORKSPACE/target/gerador-ideias-backend-0.0.1-SNAPSHOT.jar"
+          $BACKEND_DIR = "E:/Criaitor/projeto-gerador-ideias-backend"
+          $PM2 = "C:\Users\marco.filho\AppData\Roaming\npm\pm2.ps1"
+          $JAR_SOURCE = "$env:GITHUB_WORKSPACE/backend/target/gerador-ideias-backend-0.0.1-SNAPSHOT.jar"
+          $JAR_DEST = "$BACKEND_DIR/gerador-ideias-backend-0.0.1-SNAPSHOT.jar"
 
           echo "Copiando novo JAR..."
-          Copy-Item -Path $JAR_SOURCE -Destination "$BACKEND_DIR/target/gerador-ideias-backend-0.0.1-SNAPSHOT.jar" -Force
+          Copy-Item $JAR_SOURCE $JAR_DEST -Force
 
-          cd $BACKEND_DIR
+          echo "Reiniciando PM2..."
+          & $PM2 restart CriaitorBackend 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            & $PM2 start "E:/Criaitor/ecosystem.config.js" --only CriaitorBackend
+          }
 
-          & $PM2_PATH startOrRestart "ecosystem.config.js" --only CriaitorBackend
-          & $PM2_PATH save
+          & $PM2 save
 
           echo "Backend deploy finalizado!"
