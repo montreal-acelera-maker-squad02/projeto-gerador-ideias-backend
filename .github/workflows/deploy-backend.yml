@@ -20,9 +20,15 @@ jobs:
       - name: Deploy Local PM2 Reload
         run: |
           echo "Deploying to local VM runner..."
+          $PM2_PATH = "C:\Users\marco.filho\AppData\Roaming\npm\pm2.ps1" 
+          
+          cp target/gerador-ideias-backend-0.0.1-SNAPSHOT.jar E:/Criaitor/projeto-gerador-ideias-backend/target/
+          
+          cp ecosystem.config.js E:/Criaitor/projeto-gerador-ideias-backend/
+          
           cd E:/Criaitor/projeto-gerador-ideias-backend 
           
-          pm2 restart CriaitorBackend --update-env 
-          pm2 save
+          & $PM2_PATH restart CriaitorBackend --update-env 
+          & $PM2_PATH save
           
-          echo "Deployment successful. Backend reloaded."
+          echo "Deployment successful. Backend restarted."
