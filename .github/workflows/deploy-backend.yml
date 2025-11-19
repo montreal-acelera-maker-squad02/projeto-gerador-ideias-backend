@@ -1,4 +1,5 @@
 name: CI/CD - Deploy Backend Java
+
 on:
   push:
     branches:
@@ -6,7 +7,6 @@ on:
 
 jobs:
   build-and-deploy:
-
     runs-on: self-hosted
 
     steps:
@@ -14,25 +14,24 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build with Maven
+      - name: Build Backend
         run: mvn clean package
 
-      - name: Deploy Local PM2 Reload
+      - name: Deploy Backend with PM2
+        shell: powershell
         run: |
-          echo "Deploying Frontend to VM..."
-          
-          $FRONTEND_DIR = "E:/Criaitor/projeto-gerador-ideias-frontend"
-          $BACKEND_DIR = "E:/Criaitor/projeto-gerador-ideias-backend"
-          $PM2_PATH = "C:\Users\marco.filho\AppData\Roaming\npm\pm2.ps1" 
-          
-          echo "Removendo pasta 'dist' antiga..."
-          Remove-Item -Path "$FRONTEND_DIR/dist" -Recurse -Force -ErrorAction SilentlyContinue
-          
-          cp -r dist $FRONTEND_DIR/
-          
+          echo "Deploying Backend..."
+
+          $BACKEND_DIR = "E:/actions-runner/_work/projeto-gerador-ideias-backend/projeto-gerador-ideias-backend"
+          $PM2_PATH = "C:\Users\marco.filho\AppData\Roaming\npm\pm2.ps1"
+          $JAR_SOURCE = "$env:GITHUB_WORKSPACE/target/gerador-ideias-backend-0.0.1-SNAPSHOT.jar"
+
+          echo "Copiando novo JAR..."
+          Copy-Item -Path $JAR_SOURCE -Destination "$BACKEND_DIR/target/gerador-ideias-backend-0.0.1-SNAPSHOT.jar" -Force
+
           cd $BACKEND_DIR
-          
-          & $PM2_PATH startOrRestart ecosystem.config.js --only CriaitorFrontend
+
+          & $PM2_PATH startOrRestart "ecosystem.config.js" --only CriaitorBackend
           & $PM2_PATH save
-          
-          echo "Frontend Deployment successful."
+
+          echo "Backend deploy finalizado!"
