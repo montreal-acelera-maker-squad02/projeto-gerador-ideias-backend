@@ -6,10 +6,11 @@ module.exports = {
       exec_mode: 'fork',
       args: [
         '-jar',
-        'target/gerador-ideias-backend-0.0.1-SNAPSHOT.jar',
+        'gerador-ideias-backend-0.0.1-SNAPSHOT.jar',
         '-Dspring.profiles.active=prod'
       ],
-      cwd: 'E:/actions-runner/_work/projeto-gerador-ideias-backend/projeto-gerador-ideias-backend',
+      cwd: 'E:/Criaitor/projeto-gerador-ideias-backend',
+
       out_file: './logs/stdout.log',
       error_file: './logs/stderr.log',
     },
@@ -26,7 +27,8 @@ module.exports = {
         '0.0.0.0',
         '--silent'
       ],
-      cwd: 'E:/actions-runner-frontend/_work/projeto-gerador-ideias-frontend/projeto-gerador-ideias-frontend',
+      cwd: 'E:/Criaitor/projeto-gerador-ideias-frontend',
+
       out_file: './logs/stdout_frontend.log',
       error_file: './logs/stderr_frontend.log',
     }
