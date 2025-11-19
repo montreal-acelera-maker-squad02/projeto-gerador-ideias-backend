@@ -22,7 +22,7 @@ jobs:
           echo "Deploying to local VM runner..."
           cd E:/Criaitor/projeto-gerador-ideias-backend 
           
-          pm2 reload CriaitorBackend --update-env 
+          pm2 restart CriaitorBackend --update-env 
           pm2 save
           
           echo "Deployment successful. Backend reloaded."
