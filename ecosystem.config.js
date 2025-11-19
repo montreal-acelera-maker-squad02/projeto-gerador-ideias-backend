@@ -11,5 +11,14 @@ module.exports = {
       out_file: './logs/stdout.log',
       error_file: './logs/stderr.log',
     },
-  ],
-};
+  {
+        name: 'CriaitorFrontend',
+        script: 'serve',
+        exec_mode: 'fork',
+        args: ['-s', 'dist', '-l', '5174'],
+        cwd: 'E:/Criaitor/projeto-gerador-ideias-frontend',
+        out_file: './logs/stdout_frontend.log',
+        error_file: './logs/stderr_frontend.log',
+      },
+    ],
+  };
