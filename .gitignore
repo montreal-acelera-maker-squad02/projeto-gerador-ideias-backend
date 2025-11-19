@@ -36,3 +36,8 @@ build/
 
 ### Database ###
 *.db
+
+### Environment Variables ###
+.env
+.env.local
+.env.*.local
