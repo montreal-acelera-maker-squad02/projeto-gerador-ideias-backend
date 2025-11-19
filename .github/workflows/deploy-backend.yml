@@ -1,0 +1,28 @@
+name: CI/CD - Deploy Backend Java
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+
+    runs-on: self-hosted
+
+    steps:
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+
+      - name: Deploy Local PM2 Reload
+        run: |
+          echo "Deploying to local VM runner..."
+          cd E:/Criaitor/projeto-gerador-ideias-backend 
+          
+          pm2 restart CriaitorBackend --update-env 
+          pm2 save
+          
+          echo "Deployment successful. Backend reloaded."
