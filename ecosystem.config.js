@@ -13,9 +13,9 @@ module.exports = {
     },
   {
         name: 'CriaitorFrontend',
-        script: 'serve',
+        script: 'npm',
         exec_mode: 'fork',
-        args: ['-s', 'dist', '-p', '5174'],
+        args: ['start'],
         cwd: 'E:/Criaitor/projeto-gerador-ideias-frontend',
         out_file: './logs/stdout_frontend.log',
         error_file: './logs/stderr_frontend.log',
