@@ -6,10 +6,12 @@ import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import projeto_gerador_ideias_backend.model.Role;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -33,7 +35,7 @@ class JwtServiceTest {
         String email = "joao@example.com";
         Long userId = 1L;
         
-        String token = jwtService.generateAccessToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId, Role.USER);
         
         assertNotNull(token);
         assertFalse(token.isEmpty());
@@ -44,6 +46,28 @@ class JwtServiceTest {
         assertEquals(userId, userIdClaim instanceof Integer ? ((Integer) userIdClaim).longValue() : userIdClaim);
         assertNotNull(claims.getIssuedAt());
         assertNotNull(claims.getExpiration());
+        
+        @SuppressWarnings("unchecked")
+        List<String> authorities = (List<String>) claims.get("authorities");
+        assertNotNull(authorities);
+        assertTrue(authorities.contains("ROLE_USER"));
+    }
+    
+    @Test
+    void shouldIncludeAdminAuthoritiesInToken() {
+        String email = "admin@example.com";
+        Long userId = 1L;
+        
+        String token = jwtService.generateAccessToken(email, userId, Role.ADMIN);
+        
+        assertNotNull(token);
+        Claims claims = parseToken(token);
+        
+        @SuppressWarnings("unchecked")
+        List<String> authorities = (List<String>) claims.get("authorities");
+        assertNotNull(authorities);
+        assertTrue(authorities.contains("ROLE_ADMIN"));
+        assertFalse(authorities.contains("ROLE_USER"));
     }
     
     @Test
@@ -51,7 +75,7 @@ class JwtServiceTest {
         String email = "maria@example.com";
         Long userId = 2L;
         
-        String token = jwtService.generateAccessToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId, Role.USER);
         String extractedEmail = jwtService.extractUsername(token);
         
         assertEquals(email, extractedEmail);
@@ -62,7 +86,7 @@ class JwtServiceTest {
         String email = "pedro@example.com";
         Long userId = 3L;
         
-        String token = jwtService.generateAccessToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId, Role.USER);
         Long extractedUserId = jwtService.extractUserId(token);
         
         assertEquals(userId, extractedUserId);
@@ -73,7 +97,7 @@ class JwtServiceTest {
         String email = "teste@example.com";
         Long userId = 1L;
         
-        String token = jwtService.generateAccessToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId, Role.USER);
         boolean isValid = jwtService.validateToken(token);
         
         assertTrue(isValid);
@@ -84,7 +108,7 @@ class JwtServiceTest {
         String email = "teste@example.com";
         Long userId = 1L;
         
-        String token = jwtService.generateAccessToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId, Role.USER);
         
         JwtService differentService = new JwtService();
         ReflectionTestUtils.setField(differentService, "secret", "different-secret-key-minimum-32-characters");
@@ -123,7 +147,7 @@ class JwtServiceTest {
         String email = "teste@example.com";
         Long userId = 1L;
         
-        String token = jwtService.generateAccessToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId, Role.USER);
         Claims claims = parseToken(token);
         
         Date expiration = claims.getExpiration();
@@ -156,7 +180,7 @@ class JwtServiceTest {
         String email = "teste@example.com";
         Long userId = 1L;
         
-        String token1 = jwtService.generateAccessToken(email, userId);
+        String token1 = jwtService.generateAccessToken(email, userId, Role.USER);
         Claims claims1 = parseToken(token1);
         Date issuedAt1 = claims1.getIssuedAt();
         
@@ -165,7 +189,7 @@ class JwtServiceTest {
         boolean tokensAreDifferent = false;
         
         for (int i = 0; i < 20; i++) {
-            token2 = jwtService.generateAccessToken(email, userId);
+            token2 = jwtService.generateAccessToken(email, userId, Role.USER);
             Claims claims2 = parseToken(token2);
             issuedAt2 = claims2.getIssuedAt();
             
@@ -202,7 +226,7 @@ class JwtServiceTest {
         String email = "test@example.com";
         Long userId = 1L;
         
-        String token = jwtService.generateAccessToken(email, userId);
+        String token = jwtService.generateAccessToken(email, userId, Role.USER);
         
         assertNotNull(token);
         assertFalse(token.isEmpty());
@@ -218,7 +242,7 @@ class JwtServiceTest {
         String email = "test@example.com";
         Long userId = 1L;
         
-        String token = jwtService.generateRefreshToken(email, userId);
+        String token = jwtService.generateRefreshToken(email, userId, Role.USER);
         
         assertNotNull(token);
         assertFalse(token.isEmpty());
@@ -234,7 +258,7 @@ class JwtServiceTest {
         String email = "test@example.com";
         Long userId = 1L;
         
-        String token = jwtService.generateRefreshToken(email, userId);
+        String token = jwtService.generateRefreshToken(email, userId, Role.USER);
         boolean isValid = jwtService.validateRefreshToken(token);
         
         assertTrue(isValid);
@@ -257,7 +281,7 @@ class JwtServiceTest {
         String email = "test@example.com";
         Long userId = 1L;
         
-        String accessToken = jwtService.generateAccessToken(email, userId);
+        String accessToken = jwtService.generateAccessToken(email, userId, Role.USER);
         boolean isValid = jwtService.validateRefreshToken(accessToken);
         
         assertFalse(isValid);
@@ -273,7 +297,7 @@ class JwtServiceTest {
         String email = "test@example.com";
         Long userId = 1L;
         
-        String token = serviceWithShortExpiration.generateRefreshToken(email, userId);
+        String token = serviceWithShortExpiration.generateRefreshToken(email, userId, Role.USER);
         
         boolean isValid = serviceWithShortExpiration.validateRefreshToken(token);
         assertFalse(isValid);
@@ -284,7 +308,7 @@ class JwtServiceTest {
         String email = "test@example.com";
         Long userId = 1L;
         
-        String refreshToken = jwtService.generateRefreshToken(email, userId);
+        String refreshToken = jwtService.generateRefreshToken(email, userId, Role.USER);
         boolean isValid = jwtService.validateToken(refreshToken);
         
         assertFalse(isValid);
@@ -343,7 +367,7 @@ class JwtServiceTest {
         ReflectionTestUtils.setField(serviceWithVeryShortExpiration, "accessTokenExpiration", 0L);
         ReflectionTestUtils.setField(serviceWithVeryShortExpiration, "refreshTokenExpiration", 604800L);
         
-        String token = serviceWithVeryShortExpiration.generateAccessToken(email, userId);
+        String token = serviceWithVeryShortExpiration.generateAccessToken(email, userId, Role.USER);
         
         boolean isValid = serviceWithVeryShortExpiration.validateToken(token);
         assertFalse(isValid);

@@ -58,8 +58,8 @@ public class UserService {
         
         User savedUser = userRepository.save(user);
         
-        String accessToken = jwtService.generateAccessToken(savedUser.getEmail(), savedUser.getId());
-        String refreshTokenString = jwtService.generateRefreshToken(savedUser.getEmail(), savedUser.getId());
+        String accessToken = jwtService.generateAccessToken(savedUser.getEmail(), savedUser.getId(), savedUser.getRole());
+        String refreshTokenString = jwtService.generateRefreshToken(savedUser.getEmail(), savedUser.getId(), savedUser.getRole());
         
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(savedUser);
@@ -136,8 +136,8 @@ public class UserService {
             throw new ValidationException("Conta desativada. Entre em contato com o suporte.");
         }
         
-        String accessToken = jwtService.generateAccessToken(user.getEmail(), user.getId());
-        String refreshTokenString = jwtService.generateRefreshToken(user.getEmail(), user.getId());
+        String accessToken = jwtService.generateAccessToken(user.getEmail(), user.getId(), user.getRole());
+        String refreshTokenString = jwtService.generateRefreshToken(user.getEmail(), user.getId(), user.getRole());
         
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(user);
@@ -181,8 +181,8 @@ public class UserService {
         refreshToken.setRevoked(true);
         refreshTokenRepository.save(refreshToken);
         
-        String newAccessToken = jwtService.generateAccessToken(user.getEmail(), user.getId());
-        String newRefreshTokenString = jwtService.generateRefreshToken(user.getEmail(), user.getId());
+        String newAccessToken = jwtService.generateAccessToken(user.getEmail(), user.getId(), user.getRole());
+        String newRefreshTokenString = jwtService.generateRefreshToken(user.getEmail(), user.getId(), user.getRole());
         
         RefreshToken newRefreshToken = new RefreshToken();
         newRefreshToken.setUser(user);

@@ -5,13 +5,16 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import projeto_gerador_ideias_backend.model.Role;
 
 import jakarta.annotation.PostConstruct;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 @Service
 public class JwtService {
@@ -51,28 +54,38 @@ public class JwtService {
                 .getPayload();
     }
     
-    public String generateAccessToken(String email, Long userId) {
+    public String generateAccessToken(String email, Long userId, Role role) {
         Date now = new Date();
         Date expiryDate = Date.from(Instant.now().plus(accessTokenExpiration, ChronoUnit.SECONDS));
+        
+        List<String> authorities = new ArrayList<>();
+        String roleName = (role != null ? role : Role.USER).name();
+        authorities.add("ROLE_" + roleName);
         
         return Jwts.builder()
                 .subject(email)
                 .claim(CLAIM_USER_ID, userId)
                 .claim("type", "access")
+                .claim("authorities", authorities)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(getSigningKey())
                 .compact();
     }
     
-    public String generateRefreshToken(String email, Long userId) {
+    public String generateRefreshToken(String email, Long userId, Role role) {
         Date now = new Date();
         Date expiryDate = Date.from(Instant.now().plus(refreshTokenExpiration, ChronoUnit.SECONDS));
+        
+        List<String> authorities = new ArrayList<>();
+        String roleName = (role != null ? role : Role.USER).name();
+        authorities.add("ROLE_" + roleName);
         
         return Jwts.builder()
                 .subject(email)
                 .claim(CLAIM_USER_ID, userId)
                 .claim("type", "refresh")
+                .claim("authorities", authorities)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(getSigningKey())
@@ -80,11 +93,11 @@ public class JwtService {
     }
     
     /**
-     * @deprecated Use {@link #generateAccessToken(String, Long)} instead.
+     * @deprecated Use {@link #generateAccessToken(String, Long, Role)} instead.
      */
     @Deprecated(since = "1.0", forRemoval = true)
     public String generateToken(String email, Long userId) {
-        return generateAccessToken(email, userId);
+        return generateAccessToken(email, userId, Role.USER);
     }
     
     public String extractUsername(String token) {
